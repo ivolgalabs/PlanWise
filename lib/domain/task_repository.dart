@@ -10,6 +10,9 @@ abstract class TaskRepository {
   /// Все задачи в диапазоне [start, end] включительно (по полуночи даты).
   Future<List<Task>> tasksInRange(DateTime start, DateTime end);
 
+  /// Реактивно: все задачи в диапазоне [start, end] включительно.
+  Stream<List<Task>> watchTasksInRange(DateTime start, DateTime end);
+
   /// Все невыполненные задачи строго до [date] (для авто-переноса).
   Future<List<Task>> overdueBefore(DateTime date);
 

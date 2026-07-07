@@ -27,6 +27,17 @@ class AppDatabase extends _$AppDatabase {
             ..orderBy([(t) => OrderingTerm.asc(t.sortOrder)]))
           .get();
 
+  // — Tasks (reactive) —
+  Stream<List<TaskRow>> watchTasksInRange(int startDay, int endDay) =>
+      (select(tasks)
+            ..where((t) => t.date.isBetweenValues(startDay, endDay))
+            ..orderBy([(t) => OrderingTerm.asc(t.sortOrder)]))
+          .watch();
+
+  Stream<List<ColorSetRow>> watchColorSets() =>
+      (select(colorSets)..orderBy([(c) => OrderingTerm.asc(c.sortOrder)]))
+          .watch();
+
   Future<List<TaskRow>> overdueBefore(int epochDay) => (select(tasks)
         ..where(
           (t) => t.date.isSmallerThanValue(epochDay) & t.isDone.equals(false),

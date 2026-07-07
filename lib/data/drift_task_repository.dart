@@ -25,6 +25,13 @@ class DriftTaskRepository implements TaskRepository {
   }
 
   @override
+  Stream<List<Task>> watchTasksInRange(DateTime start, DateTime end) {
+    return _db
+        .watchTasksInRange(toEpochDay(start), toEpochDay(end))
+        .map((rows) => rows.map(_toDomain).toList());
+  }
+
+  @override
   Future<List<Task>> overdueBefore(DateTime date) async {
     final rows = await _db.overdueBefore(toEpochDay(date));
     return rows.map(_toDomain).toList();
