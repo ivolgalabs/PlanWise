@@ -16,25 +16,38 @@
 
 ## 2. Обоснование выбора стека
 
-### Анализ проводился по 8 критериям, релевантным проекту:
-C1 Кроссплатформа Android+Desktop · C2 Зрелость Android · C3 UI-perf (60fps dnd) · C4 Зрелость local-first sync · C5 Экосистема библиотек · C6 Time-to-market · C7 Контроль над ядром (Rust) · C8 Лёгкость бинарника/RAM.
+> **⚠️ Ревизия 2026-07-14:** Изначально выбран Flutter + Drift + Rust(FFI). После
+> реализации MVP (Фаза 1, части 1–3, 18 коммитов, архив в git-теге
+> `flutter-archive-mvp`) и попытки macOS-сборки выяснилось: Flutter требует
+> полный Xcode (20 ГБ). Переоценив анализ, признаём первоначальное решение
+> ошибочным — **Tauri v2 + Rust + React/SolidJS** (оригинальный замысел автора)
+> лучше соответствует проекту: Rust-ядро нативно (без FFI-моста), macOS-сборка
+> на CLT (без полного Xcode), web-версия бесплатно для Фазы 4 (шаринг). Аргумент
+> «Flutter лучше для тач-dnd» реален, но не перевешивает потерю Rust-нативности.
 
-### Финальный рейтинг
+### Финальный рейтинг (с пересмотром)
 
 | Место | Стек | Балл | Вердикт |
 |---|---|---|---|
-| 🥇 1 | **Flutter + Drift + Rust(FFI)** | **67/80** | **ВЫБРАНО** |
-| 2 | React Native (Expo) + WatermelonDB | 63/80 | Сильный, но local-first-козырь отпадает (PowerSync/WatermelonDB требуют бэкенд, а у нас безсерверная модель); desktop слаб |
-| 3 | Tauri v2 + Rust + React | 60/80 | Инженерно красив, но Android/dnd в WebView слабее, дольше путь |
-| 4 | Flutter + Drift (без Rust) | 62/80 | Упрощённый вариант, если Rust не нужен |
+| 🥇 1 | **Tauri v2 + Rust + React/SolidJS** | **68/80** | **ВЫБРАНО (пересмотр)** |
+| 2 | Flutter + Drift + Rust(FFI) | 67/80 | Реализован MVP, но требует Xcode; FFI-мост — доп. слой боли для Rust-ядра |
+| 3 | React Native (Expo) + WatermelonDB | 63/80 | Local-first-козырь отпадает (требуют бэкенд); desktop слаб |
+| 4 | Flutter + Drift (без Rust) | 62/80 | Упрощённый вариант |
 | 5 | Capacitor + React | 55/80 | WebView-проблемы на тач, нет Rust-ядра |
 
-### Почему Flutter + Drift + Rust(FFI)
+### Почему Tauri v2 + Rust + React/SolidJS (пересмотр)
 
-1. **Ключевой инсайт:** модель синхронизации — обмен файлами через Google Drive `appDataFolder` **без своего сервера**. Главный козырь RN (зрелые local-first движки PowerSync/WatermelonDB) **здесь не работает**, т.к. они требуют Postgres-бэкенд. Для безсерверной синхры нужен CRDT (automerge), а он нейтрален к стеку.
-2. **Flutter лучше Tauri для этого приложения:** Android — первоклассная платформа (а у Tauri mobile «менее зрелый»), собственный рендер даёт гарантированный 60fps drag-and-drop на любом Android (в WebView на тач «tricky», подёргивания).
-3. **Rust-ядро сохраняется:** `flutter_rust_bridge` (FFI) позволяет вынести CRDT/крипто/merge-логику в Rust, вызываемую из Dart. Ядро «железное», как в оригинальном плане — меняется только UI-слой.
-4. **Desktop первоклассный** (macOS/Windows/Linux), в отличие от RN.
+1. **Rust-ядро нативно:** Tauri — это Rust-приложение с WebView-фронтом. Бэкенд
+   на Rust «из коробки», без FFI-моста (`flutter_rust_bridge`). CRDT, AES-256,
+   merge-логика Фазы 3 реализуются прямо в Rust-командах Tauri.
+2. **macOS-сборка без полного Xcode:** достаточно Command Line Tools (CLT уже
+   есть) + системный WebKit. Flutter требует 20 ГБ Xcode.
+3. **Соответствие оригинальному плану автора:** стек совпадает с изначальным
+   замыслом (Tauri v2 + Rust Core + React/SolidJS).
+4. **Web-версия бесплатно для Фазы 4:** Tauri-фронт — это web tech, публичный
+   шаринг календаря (read-only) строится из той же кодовой базы.
+5. **Drag-and-drop на desktop идеален:** `@dnd-kit/core` в WebView на macOS/Windows
+   даёт плавный 60fps dnd. (На тач-Android dnd в WebView слабее — принятый компромисс.)
 
 ---
 
@@ -42,24 +55,21 @@ C1 Кроссплатформа Android+Desktop · C2 Зрелость Android �
 
 ```
 ┌─────────────────────────────────────────────────┐
-│  UI Layer: Flutter (Dart)                       │
+│  Frontend: React/SolidJS + TypeScript           │
+│  (рендерится в Tauri WebView, системный WebKit) │
 │  • Виды: День / Неделя / Месяц                  │
-│  • Drag-and-drop задач между днями              │
+│  • Drag-and-drop (@dnd-kit/core)                │
 │  • Мини-календарь с индикатором занятости       │
 │  • Сеты цветов, темы                            │
+│  • Тонкий клиент: state через Tauri IPC         │
 └────────────────────┬────────────────────────────┘
-                     │ async (Stream + isolates)
+                     │ Tauri IPC (invoke / events)
 ┌────────────────────▼────────────────────────────┐
-│  Data Layer: Drift (SQLite, ACID)               │
-│  • tasks, color_sets, settings                  │
-│  • Реактивные стримы для UI                     │
-└────────────────────┬────────────────────────────┘
-                     │ FFI (flutter_rust_bridge) [Фаза 3]
-┌────────────────────▼────────────────────────────┐
-│  Rust Core (shared library)                     │
-│  • automerge-rs: CRDT-merge без потерь          │
-│  • AES-256-GCM: шифрование снапшотов            │
-│  • Сериализация payload                         │
+│  Rust Core (Tauri backend — нативно, без FFI)   │
+│  • rusqlite / sqlx: локальная SQLite (ACID)     │
+│  • Команды: get_tasks, upsert_task, move_task   │
+│  • automerge-rs: CRDT-merge [Фаза 3]            │
+│  • AES-256-GCM: шифрование снапшотов [Фаза 3]   │
 └────────────────────┬────────────────────────────┘
                      │ REST [Фаза 3]
 ┌────────────────────▼────────────────────────────┐
@@ -68,21 +78,30 @@ C1 Кроссплатформа Android+Desktop · C2 Зрелость Android �
 └─────────────────────────────────────────────────┘
 ```
 
-**Принцип изоляции:** UI и БД полностью изолированы от sync-логики. Это позволяет доставить Фазу 1 (локальный MVP) без единой строки CRDT-кода, а синхру наслоить позже без переделок.
+**Принцип изоляции:** Frontend (React) — тонкий клиент, общается с Rust-ядром
+только через Tauri IPC-команды. Локальная SQLite живёт в Rust, что даёт ACID
+и микросекундную latency без JS-движка. Слой синхронизации (Фаза 3) добавляется
+в Rust-ядро без переделок UI.
 
 ---
 
 ## 4. Дорожная карта (фазы)
 
+> **Стек после пересмотра 2026-07-14:** Tauri v2 + Rust + React/TypeScript.
+
 ### Фаза 1 — Локальный MVP (ядро) 🎯 текущий фокус
 - Виды: **День / Неделя / Месяц** + сегментированный переключатель
+- **Inline-ввод задач прямо в поле дня** (как tweek.so): печатай в строке дня →
+  Enter → задача создана. Никаких модалок/FAB для быстрого создания.
 - Мини-календарь с индикатором занятости (точки/полоски/свободен/прошло)
-- Создание/редактирование/удаление задач
-- **Drag-and-drop** задач между днями
-- **Сеты цветов** (палитра + кастомные)
+- Создание/редактирование/удаление задач (inline + опции в карточке)
+- **Drag-and-drop** задач между днями (@dnd-kit/core)
+- **Сеты цветов** (палитра; цвет выбирается на карточке — категория НЕ навязывается при создании)
+- **Экран настроек**: тема, первый день недели, авто-перенос вкл/выкл
+- **Выбор дат** (date picker) для прыжка к произвольному дню
 - **Авто-перенос** невыполненных задач на завтра (Automate)
 - **Темы**: минимум paper-white, тёмная, холодная
-- Локальная БД Drift/SQLite, полностью офлайн
+- Локальная SQLite (rusqlite в Rust-ядре), полностью офлайн
 
 ### Фаза 2 — Богатые задачи
 - Подзадачи (subtasks)
@@ -92,8 +111,8 @@ C1 Кроссплатформа Android+Desktop · C2 Зрелость Android �
 - Поиск с фильтром по цвету-сету
 
 ### Фаза 3 — Синхронизация (Rust-ядро)
-- `flutter_rust_bridge` + automerge-rs (CRDT)
-- Шифрование AES-256 снапшотов
+- **automerge-rs** CRDT (нативно в Rust, без FFI-моста)
+- Шифрование AES-256-GCM снапшотов
 - Google Drive `appDataFolder` (безсерверная синхра)
 - Разрешение конфликтов без потерь
 
@@ -220,17 +239,19 @@ C1 Кроссплатформа Android+Desktop · C2 Зрелость Android �
 
 | Слой | Технология | Версия/заметка |
 |---|---|---|
-| UI | **Flutter** | 3.x stable, Dart 3.x |
-| State | **Riverpod** | реактивное управление, хорошо с Drift-стримами |
-| Локальная БД | **Drift** | реактивная обёртка над SQLite, ACID, миграции |
-| Routing | **go_router** | декларативная навигация |
-| Drag-and-drop | **flutter_animate** + нативные reorderable | 60fps на собственном рендере Flutter |
-| Дата/время | **intl** + кастомный LocalDate | без часовых поясов в дате задачи |
-| UUID/secure storage | **uuid** + **flutter_secure_storage** | device UUID |
-| Rust-ядро (Фаза 3) | **flutter_rust_bridge** + **automerge-rs** + **aes-gcm** | FFI |
-| Транспорт (Фаза 3) | **googleapis** + OAuth2 | Drive appDataFolder |
+| Оболочка | **Tauri v2** | Rust + системный WebView (WebKit на macOS) |
+| Frontend | **React + TypeScript** | тонкий UI-клиент (рассматривается SolidJS как альтернатива) |
+| Сборка frontend | **Vite** | горячий reload, быстрые сборки |
+| State | **Zustand** или React Context | лёгкий, без boilerplate |
+| Drag-and-drop | **@dnd-kit/core** | плавный 60fps dnd в WebView на desktop |
+| Дата/время | **date-fns** + `temporal-polyfill` | без часовых поясов в дате задачи |
+| Локальная БД | **rusqlite** (Rust) | SQLite через Rust-ядро, ACID, миграции (refinery) |
+| Rust-сердец | **Tauri commands** | IPC: `get_tasks`, `upsert_task`, `move_task` |
+| CRDT (Фаза 3) | **automerge-rs** | бесконфликтное слияние реплик |
+| Крипто (Фаза 3) | **aes-gcm** crate | AES-256-GCM снапшотов |
+| Транспорт (Фаза 3) | **google-api-rs** + OAuth2 | Drive appDataFolder |
 
-**Платформы Фазы 1:** Android (primary), macOS/Windows desktop (secondary).
+**Платформы Фазы 1:** macOS (primary, сборка на CLT без полного Xcode), Windows/Linux desktop (secondary). Android — Фаза 5.
 
 ---
 
