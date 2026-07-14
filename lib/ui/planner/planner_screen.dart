@@ -125,6 +125,9 @@ class PlannerScreen extends ConsumerWidget {
                 tasks: tasks,
                 onToggle: repo == null ? null : (t) => _toggle(ref, repo, t),
                 onTaskTap: repo == null ? null : (t) => _editTask(ref, repo, t),
+                onMoveTask: repo == null
+                    ? null
+                    : (task, newDay) => _moveTask(ref, repo, task, newDay),
               )
             : WeekView(
                 focalDay: selected,
@@ -134,6 +137,9 @@ class PlannerScreen extends ConsumerWidget {
                     ? null
                     : (day) => _addTask(ref.context, ref, repo, day),
                 onTaskTap: repo == null ? null : (t) => _editTask(ref, repo, t),
+                onMoveTask: repo == null
+                    ? null
+                    : (task, newDay) => _moveTask(ref, repo, task, newDay),
               );
       case CalendarView.month:
         return MonthView(
@@ -235,6 +241,15 @@ class PlannerScreen extends ConsumerWidget {
     Task task,
   ) async {
     await repo.upsertTask(task.copyWith(isDone: !task.isDone));
+  }
+
+  Future<void> _moveTask(
+    WidgetRef ref,
+    TaskRepository repo,
+    Task task,
+    DateTime newDay,
+  ) async {
+    await repo.moveTask(task.id, atMidnight(newDay));
   }
 }
 
