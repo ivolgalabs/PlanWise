@@ -3,7 +3,7 @@ import 'package:daily_planner/domain/models.dart';
 import 'package:daily_planner/ui/task/day_column.dart';
 import 'package:flutter/material.dart';
 
-/// Вид «Неделя» (горизонтальный): 7 колонок tweek-стиля.
+/// Вид «Неделя» (горизонтальный): 7 колонок tweek-стиля с drop-переносом.
 class WeekView extends StatelessWidget {
   const WeekView({
     required this.focalDay,
@@ -11,6 +11,7 @@ class WeekView extends StatelessWidget {
     this.onToggle,
     this.onAddForDay,
     this.onTaskTap,
+    this.onMoveTask,
     super.key,
   });
 
@@ -19,6 +20,7 @@ class WeekView extends StatelessWidget {
   final void Function(Task task)? onToggle;
   final void Function(DateTime day)? onAddForDay;
   final void Function(Task task)? onTaskTap;
+  final void Function(Task task, DateTime newDay)? onMoveTask;
 
   @override
   Widget build(BuildContext context) {
@@ -38,6 +40,9 @@ class WeekView extends StatelessWidget {
                   onToggle: onToggle,
                   onAdd: onAddForDay == null ? null : () => onAddForDay!(d),
                   onTaskTap: onTaskTap,
+                  onMoveToDay: onMoveTask == null
+                      ? null
+                      : (task) => onMoveTask!(task, d),
                 ),
               ),
             ),
