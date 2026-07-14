@@ -63,6 +63,6 @@ QueryExecutor _open() {
   return LazyDatabase(() async {
     final dir = await getApplicationDocumentsDirectory();
     final file = File(p.join(dir.path, 'daily_planner.sqlite'));
-    return NativeDatabase.createInBackground(file, logStatements: false);
+    return NativeDatabase(file, logStatements: false);
   });
 }
