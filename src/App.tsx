@@ -1,50 +1,156 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
+import { useCallback, useEffect, useState } from "react";
+import { api } from "./api";
+import { useStore } from "./store";
+import { weekDays, firstOfMonth, lastOfMonth } from "./date";
+import { COLORS } from "./theme";
+import { TopBar } from "./components/TopBar";
+import { MiniCalendar } from "./components/MiniCalendar";
+import { SettingsPanel } from "./components/SettingsPanel";
+import { DatePickerModal } from "./components/DatePickerModal";
+import { DayView } from "./views/DayView";
+import { WeekView } from "./views/WeekView";
+import { WeekViewVertical } from "./views/WeekViewVertical";
+import { MonthView } from "./views/MonthView";
 import "./App.css";
 
 function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+  const {
+    selectedDate,
+    view,
+    tasks,
+    mondayFirst,
+    setSelectedDate,
+    setView,
+    setTasks,
+    toggleMondayFirst,
+  } = useStore();
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
+  const [isWide, setIsWide] = useState(true);
+
+  // Адаптивность по ширине окна.
+  useEffect(() => {
+    const onResize = () => setIsWide(window.innerWidth >= 720);
+    onResize();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  // Загрузка задач при смене даты/вида.
+  const reload = useCallback(async () => {
+    let start: Date;
+    let end: Date;
+    if (view === "day") {
+      start = end = selectedDate;
+    } else if (view === "week") {
+      const days = weekDays(selectedDate, mondayFirst);
+      start = days[0];
+      end = days[6];
+    } else {
+      start = firstOfMonth(selectedDate);
+      end = lastOfMonth(selectedDate);
+    }
+    const loaded = await api.getTasks(start, end);
+    setTasks(loaded);
+  }, [view, selectedDate, mondayFirst, setTasks]);
+
+  useEffect(() => {
+    reload();
+  }, [reload]);
+
+  const shift = (dir: number) => {
+    if (view === "day") {
+      const d = new Date(selectedDate);
+      d.setDate(d.getDate() + dir);
+      setSelectedDate(d);
+    } else if (view === "week") {
+      const d = new Date(selectedDate);
+      d.setDate(d.getDate() + 7 * dir);
+      setSelectedDate(d);
+    } else {
+      setSelectedDate(
+        new Date(
+          selectedDate.getFullYear(),
+          selectedDate.getMonth() + dir,
+          selectedDate.getDate(),
+        ),
+      );
+    }
+  };
 
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
-
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+    <div
+      style={{
+        background: COLORS.paper,
+        height: "100vh",
+        display: "flex",
+        flexDirection: "column",
+        color: COLORS.text,
+        fontFamily:
+          '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      }}
+    >
+      <TopBar
+        selectedDate={selectedDate}
+        view={view}
+        mondayFirst={mondayFirst}
+        onViewChanged={setView}
+        onPrev={() => shift(-1)}
+        onNext={() => shift(1)}
+        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenDatePicker={() => setDatePickerOpen(true)}
+      />
+      <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
+        {isWide && view !== "month" && (
+          <div
+            style={{
+              width: 220,
+              padding: 8,
+              flexShrink: 0,
+              overflowY: "auto",
+            }}
+          >
+            <MiniCalendar tasks={tasks} />
+          </div>
+        )}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {view === "day" && (
+            <DayView day={selectedDate} tasks={tasks} onChange={reload} />
+          )}
+          {view === "week" &&
+            (isWide ? (
+              <WeekView tasks={tasks} onChange={reload} />
+            ) : (
+              <WeekViewVertical tasks={tasks} onChange={reload} />
+            ))}
+          {view === "month" && (
+            <MonthView
+              tasks={tasks}
+              onSelectDay={(d) => {
+                setSelectedDate(d);
+                setView("day");
+              }}
+            />
+          )}
+        </div>
       </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
 
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
+      {settingsOpen && (
+        <SettingsPanel
+          mondayFirst={mondayFirst}
+          onToggleMondayFirst={toggleMondayFirst}
+          onClose={() => setSettingsOpen(false)}
         />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
+      )}
+      {datePickerOpen && (
+        <DatePickerModal
+          initial={selectedDate}
+          onPick={setSelectedDate}
+          onClose={() => setDatePickerOpen(false)}
+        />
+      )}
+    </div>
   );
 }
 
