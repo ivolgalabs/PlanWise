@@ -27,14 +27,18 @@ function App() {
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [datePickerOpen, setDatePickerOpen] = useState(false);
-  const [isWide, setIsWide] = useState(true);
+  const [isWide, setIsWide] = useState(
+    typeof window !== "undefined" ? window.matchMedia("(min-width: 720px)").matches : true,
+  );
 
-  // Адаптивность по ширине окна.
+  // Адаптивность по ширине окна через matchMedia — надёжнее в Tauri WebView,
+  // срабатывает сразу при пересечении порога, а не на каждый пиксель ресайза.
   useEffect(() => {
-    const onResize = () => setIsWide(window.innerWidth >= 720);
-    onResize();
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
+    const mq = window.matchMedia("(min-width: 720px)");
+    const handler = (e: MediaQueryListEvent) => setIsWide(e.matches);
+    mq.addEventListener("change", handler);
+    setIsWide(mq.matches);
+    return () => mq.removeEventListener("change", handler);
   }, []);
 
   // Загрузка задач при смене даты/вида.

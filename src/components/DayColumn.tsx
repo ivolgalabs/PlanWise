@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { Task } from "../api";
 import { api } from "../api";
 import { isToday } from "../date";
@@ -15,8 +15,10 @@ interface Props {
   hovering?: boolean;
 }
 
-/** Колонка одного дня: заголовок, список задач, inline-поле ввода.
- * Принимает drop перетаскиваемой задачи. */
+/**
+ * Колонка одного дня: заголовок, список строк-задач, поле ввода.
+ * Enter в строке создаёт новую строку ниже (расширение).
+ */
 export function DayColumn({
   day,
   tasks,
@@ -27,19 +29,41 @@ export function DayColumn({
   hovering,
 }: Props) {
   const [newTitle, setNewTitle] = useState("");
+  const newInputRef = useRef<HTMLInputElement>(null);
   const today = isToday(day);
   const weekday = day.toLocaleDateString("ru", { weekday: "short" });
   const dayNum = day.getDate();
 
+  const epochDay = Math.floor(
+    Date.UTC(day.getFullYear(), day.getMonth(), day.getDate()) / 86_400_000,
+  );
+
   const addTask = async () => {
     const t = newTitle.trim();
     if (!t) return;
-    const epochDay = Math.floor(
-      Date.UTC(day.getFullYear(), day.getMonth(), day.getDate()) / 86_400_000,
-    );
     await api.upsertTask({ title: t, date: epochDay });
     setNewTitle("");
     onChange();
+    // Вернуть фокус на поле ввода для непрерывного набора.
+    requestAnimationFrame(() => newInputRef.current?.focus());
+  };
+
+  /** Создать новую пустую строку после задачи [afterId] и сфокусировать её. */
+  const createNext = async (afterId: string) => {
+    // sortOrder новой задачи — чуть больше, чем у afterId.
+    const after = tasks.find((t) => t.id === afterId);
+    const sort = after ? after.sortOrder + 1 : Date.now();
+    await api.upsertTask({ title: "", date: epochDay, sortOrder: sort });
+    onChange();
+    // Фокус новой строки после ре-рендера.
+    requestAnimationFrame(() => {
+      const inputs = document.querySelectorAll<HTMLInputElement>(
+        `input[data-task-id]`,
+      );
+      // Найдём пустую (только что созданную).
+      const empty = Array.from(inputs).find((i) => i.value === "");
+      empty?.focus();
+    });
   };
 
   return (
@@ -88,12 +112,17 @@ export function DayColumn({
         style={{ padding: 4, flex: 1, overflowY: "auto", minHeight: 40 }}
       >
         {tasks.map((t) => (
-          <div key={t.id} style={{ marginBottom: 4 }}>
-            <TaskCard task={t} onChange={onChange} onDragStart={onDragStart} />
-          </div>
+          <TaskCard
+            key={t.id}
+            task={t}
+            onChange={onChange}
+            onDragStart={onDragStart}
+            onCreateNext={createNext}
+          />
         ))}
       </div>
       <input
+        ref={newInputRef}
         className="inline-input"
         value={newTitle}
         onChange={(e) => setNewTitle(e.target.value)}

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Task } from "../api";
 import { api } from "../api";
 import { COLORS, colorSetHex } from "../theme";
@@ -7,22 +7,34 @@ interface Props {
   task: Task;
   onChange: () => void;
   onDragStart?: (t: Task) => void;
+  /** Создать новую пустую задачу сразу после этой (расширение по Enter). */
+  onCreateNext?: (afterTaskId: string) => void;
 }
 
-/** Карточка задачи: чекбокс done, inline-редактирование по двойному клику,
- * выбор цвета и удаление через меню. */
-export function TaskCard({ task, onChange, onDragStart }: Props) {
-  const [editing, setEditing] = useState(false);
+/**
+ * Строка задачи (tweek-style line): чекбокс + inline-текст + цветная полоска
+ * слева. Enter в редактируемой строке сохраняет и создаёт новую строку ниже.
+ * Backspace в пустой — удаляет текущую и фокусирует предыдущую.
+ */
+export function TaskCard({ task, onChange, onDragStart, onCreateNext }: Props) {
   const [title, setTitle] = useState(task.title);
+  const [editing, editingSetter] = useState(false);
   const [colorMenu, setColorMenu] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  const save = async () => {
+  // Синхронизируем локальный title, если задача изменилась извне.
+  useEffect(() => {
+    if (!editing) setTitle(task.title);
+  }, [task.title, editing]);
+
+  const save = async (): Promise<Task> => {
     const t = title.trim();
     if (t && t !== task.title) {
-      await api.upsertTask({ ...task, title: t });
+      const updated = await api.upsertTask({ ...task, title: t });
       onChange();
+      return updated;
     }
-    setEditing(false);
+    return task;
   };
 
   const toggleDone = async () => {
@@ -41,64 +53,94 @@ export function TaskCard({ task, onChange, onDragStart }: Props) {
     onChange();
   };
 
-  const bg = task.isDone ? COLORS.setNone : colorSetHex(task.colorSetId);
+  const setEditing = (v: boolean) => editingSetter(v);
+
+  const onKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const saved = await save();
+      setEditing(false);
+      // Создаём новую строку ниже и переводим на неё фокус.
+      onCreateNext?.(saved.id);
+    } else if (e.key === "Escape") {
+      setTitle(task.title);
+      setEditing(false);
+    } else if (
+      e.key === "Backspace" &&
+      title === "" &&
+      !task.title // удаляем только если задача была пустой
+    ) {
+      e.preventDefault();
+      await del();
+    }
+  };
+
+  const setHex = colorSetHex(task.colorSetId);
 
   return (
     <div
-      className="task-card"
-      style={{ background: bg, position: "relative" }}
+      className="task-line"
+      style={{
+        position: "relative",
+        display: "flex",
+        alignItems: "center",
+        background: task.isDone ? "transparent" : "transparent",
+        borderRadius: 4,
+      }}
       draggable={!!onDragStart}
       onDragStart={() => onDragStart?.(task)}
     >
-      <div style={{ display: "flex", alignItems: "center", padding: "4px 6px" }}>
-        <input
-          type="checkbox"
-          checked={task.isDone}
-          onChange={toggleDone}
-          style={{ marginRight: 6 }}
-        />
-        {editing ? (
-          <input
-            autoFocus
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            onBlur={save}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") save();
-              if (e.key === "Escape") {
-                setTitle(task.title);
-                setEditing(false);
-              }
-            }}
-            style={{
-              flex: 1,
-              fontSize: 13,
-              border: "none",
-              background: "transparent",
-              outline: "none",
-            }}
-          />
-        ) : (
-          <span
-            onDoubleClick={() => setEditing(true)}
-            style={{
-              flex: 1,
-              fontSize: 13,
-              color: task.isDone ? COLORS.muted : COLORS.text,
-              textDecoration: task.isDone ? "line-through" : "none",
-              cursor: "pointer",
-            }}
-          >
-            {task.title}
-          </span>
-        )}
+      {/* Цветная полоска слева (маркер сета) */}
+      <div
+        style={{
+          width: 3,
+          alignSelf: "stretch",
+          borderRadius: 2,
+          marginRight: 6,
+          background: task.colorSetId ? setHex : "transparent",
+        }}
+      />
+      <input
+        type="checkbox"
+        checked={task.isDone}
+        onChange={toggleDone}
+        style={{ marginRight: 6, flexShrink: 0 }}
+      />
+      <input
+        ref={inputRef}
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        onFocus={() => setEditing(true)}
+        onBlur={() => {
+          setEditing(false);
+          save();
+        }}
+        onKeyDown={onKeyDown}
+        style={{
+          flex: 1,
+          fontSize: 13,
+          border: "none",
+          background: "transparent",
+          outline: "none",
+          padding: "4px 0",
+          color: task.isDone ? COLORS.muted : COLORS.text,
+          textDecoration: task.isDone ? "line-through" : "none",
+        }}
+        data-task-id={task.id}
+      />
+      {/* Кнопки появляются при hover */}
+      <div className="task-actions" style={{ opacity: 0, transition: "opacity 0.1s" }}>
         <button
           onClick={() => setColorMenu((v) => !v)}
           className="chip-btn"
           title="Цвет"
-          style={{ marginLeft: 4 }}
-        >
-          ●
+          style={{
+            background: task.colorSetId ? setHex : "transparent",
+            border: task.colorSetId ? "none" : "1px solid " + COLORS.cardBorder,
+          }}
+        />
+        <button onClick={del} className="chip-btn" title="Удалить">
+          ✕
         </button>
       </div>
       {colorMenu && (
@@ -123,9 +165,6 @@ export function TaskCard({ task, onChange, onDragStart }: Props) {
             style={{ background: COLORS.setSport }}
             title="Спорт"
           />
-          <button onClick={del} className="del-btn" title="Удалить">
-            ✕
-          </button>
         </div>
       )}
     </div>

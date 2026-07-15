@@ -99,3 +99,15 @@ input[type="checkbox"] {
 .day-column {
   transition: background 0.1s;
 }
+
+/* Строка задачи: показ действий при наведении */
+.task-line:hover .task-actions {
+  opacity: 1 !important;
+}
+.task-line {
+  padding: 0 4px;
+  border-radius: 4px;
+}
+.task-line:hover {
+  background: rgba(0, 0, 0, 0.02);
+}
