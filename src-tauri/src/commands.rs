@@ -103,3 +103,27 @@ pub fn get_color_sets(state: State<'_, Db>) -> Vec<ColorSet> {
     .filter_map(|r| r.ok())
     .collect()
 }
+
+/// Перенос всех невыполненных задач строго ДО todayEpochDay на сегодня.
+/// Возвращает количество перенесённых задач (для плашки в UI).
+#[tauri::command]
+pub fn rollover_overdue(state: State<'_, Db>, today_epoch_day: i64) -> i64 {
+    let conn = state.0.lock().unwrap();
+    // Сначала считаем, сколько строк затронем.
+    let count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM tasks WHERE is_done = 0 AND date < ?1",
+            [today_epoch_day],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+    if count == 0 {
+        return 0;
+    }
+    conn.execute(
+        "UPDATE tasks SET date = ?1, updated_at = ?2 WHERE is_done = 0 AND date < ?1",
+        rusqlite::params![today_epoch_day, now_ms()],
+    )
+    .expect("rollover_overdue execute");
+    count
+}

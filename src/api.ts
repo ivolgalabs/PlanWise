@@ -55,4 +55,7 @@ export const api = {
   moveTask: (id: string, newDate: Date) =>
     invoke<void>("move_task", { id, newDate: toEpochDay(newDate) }),
   getColorSets: () => invoke<ColorSet[]>("get_color_sets"),
+  /** Перенести невыполненные прошлые задачи на сегодня. Возвращает кол-во. */
+  rolloverOverdue: (today: Date) =>
+    invoke<number>("rollover_overdue", { todayEpochDay: toEpochDay(today) }),
 };

@@ -20,6 +20,7 @@ pub fn run() {
             commands::delete_task,
             commands::move_task,
             commands::get_color_sets,
+            commands::rollover_overdue,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

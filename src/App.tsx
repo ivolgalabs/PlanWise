@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "./api";
 import { useStore } from "./store";
 import { weekDays, firstOfMonth, lastOfMonth } from "./date";
-import { COLORS } from "./theme";
+import { COLORS, applyTheme } from "./theme";
 import { TopBar } from "./components/TopBar";
 import { MiniCalendar } from "./components/MiniCalendar";
 import { SettingsPanel } from "./components/SettingsPanel";
@@ -19,10 +19,12 @@ function App() {
     view,
     tasks,
     mondayFirst,
+    theme,
     setSelectedDate,
     setView,
     setTasks,
     toggleMondayFirst,
+    setTheme,
   } = useStore();
 
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -30,6 +32,12 @@ function App() {
   const [isWide, setIsWide] = useState(
     typeof window !== "undefined" ? window.matchMedia("(min-width: 720px)").matches : true,
   );
+  const [rolloverCount, setRolloverCount] = useState(0);
+
+  // Применяем тему при старте и при смене.
+  useEffect(() => {
+    applyTheme(theme);
+  }, [theme]);
 
   // Адаптивность по ширине окна через matchMedia — надёжнее в Tauri WebView,
   // срабатывает сразу при пересечении порога, а не на каждый пиксель ресайза.
@@ -39,6 +47,20 @@ function App() {
     mq.addEventListener("change", handler);
     setIsWide(mq.matches);
     return () => mq.removeEventListener("change", handler);
+  }, []);
+
+  // Авто-перенос невыполненных прошлых задач на сегодня (Automate).
+  // Запускается один раз при старте приложения.
+  useEffect(() => {
+    (async () => {
+      try {
+        const today = new Date();
+        const count = await api.rolloverOverdue(today);
+        setRolloverCount(count);
+      } catch {
+        // не критично — просто не показываем плашку
+      }
+    })();
   }, []);
 
   // Загрузка задач при смене даты/вида.
@@ -105,6 +127,30 @@ function App() {
         onOpenSettings={() => setSettingsOpen(true)}
         onOpenDatePicker={() => setDatePickerOpen(true)}
       />
+      {rolloverCount > 0 && (
+        <div
+          style={{
+            background: COLORS.accent + "26",
+            color: COLORS.text,
+            fontSize: 12,
+            padding: "6px 16px",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          <span>
+            Перенесено невыполненных задач на сегодня: {rolloverCount}
+          </span>
+          <button
+            className="icon-btn"
+            style={{ marginLeft: "auto", fontSize: 14 }}
+            onClick={() => setRolloverCount(0)}
+          >
+            ✕
+          </button>
+        </div>
+      )}
       <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
         {isWide && view !== "month" && (
           <div
@@ -143,7 +189,9 @@ function App() {
       {settingsOpen && (
         <SettingsPanel
           mondayFirst={mondayFirst}
+          theme={theme}
           onToggleMondayFirst={toggleMondayFirst}
+          onThemeChange={setTheme}
           onClose={() => setSettingsOpen(false)}
         />
       )}
