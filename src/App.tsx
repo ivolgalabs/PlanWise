@@ -51,10 +51,12 @@ function App() {
     return watchSystemTheme(resolveAndApply);
   }, [theme]);
 
-  // Масштаб интерфейса: класс scale-* на <html>.
+  // Масштаб интерфейса: класс scale-<N> на <html>, --ui-scale множит размеры.
   useEffect(() => {
     const html = document.documentElement;
-    html.classList.remove("scale-sm", "scale-md", "scale-lg", "scale-xl");
+    html.classList.remove(
+      "scale-80", "scale-90", "scale-100", "scale-110", "scale-125", "scale-150",
+    );
     html.classList.add(`scale-${scale}`);
   }, [scale]);
 

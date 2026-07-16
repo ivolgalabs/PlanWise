@@ -10,7 +10,7 @@ interface PlannerState {
   mondayFirst: boolean;
   /** id темы Universal UI ("light-slate" и т.д.) или "auto". */
   theme: string;
-  /** Масштаб интерфейса: sm/md/lg/xl. */
+  /** Масштаб интерфейса в %: 80/90/100/110/125/150. */
   scale: string;
   setSelectedDate: (d: Date) => void;
   setView: (v: ViewKind) => void;
@@ -26,7 +26,7 @@ export const useStore = create<PlannerState>((set) => ({
   tasks: [],
   mondayFirst: true,
   theme: "auto",
-  scale: "md",
+  scale: "100",
   setSelectedDate: (d) => set({ selectedDate: d }),
   setView: (v) => set({ view: v }),
   setTasks: (t) => set({ tasks: t }),

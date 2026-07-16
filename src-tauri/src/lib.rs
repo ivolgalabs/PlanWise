@@ -21,6 +21,9 @@ pub fn run() {
             commands::move_task,
             commands::get_color_sets,
             commands::rollover_overdue,
+            commands::get_subtasks,
+            commands::upsert_subtask,
+            commands::delete_subtask,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

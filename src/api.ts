@@ -16,8 +16,17 @@ export interface Task {
 export interface ColorSet {
   id: string;
   name: string;
-  color: number; // ARGB
+  color: number;
   sortOrder: number;
+}
+
+export interface Subtask {
+  id: string;
+  taskId: string;
+  title: string;
+  isDone: boolean;
+  sortOrder: number;
+  createdAt: number;
 }
 
 /** epoch-day <-> Date. Должно совпадать с Rust-логикой хранения. */
@@ -60,4 +69,18 @@ export const api = {
   /** Перенести невыполненные прошлые задачи на сегодня. Возвращает кол-во. */
   rolloverOverdue: (today: Date) =>
     invoke<number>("rollover_overdue", { todayEpochDay: toEpochDay(today) }),
+  getSubtasks: (taskId: string) =>
+    invoke<Subtask[]>("get_subtasks", { taskId }),
+  upsertSubtask: (sub: Partial<Subtask> & { taskId: string; title: string }) =>
+    invoke<Subtask>("upsert_subtask", {
+      sub: {
+        id: sub.id ?? "",
+        taskId: sub.taskId,
+        title: sub.title,
+        isDone: sub.isDone ?? false,
+        sortOrder: sub.sortOrder ?? Date.now(),
+        createdAt: sub.createdAt ?? 0,
+      },
+    }),
+  deleteSubtask: (id: string) => invoke<void>("delete_subtask", { id }),
 };

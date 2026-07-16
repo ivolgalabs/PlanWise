@@ -4,15 +4,19 @@
 
 :root {
   font-family: var(--font-ui);
-  font-size: 16px; /* базовый масштаб — регулируется настройкой */
+  font-size: clamp(13px, 1.05vw, 17px); /* адаптивный базовый масштаб */
   color: var(--text-primary);
 }
 
-/* Масштаб интерфейса (настройка пользователя). Класс вешается на <html>. */
-html.scale-sm { font-size: 14px; }
-html.scale-md { font-size: 16px; }
-html.scale-lg { font-size: 18px; }
-html.scale-xl { font-size: 20px; }
+/* Масштаб интерфейса в % (настройка пользователя). --ui-scale множит
+ * все относительные размеры. Базовый 100% = системный rem. */
+html { --ui-scale: 1; }
+html.scale-80 { --ui-scale: 0.8; }
+html.scale-90 { --ui-scale: 0.9; }
+html.scale-100 { --ui-scale: 1; }
+html.scale-110 { --ui-scale: 1.1; }
+html.scale-125 { --ui-scale: 1.25; }
+html.scale-150 { --ui-scale: 1.5; }
 
 * {
   box-sizing: border-box;

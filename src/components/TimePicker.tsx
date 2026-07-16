@@ -24,14 +24,19 @@ export function TimePicker({ value, onChange }: Props) {
 
   return (
     <div style={pickerStyle}>
-      <div style={rowStyle}>
-        <span style={badgeStyle(value !== null)}>
-          ⏰ {value !== null ? formatMinutes(value) : "в течение дня"}
-        </span>
-        <button className="chip-btn" onClick={() => setEditing((v) => !v)} title="Время">
-          {value !== null ? "изм" : "+"}
-        </button>
-      </div>
+      <button
+        onClick={() => setEditing((v) => !v)}
+        style={{
+          ...badgeStyle(value !== null),
+          cursor: "pointer",
+          border: "none",
+          display: "inline-flex",
+          alignItems: "center",
+        }}
+        title="Изменить время"
+      >
+        ⏰ {value !== null ? formatMinutes(value) : "в течение дня"}
+      </button>
 
       {editing && (
         <div style={menuStyle}>
@@ -73,7 +78,6 @@ export function TimePicker({ value, onChange }: Props) {
 }
 
 const pickerStyle: React.CSSProperties = { position: "relative", display: "inline-flex" };
-const rowStyle: React.CSSProperties = { display: "flex", alignItems: "center", gap: 4 };
 function badgeStyle(hasTime: boolean): React.CSSProperties {
   return {
     fontSize: "var(--fs-2xs)",

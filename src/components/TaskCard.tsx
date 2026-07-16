@@ -3,6 +3,7 @@ import type { Task } from "../api";
 import { api } from "../api";
 import { COLORS, colorSetHex } from "../theme";
 import { TimePicker } from "./TimePicker";
+import { SubtaskList } from "./SubtaskList";
 
 interface Props {
   task: Task;
@@ -84,6 +85,7 @@ export function TaskCard({ task, onChange, onDragStart, onCreateNext }: Props) {
   };
 
   return (
+    <div style={{ borderBottom: "1px solid var(--border-color)" }}>
     <div
       className="task-line"
       style={{
@@ -175,6 +177,8 @@ export function TaskCard({ task, onChange, onDragStart, onCreateNext }: Props) {
           />
         </div>
       )}
+    </div>
+    <SubtaskList taskId={task.id} />
     </div>
   );
 }

@@ -13,10 +13,12 @@ interface Props {
 }
 
 const SCALES = [
-  { id: "sm", label: "S" },
-  { id: "md", label: "M" },
-  { id: "lg", label: "L" },
-  { id: "xl", label: "XL" },
+  { id: "80", label: "80%" },
+  { id: "90", label: "90%" },
+  { id: "100", label: "100%" },
+  { id: "110", label: "110%" },
+  { id: "125", label: "125%" },
+  { id: "150", label: "150%" },
 ];
 
 const FILTERS: { id: ThemeMode | "auto" | "all"; label: string }[] = [

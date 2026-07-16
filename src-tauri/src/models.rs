@@ -24,3 +24,14 @@ pub struct ColorSet {
     pub color: i64, // ARGB
     pub sort_order: f64,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Subtask {
+    pub id: String,
+    pub task_id: String,
+    pub title: String,
+    pub is_done: bool,
+    pub sort_order: f64,
+    pub created_at: i64,
+}

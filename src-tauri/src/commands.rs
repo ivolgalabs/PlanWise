@@ -1,5 +1,5 @@
 use crate::db::Db;
-use crate::models::{ColorSet, Task};
+use crate::models::{ColorSet, Subtask, Task};
 use chrono::Utc;
 use tauri::State;
 use uuid::Uuid;
@@ -129,4 +129,59 @@ pub fn rollover_overdue(state: State<'_, Db>, today_epoch_day: i64) -> i64 {
     )
     .expect("rollover_overdue execute");
     count
+}
+
+// ── Подзадачи ───────────────────────────────────────────────────────
+
+#[tauri::command]
+pub fn get_subtasks(state: State<'_, Db>, task_id: String) -> Vec<Subtask> {
+    let conn = state.0.lock().unwrap();
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, task_id, title, is_done, sort_order, created_at
+             FROM subtasks WHERE task_id = ?1 ORDER BY sort_order ASC",
+        )
+        .expect("prepare get_subtasks");
+    stmt.query_map([task_id], |row| {
+        Ok(Subtask {
+            id: row.get(0)?,
+            task_id: row.get(1)?,
+            title: row.get(2)?,
+            is_done: row.get::<_, i64>(3)? != 0,
+            sort_order: row.get(4)?,
+            created_at: row.get(5)?,
+        })
+    })
+    .expect("query get_subtasks")
+    .filter_map(|r| r.ok())
+    .collect()
+}
+
+#[tauri::command]
+pub fn upsert_subtask(state: State<'_, Db>, mut sub: Subtask) -> Subtask {
+    let conn = state.0.lock().unwrap();
+    if sub.id.is_empty() {
+        sub.id = Uuid::new_v4().to_string();
+    }
+    if sub.created_at == 0 {
+        sub.created_at = now_ms();
+    }
+    conn.execute(
+        "INSERT INTO subtasks (id, task_id, title, is_done, sort_order, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+         ON CONFLICT(id) DO UPDATE SET
+           title=excluded.title, is_done=excluded.is_done, sort_order=excluded.sort_order",
+        rusqlite::params![
+            sub.id, sub.task_id, sub.title, sub.is_done as i64, sub.sort_order, sub.created_at,
+        ],
+    )
+    .expect("upsert_subtask execute");
+    sub
+}
+
+#[tauri::command]
+pub fn delete_subtask(state: State<'_, Db>, id: String) {
+    let conn = state.0.lock().unwrap();
+    conn.execute("DELETE FROM subtasks WHERE id = ?1", [id])
+        .expect("delete_subtask");
 }
