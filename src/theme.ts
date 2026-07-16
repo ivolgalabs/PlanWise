@@ -1,81 +1,76 @@
-/** Темы ежедневника. Каждая тема задаёт CSS-переменные на :root. */
+/**
+ * Темы делегируются в Universal UI (universal-ui/themes.css).
+ * Здесь — только список доступных тем для UI-пикера и хелперы.
+ */
 
-export type ThemeKind = "paper" | "dark" | "cold";
+export type ThemeMode = "light" | "dark" | "oled";
 
-interface ThemeDef {
+export interface ThemeDef {
+  /** id атрибута data-theme в Universal UI */
+  id: string;
+  /** Человекочитаемое название */
   label: string;
-  vars: Record<string, string>;
+  /** Палитра (группа) */
+  palette: string;
+  /** Режим освещённости */
+  mode: ThemeMode;
+  /** Категория для UI-пикера */
+  tier: "recommended" | "optional" | "hidden";
 }
 
-export const THEMES: Record<ThemeKind, ThemeDef> = {
-  paper: {
-    label: "Paper-white",
-    vars: {
-      "--bg": "#FAF7F0",
-      "--card": "#FFFFFF",
-      "--card-border": "#E8E2D4",
-      "--muted": "#9A8F7A",
-      "--text": "#5A5240",
-      "--accent": "#C9A87C",
-      "--set-none": "#F0ECE2",
-      "--set-work": "#C9A87C",
-      "--set-personal": "#7EB8C4",
-      "--set-sport": "#E8A87C",
-    },
-  },
-  dark: {
-    label: "Тёмная",
-    vars: {
-      "--bg": "#1E1B16",
-      "--card": "#2A2620",
-      "--card-border": "#3A352C",
-      "--muted": "#8A8170",
-      "--text": "#E8E2D4",
-      "--accent": "#D4B08C",
-      "--set-none": "#3A352C",
-      "--set-work": "#C9A87C",
-      "--set-personal": "#7EB8C4",
-      "--set-sport": "#E8A87C",
-    },
-  },
-  cold: {
-    label: "Холодная",
-    vars: {
-      "--bg": "#EEF2F5",
-      "--card": "#FFFFFF",
-      "--card-border": "#D6DEE4",
-      "--muted": "#7A8896",
-      "--text": "#3A4654",
-      "--accent": "#6B8FAE",
-      "--set-none": "#D6DEE4",
-      "--set-work": "#6B8FAE",
-      "--set-personal": "#9DB4C7",
-      "--set-sport": "#7AA8B8",
-    },
-  },
+/** Все 24 темы Universal UI (8 палитр × 3 режима). */
+const PALETTES = [
+  { palette: "slate", label: "Slate", tier: "recommended" as const, accent: "#4c5699" },
+  { palette: "sepia", label: "Sepia", tier: "recommended" as const, accent: "#a0522d" },
+  { palette: "evergreen", label: "Evergreen", tier: "recommended" as const, accent: "#2d6a4f" },
+  { palette: "nord", label: "Nord", tier: "recommended" as const, accent: "#5e81ac" },
+  { palette: "midnight", label: "Midnight", tier: "optional" as const, accent: "#3060e8" },
+  { palette: "dracula", label: "Dracula", tier: "optional" as const, accent: "#9444d6" },
+  { palette: "amber", label: "Amber", tier: "hidden" as const, accent: "#d35400" },
+  { palette: "sakura", label: "Sakura", tier: "hidden" as const, accent: "#d87093" },
+];
+
+const MODE_LABEL: Record<ThemeMode, string> = {
+  light: "Светлая",
+  dark: "Тёмная",
+  oled: "OLED",
 };
 
-/** Применить тему: выставляет CSS-переменные на :root. */
-export const applyTheme = (kind: ThemeKind) => {
-  const root = document.documentElement;
-  for (const [k, v] of Object.entries(THEMES[kind].vars)) {
-    root.style.setProperty(k, v);
-  }
+export const ALL_THEMES: ThemeDef[] = PALETTES.flatMap((p) =>
+  (["light", "dark", "oled"] as ThemeMode[]).map((mode) => ({
+    id: `${mode}-${p.palette}`,
+    label: `${p.label} · ${MODE_LABEL[mode]}`,
+    palette: p.palette,
+    mode,
+    tier: p.tier,
+  })),
+);
+
+/** Получить HEX акцента палитры (для образца в пикере). */
+export const paletteAccent = (palette: string): string =>
+  PALETTES.find((p) => p.palette === palette)?.accent ?? "#4c5699";
+
+/** Применить тему: выставляет data-theme на <html>. */
+export const applyTheme = (themeId: string) => {
+  document.documentElement.setAttribute("data-theme", themeId);
 };
 
-// Совместимость: COLORS читает CSS-переменные, чтобы компоненты автоматически
-// перекрашивались при смене темы. Fallback — paper-значения.
+// Для обратной совместимости: COLORS читает CSS-переменные Universal UI.
 export const COLORS = {
-  paper: "var(--bg)",
-  card: "var(--card)",
-  cardBorder: "var(--card-border)",
-  muted: "var(--muted)",
-  text: "var(--text)",
+  paper: "var(--bg-primary)",
+  card: "var(--bg-secondary)",
+  cardBorder: "var(--border-color)",
+  muted: "var(--text-muted)",
+  text: "var(--text-primary)",
+  secondary: "var(--text-secondary)",
   accent: "var(--accent)",
-  setNone: "var(--set-none)",
-  setWork: "var(--set-work)",
-  setPersonal: "var(--set-personal)",
-  setSport: "var(--set-sport)",
+  hover: "var(--bg-hover)",
+  tertiary: "var(--bg-tertiary)",
+  // Маркеры задач — фиксированные насыщенные (отвязаны от accent)
+  setNone: "var(--bg-tertiary)",
+  setWork: "#c9a87c",
+  setPersonal: "#7eb8c4",
+  setSport: "#e8a87c",
 } as const;
 
 export const colorSetHex = (id: string | null): string => {

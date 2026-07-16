@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import type { Task } from "./api";
-import type { ThemeKind } from "./theme";
 
 export type ViewKind = "day" | "week" | "month";
 
@@ -9,12 +8,16 @@ interface PlannerState {
   view: ViewKind;
   tasks: Task[];
   mondayFirst: boolean;
-  theme: ThemeKind;
+  /** id темы Universal UI (напр. 'light-slate'). */
+  theme: string;
+  /** Масштаб интерфейса: sm/md/lg/xl. */
+  scale: string;
   setSelectedDate: (d: Date) => void;
   setView: (v: ViewKind) => void;
   setTasks: (t: Task[]) => void;
   toggleMondayFirst: () => void;
-  setTheme: (t: ThemeKind) => void;
+  setTheme: (t: string) => void;
+  setScale: (s: string) => void;
 }
 
 export const useStore = create<PlannerState>((set) => ({
@@ -22,10 +25,12 @@ export const useStore = create<PlannerState>((set) => ({
   view: "week",
   tasks: [],
   mondayFirst: true,
-  theme: "paper",
+  theme: "light-slate",
+  scale: "md",
   setSelectedDate: (d) => set({ selectedDate: d }),
   setView: (v) => set({ view: v }),
   setTasks: (t) => set({ tasks: t }),
   toggleMondayFirst: () => set((s) => ({ mondayFirst: !s.mondayFirst })),
   setTheme: (t) => set({ theme: t }),
+  setScale: (s) => set({ scale: s }),
 }));

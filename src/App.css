@@ -1,7 +1,18 @@
+/* === Ежедневник — стили на токенах Universal UI ===
+ * Цвета/радиусы/отступы/типографика берутся из Universal UI, чтобы UI
+ * автоматически адаптировался при смене темы и был единым между приложениями. */
+
 :root {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  color: #5a5240;
+  font-family: var(--font-ui);
+  font-size: 16px; /* базовый масштаб — регулируется настройкой */
+  color: var(--text-primary);
 }
+
+/* Масштаб интерфейса (настройка пользователя). Класс вешается на <html>. */
+html.scale-sm { font-size: 14px; }
+html.scale-md { font-size: 16px; }
+html.scale-lg { font-size: 18px; }
+html.scale-xl { font-size: 20px; }
 
 * {
   box-sizing: border-box;
@@ -10,104 +21,139 @@
 body {
   margin: 0;
   padding: 0;
-  background: #faf7f0;
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
-/* Карточка задачи */
-.task-card {
-  border-radius: 6px;
-  overflow: hidden;
+/* === Карточка задачи (tweek-style line) === */
+.task-line {
+  display: flex;
+  align-items: center;
+  padding: 0 var(--sp-2);
+  border-radius: var(--radius-sm);
+  border-bottom: 1px solid var(--border-color);
+  transition: background var(--duration-fast) var(--ease-standard);
+  min-height: calc(var(--row-h) - 4px);
+}
+.task-line:hover {
+  background: var(--bg-hover);
+}
+.task-line:hover .task-actions {
+  opacity: 1;
 }
 
-/* Кнопка выбора цвета на карточке */
+/* Подчёркивание инпута задачи (как в tweek.so) */
+.task-line input[type="text"],
+.task-line input:not([type]) {
+  border-bottom: 1px solid transparent;
+}
+.task-line input:focus {
+  border-bottom-color: var(--accent);
+}
+
+/* Чекбоксы — компактнее, в цвет акцента */
+input[type="checkbox"] {
+  width: calc(var(--fs-base) - 2px);
+  height: calc(var(--fs-base) - 2px);
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+
+/* === Inline-поле ввода === */
+.inline-input {
+  border-bottom: 1px solid var(--border-color);
+}
+.inline-input:focus {
+  border-bottom-color: var(--accent);
+}
+.inline-input::placeholder {
+  color: var(--text-muted);
+}
+
+/* === Кнопки === */
+.icon-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--fs-md);
+  cursor: pointer;
+  padding: var(--sp-1) var(--sp-3);
+  border-radius: var(--radius-md);
+  min-width: var(--control-h-sm);
+  height: var(--control-h-sm);
+  transition: background var(--duration-fast) var(--ease-standard);
+}
+.icon-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
 .chip-btn {
   border: none;
-  background: rgba(255, 255, 255, 0.5);
-  border-radius: 50%;
-  width: 18px;
-  height: 18px;
-  font-size: 8px;
-  color: #5a5240;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-full);
+  width: calc(var(--fs-md) + 4px);
+  height: calc(var(--fs-md) + 4px);
+  font-size: var(--fs-2xs);
+  color: var(--text-primary);
   cursor: pointer;
   line-height: 1;
   padding: 0;
   opacity: 0.5;
+  transition: opacity var(--duration-fast);
 }
 .chip-btn:hover {
   opacity: 1;
 }
 
-/* Меню выбора цвета */
+/* === Меню выбора цвета === */
 .color-menu {
   position: absolute;
-  right: 4px;
-  top: 28px;
-  background: #fff;
-  border: 1px solid #e8e2d4;
-  border-radius: 8px;
-  padding: 4px;
+  right: var(--sp-2);
+  top: calc(var(--row-h) - 2px);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-2);
   display: flex;
-  gap: 4px;
-  z-index: 10;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  gap: var(--sp-2);
+  z-index: var(--z-dropdown);
+  box-shadow: var(--shadow-lg);
 }
 .color-menu button {
-  width: 20px;
-  height: 20px;
-  border: 1px solid #e8e2d4;
-  border-radius: 50%;
+  width: calc(var(--fs-md) + 6px);
+  height: calc(var(--fs-md) + 6px);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-full);
   cursor: pointer;
   padding: 0;
 }
 .color-menu button.del-btn {
   background: transparent;
-  color: #c44;
-  border: 1px solid #e8e2d4;
-  font-size: 10px;
-  line-height: 1;
+  color: var(--danger);
+  border: 1px solid var(--border-color);
+  font-size: var(--fs-2xs);
 }
 
-/* Иконки-кнопки в шапке */
-.icon-btn {
-  border: none;
-  background: transparent;
-  color: #9a8f7a;
-  font-size: 18px;
-  cursor: pointer;
-  padding: "2px 6px";
-  border-radius: 6px;
-  min-width: 28px;
-  height: 28px;
-}
-.icon-btn:hover {
-  background: #ede6d5;
-}
-
-/* Inline-поле ввода задачи в колонке дня */
-.inline-input::placeholder {
-  color: #b8ad95;
-}
-
-/* Чекбоксы — компактнее */
-input[type="checkbox"] {
-  width: 14px;
-  height: 14px;
-  cursor: pointer;
-}
-
-/* Колонка дня при наведении drop */
+/* === Колонка дня === */
 .day-column {
-  transition: background 0.1s;
+  border-radius: var(--radius-lg);
+  transition: background var(--duration-fast) var(--ease-standard);
 }
 
-/* Строка задачи: показ действий при наведении */
-.task-line:hover .task-actions {
-  opacity: 1 !important;
+/* === Скроллбары === */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
 }
-.task-line {
-  padding: 0 4px;
-  border-radius: 4px;
+::-webkit-scrollbar-track {
+  background: transparent;
 }
-.task-line:hover {
-  background: rgba(0, 0, 0, 0.02);
+::-webkit-scrollbar-thumb {
+  background: var(--bg-hover);
+  border-radius: var(--radius-sm);
+  border: 2px solid var(--bg-primary);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
 }

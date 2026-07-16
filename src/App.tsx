@@ -20,11 +20,13 @@ function App() {
     tasks,
     mondayFirst,
     theme,
+    scale,
     setSelectedDate,
     setView,
     setTasks,
     toggleMondayFirst,
     setTheme,
+    setScale,
   } = useStore();
 
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -38,6 +40,13 @@ function App() {
   useEffect(() => {
     applyTheme(theme);
   }, [theme]);
+
+  // Масштаб интерфейса: класс scale-* на <html>.
+  useEffect(() => {
+    const html = document.documentElement;
+    html.classList.remove("scale-sm", "scale-md", "scale-lg", "scale-xl");
+    html.classList.add(`scale-${scale}`);
+  }, [scale]);
 
   // Адаптивность по ширине окна через matchMedia — надёжнее в Tauri WebView,
   // срабатывает сразу при пересечении порога, а не на каждый пиксель ресайза.
@@ -190,8 +199,10 @@ function App() {
         <SettingsPanel
           mondayFirst={mondayFirst}
           theme={theme}
+          scale={scale}
           onToggleMondayFirst={toggleMondayFirst}
           onThemeChange={setTheme}
+          onScaleChange={setScale}
           onClose={() => setSettingsOpen(false)}
         />
       )}
