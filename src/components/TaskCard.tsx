@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Task } from "../api";
 import { api } from "../api";
 import { COLORS, colorSetHex } from "../theme";
+import { TimePicker } from "./TimePicker";
 
 interface Props {
   task: Task;
@@ -77,6 +78,11 @@ export function TaskCard({ task, onChange, onDragStart, onCreateNext }: Props) {
 
   const setHex = colorSetHex(task.colorSetId);
 
+  const setTime = async (m: number | null) => {
+    await api.upsertTask({ ...task, timeMinutes: m });
+    onChange();
+  };
+
   return (
     <div
       className="task-line"
@@ -128,6 +134,8 @@ export function TaskCard({ task, onChange, onDragStart, onCreateNext }: Props) {
         }}
         data-task-id={task.id}
       />
+      {/* Время — бейдж всегда виден, пикер по клику */}
+      <TimePicker value={task.timeMinutes ?? null} onChange={setTime} />
       {/* Кнопки появляются при hover */}
       <div className="task-actions" style={{ opacity: 0, transition: "opacity 0.1s" }}>
         <button

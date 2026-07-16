@@ -10,6 +10,7 @@ export interface Task {
   createdAt: number; // epoch-ms
   updatedAt: number;
   deviceId: string;
+  timeMinutes?: number | null; // 0-1439, null = «в течение дня»
 }
 
 export interface ColorSet {
@@ -49,6 +50,7 @@ export const api = {
         createdAt: task.createdAt ?? 0,
         updatedAt: 0,
         deviceId: task.deviceId ?? "",
+        timeMinutes: task.timeMinutes ?? null,
       },
     }),
   deleteTask: (id: string) => invoke<void>("delete_task", { id }),

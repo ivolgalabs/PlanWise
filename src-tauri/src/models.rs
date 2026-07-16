@@ -12,6 +12,8 @@ pub struct Task {
     pub created_at: i64, // epoch-ms
     pub updated_at: i64, // epoch-ms
     pub device_id: String,
+    #[serde(default)]
+    pub time_minutes: Option<i32>, // 0-1439, NULL = «в течение дня»
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

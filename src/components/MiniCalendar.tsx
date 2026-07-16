@@ -6,6 +6,10 @@ import { useStore } from "../store";
 
 interface Props {
   tasks: Task[];
+  /** Крупный режим (для боковой панели DayView). */
+  large?: boolean;
+  /** Колбэк выбора дня (если не задан — использует store.setSelectedDate). */
+  onSelect?: (d: Date) => void;
 }
 
 type BusyLevel = "free" | "light" | "heavy";
@@ -14,7 +18,7 @@ const busyLevel = (n: number): BusyLevel =>
   n === 0 ? "free" : n <= 2 ? "light" : "heavy";
 
 /** Мини-календарь месяца с индикатором занятости дней. */
-export function MiniCalendar({ tasks }: Props) {
+export function MiniCalendar({ tasks, large, onSelect }: Props) {
   const { selectedDate, setSelectedDate, mondayFirst } = useStore();
   const first = firstOfMonth(selectedDate);
   const gridStart = startOfWeek(first, mondayFirst);
@@ -28,39 +32,45 @@ export function MiniCalendar({ tasks }: Props) {
     return d;
   });
 
-  const monthTitle = first.toLocaleDateString("ru", {
-    month: "long",
-    year: "numeric",
-  });
+  const pick = (d: Date) => {
+    const clean = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    if (onSelect) onSelect(clean);
+    else setSelectedDate(clean);
+  };
+
+  // Масштаб: large — крупнее шрифт/ячейки.
+  const fs = large ? "var(--fs-sm)" : 9;
+  const cellPad = large ? "8px 0" : "3px 0";
+  const monthFs = large ? "var(--fs-md)" : 11;
 
   return (
     <div
       style={{
         background: COLORS.card,
         border: `1px solid ${COLORS.cardBorder}`,
-        borderRadius: 8,
-        padding: 10,
+        borderRadius: "var(--radius-lg)",
+        padding: large ? "var(--sp-6)" : 10,
       }}
     >
       <div
         style={{
-          fontSize: 11,
+          fontSize: monthFs,
           fontWeight: 600,
           color: COLORS.text,
-          marginBottom: 8,
+          marginBottom: "var(--sp-4)",
           textTransform: "capitalize",
         }}
       >
-        {monthTitle}
+        {first.toLocaleDateString("ru", { month: "long", year: "numeric" })}
       </div>
-      <div style={{ display: "flex", marginBottom: 4 }}>
+      <div style={{ display: "flex", marginBottom: 6 }}>
         {["П", "В", "С", "Ч", "П", "С", "В"].map((w, i) => (
           <div
             key={i}
             style={{
               flex: 1,
               textAlign: "center",
-              fontSize: 8,
+              fontSize: large ? "var(--fs-2xs)" : 8,
               color: COLORS.muted,
             }}
           >
@@ -72,7 +82,7 @@ export function MiniCalendar({ tasks }: Props) {
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(7, 1fr)",
-          gap: 2,
+          gap: large ? 3 : 2,
         }}
       >
         {cells.map((day, i) => {
@@ -82,22 +92,18 @@ export function MiniCalendar({ tasks }: Props) {
           return (
             <div
               key={i}
-              onClick={() =>
-                setSelectedDate(
-                  new Date(day.getFullYear(), day.getMonth(), day.getDate()),
-                )
-              }
+              onClick={() => pick(day)}
               style={{
                 textAlign: "center",
-                padding: "3px 0",
+                padding: cellPad,
                 cursor: "pointer",
-                borderRadius: 4,
+                borderRadius: "var(--radius-sm)",
                 background: selected ? COLORS.accent + "26" : "transparent",
               }}
             >
               <div
                 style={{
-                  fontSize: 9,
+                  fontSize: fs,
                   fontWeight: selected ? 700 : 400,
                   color: inMonth
                     ? selected
@@ -108,7 +114,7 @@ export function MiniCalendar({ tasks }: Props) {
               >
                 {day.getDate()}
               </div>
-              <BusyDot level={level} />
+              <BusyDot level={level} large={large} />
             </div>
           );
         })}
@@ -117,15 +123,22 @@ export function MiniCalendar({ tasks }: Props) {
   );
 }
 
-function BusyDot({ level }: { level: BusyLevel }) {
-  if (level === "free") return <div style={{ height: 3 }} />;
+function BusyDot({
+  level,
+  large,
+}: {
+  level: BusyLevel;
+  large?: boolean;
+}) {
+  const sz = large ? 4 : 3;
+  if (level === "free") return <div style={{ height: sz }} />;
   if (level === "light")
     return (
       <div
         style={{
-          width: 3,
-          height: 3,
-          margin: "1px auto 0",
+          width: sz,
+          height: sz,
+          margin: "2px auto 0",
           borderRadius: "50%",
           background: COLORS.accent,
         }}
@@ -134,9 +147,9 @@ function BusyDot({ level }: { level: BusyLevel }) {
   return (
     <div
       style={{
-        width: 10,
+        width: large ? 14 : 10,
         height: 3,
-        margin: "1px auto 0",
+        margin: "2px auto 0",
         borderRadius: 2,
         background: COLORS.setSport,
       }}

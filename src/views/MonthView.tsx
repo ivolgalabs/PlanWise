@@ -1,17 +1,21 @@
+import { useState } from "react";
 import type { Task } from "../api";
-import { fromEpochDay } from "../api";
-import { startOfWeek, firstOfMonth, isSameDay, isToday } from "../date";
+import { api, fromEpochDay } from "../api";
+import { startOfWeek, firstOfMonth, isSameDay, isToday, isPast } from "../date";
 import { COLORS } from "../theme";
 import { useStore } from "../store";
 
 interface Props {
   tasks: Task[];
   onSelectDay: (d: Date) => void;
+  onChange: () => void;
 }
 
-/** Вид «Месяц»: сетка 6×7 с превью первых задач в ячейках. */
-export function MonthView({ tasks, onSelectDay }: Props) {
+/** Вид «Месяц»: сетка с читаемым превью задач + меню по клику на день. */
+export function MonthView({ tasks, onSelectDay, onChange }: Props) {
   const { selectedDate, mondayFirst } = useStore();
+  const [menuDay, setMenuDay] = useState<Date | null>(null);
+  const [addTitle, setAddTitle] = useState("");
   const first = firstOfMonth(selectedDate);
   const gridStart = startOfWeek(first, mondayFirst);
 
@@ -28,15 +32,25 @@ export function MonthView({ tasks, onSelectDay }: Props) {
     ? ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
     : ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
 
+  const openDay = (d: Date) => {
+    setMenuDay(null);
+    onSelectDay(d);
+  };
+
+  const addTask = async (d: Date) => {
+    const t = addTitle.trim();
+    if (!t) return;
+    const epochDay = Math.floor(
+      Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86_400_000,
+    );
+    await api.upsertTask({ title: t, date: epochDay });
+    setAddTitle("");
+    setMenuDay(null);
+    onChange();
+  };
+
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        height: "100%",
-        padding: 8,
-      }}
-    >
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", padding: "var(--sp-4)" }}>
       <div style={{ display: "flex" }}>
         {weekdays.map((w) => (
           <div
@@ -44,10 +58,10 @@ export function MonthView({ tasks, onSelectDay }: Props) {
             style={{
               flex: 1,
               textAlign: "center",
-              fontSize: 10,
+              fontSize: "var(--fs-2xs)",
               color: COLORS.muted,
               fontWeight: 600,
-              padding: "4px 0",
+              padding: "var(--sp-2) 0",
             }}
           >
             {w}
@@ -58,7 +72,7 @@ export function MonthView({ tasks, onSelectDay }: Props) {
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(7, 1fr)",
-          gap: 3,
+          gap: "var(--sp-2)",
           flex: 1,
           minHeight: 0,
         }}
@@ -66,37 +80,42 @@ export function MonthView({ tasks, onSelectDay }: Props) {
         {cells.map((day) => {
           const inMonth = day.getMonth() === selectedDate.getMonth();
           const today = isToday(day);
+          const past = isPast(day);
           const dayTasks = tasksForDay(day);
           return (
             <div
               key={day.toISOString()}
-              onClick={() => onSelectDay(day)}
+              onClick={() => setMenuDay(day)}
               style={{
                 background: COLORS.card,
                 border: `${today ? 2 : 1}px solid ${today ? COLORS.accent : COLORS.cardBorder}`,
-                borderRadius: 6,
-                padding: 4,
+                borderRadius: "var(--radius-md)",
+                padding: "var(--sp-2)",
                 cursor: "pointer",
-                opacity: inMonth ? 1 : 0.4,
+                opacity: !inMonth ? 0.35 : past ? 0.6 : 1,
                 minHeight: 0,
                 overflow: "hidden",
+                position: "relative",
               }}
             >
               <div
                 style={{
-                  fontSize: 11,
+                  fontSize: "var(--fs-sm)",
                   fontWeight: 600,
                   color: COLORS.text,
-                  marginBottom: 2,
+                  marginBottom: "var(--sp-1)",
                 }}
               >
                 {day.getDate()}
               </div>
-              {dayTasks.slice(0, 2).map((t) => (
+              {dayTasks.slice(0, 3).map((t) => (
                 <div
                   key={t.id}
                   style={{
-                    fontSize: 8,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 3,
+                    fontSize: "var(--fs-2xs)",
                     color: t.isDone ? COLORS.muted : COLORS.text,
                     textDecoration: t.isDone ? "line-through" : "none",
                     whiteSpace: "nowrap",
@@ -104,18 +123,96 @@ export function MonthView({ tasks, onSelectDay }: Props) {
                     textOverflow: "ellipsis",
                   }}
                 >
+                  <span
+                    style={{
+                      width: 5,
+                      height: 5,
+                      borderRadius: "50%",
+                      flexShrink: 0,
+                      background:
+                        t.colorSetId === "cs-work"
+                          ? COLORS.setWork
+                          : t.colorSetId === "cs-personal"
+                            ? COLORS.setPersonal
+                            : t.colorSetId === "cs-sport"
+                              ? COLORS.setSport
+                              : COLORS.muted,
+                    }}
+                  />
                   {t.title}
                 </div>
               ))}
-              {dayTasks.length > 2 && (
-                <div style={{ fontSize: 7, color: COLORS.muted }}>
-                  +{dayTasks.length - 2}
+              {dayTasks.length > 3 && (
+                <div style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted }}>
+                  +{dayTasks.length - 3} ещё
                 </div>
               )}
             </div>
           );
         })}
       </div>
+
+      {/* Меню при клике на день */}
+      {menuDay && (
+        <div
+          onClick={() => { setMenuDay(null); setAddTitle(""); }}
+          style={{
+            position: "fixed", inset: 0,
+            background: "rgba(0,0,0,.25)", zIndex: 200,
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: COLORS.card, border: `1px solid ${COLORS.cardBorder}`,
+              borderRadius: "var(--radius-xl)", padding: "var(--sp-6)",
+              width: 280, boxShadow: "var(--shadow-xl)",
+            }}
+          >
+            <div style={{ fontSize: "var(--fs-md)", fontWeight: 600, color: COLORS.text, marginBottom: "var(--sp-4)", textTransform: "capitalize" }}>
+              {menuDay.toLocaleDateString("ru", { day: "numeric", month: "long", weekday: "long" })}
+            </div>
+            <input
+              autoFocus
+              value={addTitle}
+              onChange={(e) => setAddTitle(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") addTask(menuDay); }}
+              placeholder="Добавить задачу на этот день"
+              style={{
+                width: "100%", fontSize: "var(--fs-sm)",
+                border: `1px solid ${COLORS.cardBorder}`, borderRadius: "var(--radius-md)",
+                padding: "var(--sp-2) var(--sp-3)", marginBottom: "var(--sp-4)",
+                background: "transparent", color: COLORS.text,
+              }}
+            />
+            <div style={{ display: "flex", gap: "var(--sp-2)" }}>
+              <button
+                onClick={() => addTask(menuDay)}
+                style={btnStyle(false)}
+              >
+                Добавить
+              </button>
+              <button
+                onClick={() => openDay(menuDay)}
+                style={btnStyle(true)}
+              >
+                Перейти к дню
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+function btnStyle(primary: boolean): React.CSSProperties {
+  return {
+    flex: 1, padding: "var(--sp-2) var(--sp-3)", cursor: "pointer",
+    fontSize: "var(--fs-sm)", borderRadius: "var(--radius-md)",
+    border: `1px solid ${primary ? COLORS.accent : COLORS.cardBorder}`,
+    background: primary ? COLORS.accent : "transparent",
+    color: primary ? "#fff" : COLORS.text,
+  };
 }

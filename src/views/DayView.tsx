@@ -3,7 +3,9 @@ import type { Task } from "../api";
 import { api } from "../api";
 import { fromEpochDay } from "../api";
 import { TaskCard } from "../components/TaskCard";
+import { MiniCalendar } from "../components/MiniCalendar";
 import { COLORS } from "../theme";
+import { useStore } from "../store";
 
 interface Props {
   day: Date;
@@ -12,12 +14,13 @@ interface Props {
 }
 
 /**
- * Вид «День»: заголовок + строки задач + inline-поле ввода.
- * Enter в строке создаёт новую ниже (как в DayColumn).
+ * Вид «День»: слева — крупный заголовок + задачи (увеличенный шрифт),
+ * справа — мини-календарь (больше обычного) для навигации.
  */
 export function DayView({ day, tasks, onChange }: Props) {
   const [newTitle, setNewTitle] = useState("");
   const newInputRef = useRef<HTMLInputElement>(null);
+  const { setSelectedDate } = useStore();
 
   const dayTasks = tasks
     .filter((t) => {
@@ -28,7 +31,12 @@ export function DayView({ day, tasks, onChange }: Props) {
         d.getDate() === day.getDate()
       );
     })
-    .sort((a, b) => a.sortOrder - b.sortOrder);
+    .sort((a, b) => {
+      // Сначала задачи со временем (по возрастанию), потом без времени.
+      const at = a.timeMinutes ?? 9999;
+      const bt = b.timeMinutes ?? 9999;
+      return at - bt;
+    });
 
   const epochDay = Math.floor(
     Date.UTC(day.getFullYear(), day.getMonth(), day.getDate()) / 86_400_000,
@@ -58,66 +66,84 @@ export function DayView({ day, tasks, onChange }: Props) {
   };
 
   return (
-    <div
-      style={{
-        padding: "12px 16px",
-        overflowY: "auto",
-        height: "100%",
-        maxWidth: 640,
-      }}
-    >
-      <h2
+    <div style={{ display: "flex", height: "100%", minHeight: 0 }}>
+      {/* Основная область — задачи */}
+      <div
         style={{
-          fontSize: 20,
-          fontWeight: 600,
-          color: COLORS.text,
-          margin: "0 0 12px",
-          textTransform: "capitalize",
+          flex: 1,
+          padding: "var(--sp-6) var(--sp-8)",
+          overflowY: "auto",
+          minWidth: 0,
         }}
       >
-        {day.toLocaleDateString("ru", {
-          day: "numeric",
-          month: "long",
-          weekday: "long",
-        })}
-      </h2>
+        <h2
+          style={{
+            fontSize: "var(--fs-xl)",
+            fontWeight: 700,
+            color: COLORS.text,
+            margin: "0 0 var(--sp-6)",
+            textTransform: "capitalize",
+          }}
+        >
+          {day.toLocaleDateString("ru", {
+            day: "numeric",
+            month: "long",
+            weekday: "long",
+          })}
+        </h2>
 
-      <div>
-        {dayTasks.length === 0 && (
-          <p style={{ color: COLORS.muted, fontSize: 13 }}>Нет задач</p>
-        )}
-        {dayTasks.map((t) => (
-          <TaskCard
-            key={t.id}
-            task={t}
-            onChange={onChange}
-            onCreateNext={createNext}
-          />
-        ))}
+        <div>
+          {dayTasks.length === 0 && (
+            <p style={{ color: COLORS.muted, fontSize: "var(--fs-base)" }}>
+              Нет задач. Напишите ниже, чтобы добавить.
+            </p>
+          )}
+          {dayTasks.map((t) => (
+            <TaskCard
+              key={t.id}
+              task={t}
+              onChange={onChange}
+              onCreateNext={createNext}
+            />
+          ))}
+        </div>
+
+        {/* Inline-поле ввода — крупное */}
+        <input
+          ref={newInputRef}
+          className="inline-input"
+          value={newTitle}
+          onChange={(e) => setNewTitle(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") addTask();
+          }}
+          placeholder="+ добавить задачу"
+          style={{
+            width: "100%",
+            border: "none",
+            borderTop: `1px solid ${COLORS.cardBorder}`,
+            padding: "var(--sp-4) var(--sp-2)",
+            marginTop: "var(--sp-2)",
+            fontSize: "var(--fs-md)",
+            background: "transparent",
+            outline: "none",
+            color: COLORS.text,
+          }}
+        />
       </div>
 
-      {/* Inline-поле ввода */}
-      <input
-        ref={newInputRef}
-        className="inline-input"
-        value={newTitle}
-        onChange={(e) => setNewTitle(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") addTask();
-        }}
-        placeholder="+ добавить задачу"
+      {/* Правая панель — мини-календарь крупнее */}
+      <div
         style={{
-          width: "100%",
-          border: "none",
-          borderTop: `1px solid ${COLORS.cardBorder}`,
-          padding: "8px 4px",
-          marginTop: 4,
-          fontSize: 13,
-          background: "transparent",
-          outline: "none",
-          color: COLORS.text,
+          width: 280,
+          flexShrink: 0,
+          padding: "var(--sp-6) var(--sp-4)",
+          borderLeft: `1px solid ${COLORS.cardBorder}`,
+          overflowY: "auto",
         }}
-      />
+      >
+        <MiniCalendar tasks={tasks} large onSelect={(d) => setSelectedDate(d)} />
+      </div>
     </div>
   );
 }

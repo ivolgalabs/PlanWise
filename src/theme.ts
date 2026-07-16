@@ -1,61 +1,61 @@
 /**
- * Темы делегируются в Universal UI (universal-ui/themes.css).
- * Здесь — только список доступных тем для UI-пикера и хелперы.
+ * Темы Universal UI.
+ * Двухосевая модель: РЕЖИМ (light/dark/auto) × ПАЛИТРА (slate/sepia/...).
+ * Режим auto следует за системным prefers-color-scheme.
  */
 
 export type ThemeMode = "light" | "dark" | "oled";
+/** Режим, который выбирает юзер в настройках. */
+export type ModePref = "light" | "dark" | "auto";
 
-export interface ThemeDef {
-  /** id атрибута data-theme в Universal UI */
+export interface PaletteDef {
   id: string;
-  /** Человекочитаемое название */
   label: string;
-  /** Палитра (группа) */
-  palette: string;
-  /** Режим освещённости */
-  mode: ThemeMode;
-  /** Категория для UI-пикера */
   tier: "recommended" | "optional" | "hidden";
+  accent: string;
 }
 
-/** Все 24 темы Universal UI (8 палитр × 3 режима). */
-const PALETTES = [
-  { palette: "slate", label: "Slate", tier: "recommended" as const, accent: "#4c5699" },
-  { palette: "sepia", label: "Sepia", tier: "recommended" as const, accent: "#a0522d" },
-  { palette: "evergreen", label: "Evergreen", tier: "recommended" as const, accent: "#2d6a4f" },
-  { palette: "nord", label: "Nord", tier: "recommended" as const, accent: "#5e81ac" },
-  { palette: "midnight", label: "Midnight", tier: "optional" as const, accent: "#3060e8" },
-  { palette: "dracula", label: "Dracula", tier: "optional" as const, accent: "#9444d6" },
-  { palette: "amber", label: "Amber", tier: "hidden" as const, accent: "#d35400" },
-  { palette: "sakura", label: "Sakura", tier: "hidden" as const, accent: "#d87093" },
+/** 8 палитр (только группы, режим выбирается отдельно). */
+export const PALETTES: PaletteDef[] = [
+  { id: "slate", label: "Slate", tier: "recommended", accent: "#4c5699" },
+  { id: "sepia", label: "Sepia", tier: "recommended", accent: "#a0522d" },
+  { id: "evergreen", label: "Evergreen", tier: "recommended", accent: "#2d6a4f" },
+  { id: "nord", label: "Nord", tier: "recommended", accent: "#5e81ac" },
+  { id: "midnight", label: "Midnight", tier: "optional", accent: "#3060e8" },
+  { id: "dracula", label: "Dracula", tier: "optional", accent: "#9444d6" },
+  { id: "amber", label: "Amber", tier: "hidden", accent: "#d35400" },
+  { id: "sakura", label: "Sakura", tier: "hidden", accent: "#d87093" },
 ];
 
-const MODE_LABEL: Record<ThemeMode, string> = {
+export const MODE_LABEL: Record<ModePref, string> = {
   light: "Светлая",
   dark: "Тёмная",
-  oled: "OLED",
+  auto: "Авто",
 };
 
-export const ALL_THEMES: ThemeDef[] = PALETTES.flatMap((p) =>
-  (["light", "dark", "oled"] as ThemeMode[]).map((mode) => ({
-    id: `${mode}-${p.palette}`,
-    label: `${p.label} · ${MODE_LABEL[mode]}`,
-    palette: p.palette,
-    mode,
-    tier: p.tier,
-  })),
-);
-
-/** Получить HEX акцента палитры (для образца в пикере). */
-export const paletteAccent = (palette: string): string =>
-  PALETTES.find((p) => p.palette === palette)?.accent ?? "#4c5699";
-
-/** Применить тему: выставляет data-theme на <html>. */
-export const applyTheme = (themeId: string) => {
-  document.documentElement.setAttribute("data-theme", themeId);
+/** Реальный режим (учитывая auto). */
+export const resolveMode = (pref: ModePref): ThemeMode => {
+  if (pref !== "auto") return pref;
+  return window.matchMedia("(prefers-color-scheme: dark)").matches
+    ? "dark"
+    : "light";
 };
 
-// Для обратной совместимости: COLORS читает CSS-переменные Universal UI.
+/** Применить тему: data-theme="<mode>-<palette>" на <html>. */
+export const applyTheme = (palette: string, modePref: ModePref) => {
+  const mode = resolveMode(modePref);
+  document.documentElement.setAttribute("data-theme", `${mode}-${palette}`);
+};
+
+/** Слушатель системной темы для режима auto. Возвращает функцию отписки. */
+export const watchSystemTheme = (onChange: () => void) => {
+  const mq = window.matchMedia("(prefers-color-scheme: dark)");
+  const handler = () => onChange();
+  mq.addEventListener("change", handler);
+  return () => mq.removeEventListener("change", handler);
+};
+
+// COLORS — читает CSS-переменные Universal UI.
 export const COLORS = {
   paper: "var(--bg-primary)",
   card: "var(--bg-secondary)",
@@ -66,7 +66,6 @@ export const COLORS = {
   accent: "var(--accent)",
   hover: "var(--bg-hover)",
   tertiary: "var(--bg-tertiary)",
-  // Маркеры задач — фиксированные насыщенные (отвязаны от accent)
   setNone: "var(--bg-tertiary)",
   setWork: "#c9a87c",
   setPersonal: "#7eb8c4",
@@ -86,7 +85,6 @@ export const colorSetHex = (id: string | null): string => {
   }
 };
 
-/** ARGB-int (из Rust) -> #RRGGBB. */
 export const argbToHex = (argb: number): string => {
   const r = (argb >> 16) & 0xff;
   const g = (argb >> 8) & 0xff;

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "./api";
 import { useStore } from "./store";
 import { weekDays, firstOfMonth, lastOfMonth } from "./date";
-import { COLORS, applyTheme } from "./theme";
+import { COLORS, applyTheme, watchSystemTheme } from "./theme";
 import { TopBar } from "./components/TopBar";
 import { MiniCalendar } from "./components/MiniCalendar";
 import { SettingsPanel } from "./components/SettingsPanel";
@@ -19,13 +19,15 @@ function App() {
     view,
     tasks,
     mondayFirst,
-    theme,
+    palette,
+    modePref,
     scale,
     setSelectedDate,
     setView,
     setTasks,
     toggleMondayFirst,
-    setTheme,
+    setPalette,
+    setModePref,
     setScale,
   } = useStore();
 
@@ -36,10 +38,12 @@ function App() {
   );
   const [rolloverCount, setRolloverCount] = useState(0);
 
-  // Применяем тему при старте и при смене.
+  // Применяем тему (палитра + режим). В auto — следим за системой.
   useEffect(() => {
-    applyTheme(theme);
-  }, [theme]);
+    applyTheme(palette, modePref);
+    if (modePref !== "auto") return;
+    return watchSystemTheme(() => applyTheme(palette, modePref));
+  }, [palette, modePref]);
 
   // Масштаб интерфейса: класс scale-* на <html>.
   useEffect(() => {
@@ -186,6 +190,7 @@ function App() {
           {view === "month" && (
             <MonthView
               tasks={tasks}
+              onChange={reload}
               onSelectDay={(d) => {
                 setSelectedDate(d);
                 setView("day");
@@ -198,10 +203,12 @@ function App() {
       {settingsOpen && (
         <SettingsPanel
           mondayFirst={mondayFirst}
-          theme={theme}
+          palette={palette}
+          modePref={modePref}
           scale={scale}
           onToggleMondayFirst={toggleMondayFirst}
-          onThemeChange={setTheme}
+          onPaletteChange={setPalette}
+          onModePrefChange={setModePref}
           onScaleChange={setScale}
           onClose={() => setSettingsOpen(false)}
         />

@@ -13,8 +13,8 @@ pub fn get_tasks(state: State<'_, Db>, start_day: i64, end_day: i64) -> Vec<Task
     let conn = state.0.lock().unwrap();
     let mut stmt = conn
         .prepare(
-            "SELECT id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id
-             FROM tasks WHERE date BETWEEN ?1 AND ?2 ORDER BY sort_order ASC",
+            "SELECT id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes
+             FROM tasks WHERE date BETWEEN ?1 AND ?2 ORDER BY time_minutes IS NULL, time_minutes ASC, sort_order ASC",
         )
         .expect("prepare get_tasks");
     stmt.query_map([start_day, end_day], |row| {
@@ -28,6 +28,7 @@ pub fn get_tasks(state: State<'_, Db>, start_day: i64, end_day: i64) -> Vec<Task
             created_at: row.get(6)?,
             updated_at: row.get(7)?,
             device_id: row.get(8)?,
+            time_minutes: row.get(9)?,
         })
     })
     .expect("query get_tasks")
@@ -46,12 +47,13 @@ pub fn upsert_task(state: State<'_, Db>, mut task: Task) -> Task {
     }
     task.updated_at = now_ms();
     conn.execute(
-        "INSERT INTO tasks (id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+        "INSERT INTO tasks (id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
          ON CONFLICT(id) DO UPDATE SET
            title=excluded.title, date=excluded.date, is_done=excluded.is_done,
            color_set_id=excluded.color_set_id, sort_order=excluded.sort_order,
-           updated_at=excluded.updated_at, device_id=excluded.device_id",
+           updated_at=excluded.updated_at, device_id=excluded.device_id,
+           time_minutes=excluded.time_minutes",
         rusqlite::params![
             task.id,
             task.title,
@@ -62,6 +64,7 @@ pub fn upsert_task(state: State<'_, Db>, mut task: Task) -> Task {
             task.created_at,
             task.updated_at,
             task.device_id,
+            task.time_minutes,
         ],
     )
     .expect("upsert_task execute");

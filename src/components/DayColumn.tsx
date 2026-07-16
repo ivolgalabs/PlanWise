@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import type { Task } from "../api";
 import { api } from "../api";
-import { isToday } from "../date";
+import { isToday, isPast } from "../date";
 import { TaskCard } from "./TaskCard";
 import { COLORS } from "../theme";
 
@@ -31,8 +31,11 @@ export function DayColumn({
   const [newTitle, setNewTitle] = useState("");
   const newInputRef = useRef<HTMLInputElement>(null);
   const today = isToday(day);
+  const past = isPast(day);
   const weekday = day.toLocaleDateString("ru", { weekday: "short" });
   const dayNum = day.getDate();
+  // Прошлые дни — приглушены (меньше контраста), будущие — ярче.
+  const dim = past ? 0.55 : 1;
 
   const epochDay = Math.floor(
     Date.UTC(day.getFullYear(), day.getMonth(), day.getDate()) / 86_400_000,
@@ -79,17 +82,18 @@ export function DayColumn({
       style={{
         background: hovering ? COLORS.accent + "14" : COLORS.card,
         border: `${today ? 2 : 1}px solid ${today ? COLORS.accent : COLORS.cardBorder}`,
-        borderRadius: 8,
+        borderRadius: "var(--radius-lg)",
         display: "flex",
         flexDirection: "column",
         minHeight: 0,
+        opacity: dim,
       }}
     >
-      <div className="day-header" style={{ padding: "4px 8px" }}>
+      <div className="day-header" style={{ padding: "var(--sp-2) var(--sp-3)" }}>
         <span
           style={{
             fontWeight: 600,
-            fontSize: 11,
+            fontSize: "var(--fs-xs)",
             color: today ? COLORS.accent : COLORS.muted,
             textTransform: "uppercase",
           }}
@@ -100,7 +104,7 @@ export function DayColumn({
         <span
           style={{
             float: "right",
-            fontSize: 10,
+            fontSize: "var(--fs-2xs)",
             color: today ? COLORS.accent : COLORS.muted,
           }}
         >
