@@ -1,50 +1,63 @@
 /**
  * Темы Universal UI.
- * Двухосевая модель: РЕЖИМ (light/dark/auto) × ПАЛИТРА (slate/sepia/...).
- * Режим auto следует за системным prefers-color-scheme.
+ * 8 палитр × 3 режима (light/dark/oled) = 24 темы.
+ * Плюс режим "Авто" (следует за prefers-color-scheme).
  */
 
 export type ThemeMode = "light" | "dark" | "oled";
-/** Режим, который выбирает юзер в настройках. */
-export type ModePref = "light" | "dark" | "auto";
 
 export interface PaletteDef {
   id: string;
   label: string;
-  tier: "recommended" | "optional" | "hidden";
   accent: string;
 }
 
-/** 8 палитр (только группы, режим выбирается отдельно). */
+export interface FullTheme {
+  /** id для data-theme: "light-slate" и т.д. */
+  id: string;
+  palette: string;
+  mode: ThemeMode;
+  label: string;
+}
+
+/** 8 палитр. */
 export const PALETTES: PaletteDef[] = [
-  { id: "slate", label: "Slate", tier: "recommended", accent: "#4c5699" },
-  { id: "sepia", label: "Sepia", tier: "recommended", accent: "#a0522d" },
-  { id: "evergreen", label: "Evergreen", tier: "recommended", accent: "#2d6a4f" },
-  { id: "nord", label: "Nord", tier: "recommended", accent: "#5e81ac" },
-  { id: "midnight", label: "Midnight", tier: "optional", accent: "#3060e8" },
-  { id: "dracula", label: "Dracula", tier: "optional", accent: "#9444d6" },
-  { id: "amber", label: "Amber", tier: "hidden", accent: "#d35400" },
-  { id: "sakura", label: "Sakura", tier: "hidden", accent: "#d87093" },
+  { id: "slate", label: "Slate", accent: "#4c5699" },
+  { id: "sepia", label: "Sepia", accent: "#a0522d" },
+  { id: "evergreen", label: "Evergreen", accent: "#2d6a4f" },
+  { id: "nord", label: "Nord", accent: "#5e81ac" },
+  { id: "midnight", label: "Midnight", accent: "#3060e8" },
+  { id: "dracula", label: "Dracula", accent: "#9444d6" },
+  { id: "amber", label: "Amber", accent: "#d35400" },
+  { id: "sakura", label: "Sakura", accent: "#d87093" },
 ];
 
-export const MODE_LABEL: Record<ModePref, string> = {
+const MODE_LABEL: Record<ThemeMode, string> = {
   light: "Светлая",
   dark: "Тёмная",
-  auto: "Авто",
+  oled: "OLED",
 };
 
-/** Реальный режим (учитывая auto). */
-export const resolveMode = (pref: ModePref): ThemeMode => {
-  if (pref !== "auto") return pref;
-  return window.matchMedia("(prefers-color-scheme: dark)").matches
-    ? "dark"
-    : "light";
-};
+/** Все 24 темы (8 палитр × 3 режима). */
+export const ALL_THEMES: FullTheme[] = PALETTES.flatMap((p) =>
+  (["light", "dark", "oled"] as ThemeMode[]).map((mode) => ({
+    id: `${mode}-${p.id}`,
+    palette: p.id,
+    mode,
+    label: `${p.label} · ${MODE_LABEL[mode]}`,
+  })),
+);
 
-/** Применить тему: data-theme="<mode>-<palette>" на <html>. */
-export const applyTheme = (palette: string, modePref: ModePref) => {
-  const mode = resolveMode(modePref);
-  document.documentElement.setAttribute("data-theme", `${mode}-${palette}`);
+/** Получить HEX акцента палитры. */
+export const paletteAccent = (palette: string): string =>
+  PALETTES.find((p) => p.id === palette)?.accent ?? "#4c5699";
+
+/**
+ * Применить тему. Принимает либо полный id ("light-slate"),
+ * либо "auto" — тогда следует за системным prefers-color-scheme.
+ */
+export const applyTheme = (themeId: string) => {
+  document.documentElement.setAttribute("data-theme", themeId);
 };
 
 /** Слушатель системной темы для режима auto. Возвращает функцию отписки. */
@@ -91,3 +104,4 @@ export const argbToHex = (argb: number): string => {
   const b = argb & 0xff;
   return "#" + [r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("");
 };
+

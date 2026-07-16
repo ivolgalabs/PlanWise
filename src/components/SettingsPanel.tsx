@@ -1,14 +1,13 @@
-import { COLORS, PALETTES, MODE_LABEL } from "../theme";
-import type { ModePref } from "../theme";
+import { useState } from "react";
+import { COLORS, ALL_THEMES, paletteAccent } from "../theme";
+import type { ThemeMode } from "../theme";
 
 interface Props {
   mondayFirst: boolean;
-  palette: string;
-  modePref: ModePref;
+  theme: string;
   scale: string;
   onToggleMondayFirst: () => void;
-  onPaletteChange: (p: string) => void;
-  onModePrefChange: (m: ModePref) => void;
+  onThemeChange: (t: string) => void;
   onScaleChange: (s: string) => void;
   onClose: () => void;
 }
@@ -20,23 +19,32 @@ const SCALES = [
   { id: "xl", label: "XL" },
 ];
 
-const MODES: ModePref[] = ["light", "dark", "auto"];
+const FILTERS: { id: ThemeMode | "auto" | "all"; label: string }[] = [
+  { id: "auto", label: "Авто" },
+  { id: "all", label: "Все" },
+  { id: "light", label: "Светлые" },
+  { id: "dark", label: "Тёмные" },
+  { id: "oled", label: "OLED" },
+];
 
-/** Панель настроек: режим (Светлая/Тёмная/Авто), палитра, масштаб, неделя. */
+/** Панель настроек: тема (24 пресета + Авто), масштаб, неделя. */
 export function SettingsPanel({
   mondayFirst,
-  palette,
-  modePref,
+  theme,
   scale,
   onToggleMondayFirst,
-  onPaletteChange,
-  onModePrefChange,
+  onThemeChange,
   onScaleChange,
   onClose,
 }: Props) {
-  const recommended = PALETTES.filter((p) => p.tier === "recommended");
-  const optional = PALETTES.filter((p) => p.tier === "optional");
-  const hidden = PALETTES.filter((p) => p.tier === "hidden");
+  const [filter, setFilter] = useState<ThemeMode | "auto" | "all">(
+    theme === "auto" ? "auto" : "all",
+  );
+
+  const visible =
+    filter === "all"
+      ? ALL_THEMES
+      : ALL_THEMES.filter((t) => t.mode === filter);
 
   return (
     <div style={panelStyle}>
@@ -47,36 +55,73 @@ export function SettingsPanel({
         </button>
       </div>
 
-      {/* Режим освещения: 3 сегментные кнопки */}
-      <Section title="Режим">
-        <div style={{ display: "flex", gap: 6 }}>
-          {MODES.map((m) => (
+      {/* Тема: фильтр + сетка */}
+      <Section title="Тема">
+        <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: "var(--sp-3)" }}>
+          {FILTERS.map((f) => (
             <button
-              key={m}
-              onClick={() => onModePrefChange(m)}
-              style={segmentBtn(modePref === m)}
+              key={f.id}
+              onClick={() => {
+                setFilter(f.id);
+                if (f.id === "auto") onThemeChange("auto");
+              }}
+              style={segBtn(
+                (f.id === "auto" && theme === "auto") ||
+                  (f.id !== "auto" && filter === f.id),
+              )}
             >
-              {MODE_LABEL[m]}
+              {f.label}
             </button>
           ))}
         </div>
-      </Section>
 
-      {/* Палитра */}
-      <Section title="Палитра">
-        <PaletteGrid palettes={recommended} current={palette} onPick={onPaletteChange} />
-      </Section>
+        {theme === "auto" && (
+          <div
+            style={{
+              fontSize: "var(--fs-2xs)",
+              color: COLORS.muted,
+              marginBottom: "var(--sp-2)",
+            }}
+          >
+            Авто: следует за системной темой
+          </div>
+        )}
 
-      <Section title="Дополнительно">
-        <PaletteGrid palettes={optional} current={palette} onPick={onPaletteChange} />
-      </Section>
-
-      <details style={{ marginTop: "var(--sp-4)" }}>
-        <summary style={hintStyle}>Все палитры</summary>
-        <div style={{ marginTop: "var(--sp-2)" }}>
-          <PaletteGrid palettes={hidden} current={palette} onPick={onPaletteChange} />
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr 1fr",
+            gap: "var(--sp-2)",
+          }}
+        >
+          {visible.map((t) => {
+            const active = theme === t.id;
+            return (
+              <button
+                key={t.id}
+                onClick={() => {
+                  onThemeChange(t.id);
+                  setFilter(t.mode);
+                }}
+                title={t.label}
+                style={themeBtn(active)}
+              >
+                <span style={{ ...swatch, background: paletteAccent(t.palette) }} />
+                <span
+                  style={{
+                    fontSize: "var(--fs-2xs)",
+                    color: active ? COLORS.accent : COLORS.text,
+                    fontWeight: active ? 700 : 400,
+                  }}
+                >
+                  {t.palette}
+                </span>
+                <span style={{ fontSize: 9, color: COLORS.muted }}>{t.mode}</span>
+              </button>
+            );
+          })}
         </div>
-      </details>
+      </Section>
 
       {/* Масштаб */}
       <Section title="Масштаб интерфейса">
@@ -85,7 +130,7 @@ export function SettingsPanel({
             <button
               key={s.id}
               onClick={() => onScaleChange(s.id)}
-              style={segmentBtn(scale === s.id)}
+              style={segBtn(scale === s.id)}
             >
               {s.label}
             </button>
@@ -118,62 +163,37 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function PaletteGrid({
-  palettes,
-  current,
-  onPick,
-}: {
-  palettes: typeof PALETTES;
-  current: string;
-  onPick: (id: string) => void;
-}) {
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--sp-2)" }}>
-      {palettes.map((p) => {
-        const active = current === p.id;
-        return (
-          <button
-            key={p.id}
-            onClick={() => onPick(p.id)}
-            title={p.label}
-            style={paletteBtn(active)}
-          >
-            <span style={{ ...swatchStyle, background: p.accent }} />
-            <span style={{ fontSize: "var(--fs-xs)", color: active ? COLORS.accent : COLORS.text }}>
-              {p.label}
-            </span>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 // --- стили ---
 const panelStyle: React.CSSProperties = {
-  position: "fixed", top: 0, right: 0, bottom: 0, width: 300,
+  position: "fixed", top: 0, right: 0, bottom: 0, width: 320,
   background: COLORS.card, borderLeft: `1px solid ${COLORS.cardBorder}`,
   padding: "var(--sp-6)", boxShadow: "var(--shadow-lg)", zIndex: 100,
   overflowY: "auto", fontFamily: "var(--font-ui)",
 };
-const headerStyle: React.CSSProperties = { display: "flex", alignItems: "center", marginBottom: "var(--sp-6)" };
-const titleStyle: React.CSSProperties = { margin: 0, fontSize: "var(--fs-lg)", color: COLORS.text };
+const headerStyle: React.CSSProperties = {
+  display: "flex", alignItems: "center", marginBottom: "var(--sp-6)",
+};
+const titleStyle: React.CSSProperties = {
+  margin: 0, fontSize: "var(--fs-lg)", color: COLORS.text,
+};
 const hintStyle: React.CSSProperties = {
   fontSize: "var(--fs-2xs)", color: COLORS.muted,
   textTransform: "uppercase", letterSpacing: 0.5,
-  marginBottom: "var(--sp-2)", cursor: "pointer",
+  marginBottom: "var(--sp-2)",
 };
 const labelStyle: React.CSSProperties = {
-  display: "flex", alignItems: "center", fontSize: "var(--fs-sm)", color: COLORS.text, cursor: "pointer",
+  display: "flex", alignItems: "center", fontSize: "var(--fs-sm)",
+  color: COLORS.text, cursor: "pointer",
 };
-const swatchStyle: React.CSSProperties = {
-  width: 16, height: 16, borderRadius: "50%", border: `1px solid ${COLORS.cardBorder}`,
+const swatch: React.CSSProperties = {
+  width: 16, height: 16, borderRadius: "50%",
+  border: `1px solid ${COLORS.cardBorder}`,
 };
 
-function segmentBtn(active: boolean): React.CSSProperties {
+function segBtn(active: boolean): React.CSSProperties {
   return {
-    flex: 1, padding: "var(--sp-2) var(--sp-3)", borderRadius: "var(--radius-md)",
-    cursor: "pointer", fontSize: "var(--fs-sm)",
+    padding: "var(--sp-1) var(--sp-3)", borderRadius: "var(--radius-md)",
+    cursor: "pointer", fontSize: "var(--fs-2xs)",
     fontWeight: active ? 700 : 400,
     color: active ? COLORS.accent : COLORS.text,
     background: active ? COLORS.accent + "1A" : "transparent",
@@ -181,10 +201,10 @@ function segmentBtn(active: boolean): React.CSSProperties {
   };
 }
 
-function paletteBtn(active: boolean): React.CSSProperties {
+function themeBtn(active: boolean): React.CSSProperties {
   return {
-    display: "flex", alignItems: "center", gap: "var(--sp-2)",
-    padding: "var(--sp-2) var(--sp-3)", borderRadius: "var(--radius-md)",
+    display: "flex", flexDirection: "column", alignItems: "center",
+    gap: 2, padding: "var(--sp-2)", borderRadius: "var(--radius-md)",
     cursor: "pointer",
     border: `1px solid ${active ? COLORS.accent : COLORS.cardBorder}`,
     background: active ? COLORS.accent + "1A" : "transparent",

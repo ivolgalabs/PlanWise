@@ -18,15 +18,13 @@ function App() {
     view,
     tasks,
     mondayFirst,
-    palette,
-    modePref,
+    theme,
     scale,
     setSelectedDate,
     setView,
     setTasks,
     toggleMondayFirst,
-    setPalette,
-    setModePref,
+    setTheme,
     setScale,
   } = useStore();
 
@@ -37,12 +35,21 @@ function App() {
   );
   const [rolloverCount, setRolloverCount] = useState(0);
 
-  // Применяем тему (палитра + режим). В auto — следим за системой.
+  // Тема: если "auto" — следим за системой, иначе применяем выбранный id.
   useEffect(() => {
-    applyTheme(palette, modePref);
-    if (modePref !== "auto") return;
-    return watchSystemTheme(() => applyTheme(palette, modePref));
-  }, [palette, modePref]);
+    const resolveAndApply = () => {
+      if (theme !== "auto") {
+        applyTheme(theme);
+        return;
+      }
+      const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      // Авто-дефолт: тёмная slate (универсальный выбор).
+      applyTheme(isDark ? "dark-slate" : "light-slate");
+    };
+    resolveAndApply();
+    if (theme !== "auto") return;
+    return watchSystemTheme(resolveAndApply);
+  }, [theme]);
 
   // Масштаб интерфейса: класс scale-* на <html>.
   useEffect(() => {
@@ -190,12 +197,10 @@ function App() {
       {settingsOpen && (
         <SettingsPanel
           mondayFirst={mondayFirst}
-          palette={palette}
-          modePref={modePref}
+          theme={theme}
           scale={scale}
           onToggleMondayFirst={toggleMondayFirst}
-          onPaletteChange={setPalette}
-          onModePrefChange={setModePref}
+          onThemeChange={setTheme}
           onScaleChange={setScale}
           onClose={() => setSettingsOpen(false)}
         />

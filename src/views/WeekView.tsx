@@ -21,7 +21,7 @@ export function WeekView({ tasks, onChange }: Props) {
   const { selectedDate, mondayFirst, setSelectedDate } = useStore();
   const [dragTask, setDragTask] = useState<Task | null>(null);
   const [hoverDay, setHoverDay] = useState<Date | null>(null);
-  const [vertical, setVertical] = useState(false);
+  const [vertical, setVertical] = useState(true);
   const days = weekDays(selectedDate, mondayFirst);
 
   const tasksForDay = (d: Date) =>
