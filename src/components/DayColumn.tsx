@@ -80,7 +80,7 @@ export function DayColumn({
       }}
       onDrop={() => onDrop?.(day)}
       style={{
-        background: hovering ? COLORS.accent + "14" : COLORS.card,
+        background: hovering ? COLORS.accent + "14" : past ? COLORS.tertiary : COLORS.card,
         border: `${today ? 2 : 1}px solid ${today ? COLORS.accent : COLORS.cardBorder}`,
         borderRadius: "var(--radius-lg)",
         display: "flex",
@@ -94,10 +94,11 @@ export function DayColumn({
           style={{
             fontWeight: 600,
             fontSize: "var(--fs-xs)",
-            color: today ? COLORS.accent : COLORS.muted,
+            color: today ? COLORS.accent : past ? COLORS.muted : COLORS.secondary,
             textTransform: "uppercase",
           }}
         >
+          {past ? "✓ " : ""}
           {weekday}
           {today && " ●"}
         </span>

@@ -136,8 +136,8 @@ export function TaskCard({ task, onChange, onDragStart, onCreateNext }: Props) {
       />
       {/* Время — бейдж всегда виден, пикер по клику */}
       <TimePicker value={task.timeMinutes ?? null} onChange={setTime} />
-      {/* Кнопки появляются при hover */}
-      <div className="task-actions" style={{ opacity: 0, transition: "opacity 0.1s" }}>
+      {/* Кнопки цвета/удаления — всегда видны (приглушены, ярче при hover) */}
+      <div className="task-actions" style={{ display: "flex", gap: 2 }}>
         <button
           onClick={() => setColorMenu((v) => !v)}
           className="chip-btn"

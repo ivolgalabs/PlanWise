@@ -108,7 +108,7 @@ export function MonthView({ tasks, onSelectDay, onChange }: Props) {
               >
                 {day.getDate()}
               </div>
-              {dayTasks.slice(0, 3).map((t) => (
+              {dayTasks.slice(0, 6).map((t) => (
                 <div
                   key={t.id}
                   style={{
@@ -121,6 +121,7 @@ export function MonthView({ tasks, onSelectDay, onChange }: Props) {
                     whiteSpace: "nowrap",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
+                    lineHeight: 1.3,
                   }}
                 >
                   <span
@@ -142,9 +143,9 @@ export function MonthView({ tasks, onSelectDay, onChange }: Props) {
                   {t.title}
                 </div>
               ))}
-              {dayTasks.length > 3 && (
-                <div style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted }}>
-                  +{dayTasks.length - 3} ещё
+              {dayTasks.length > 6 && (
+                <div style={{ fontSize: "var(--fs-2xs)", color: COLORS.accent, fontWeight: 600 }}>
+                  +{dayTasks.length - 6} ещё
                 </div>
               )}
             </div>

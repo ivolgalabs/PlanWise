@@ -4,7 +4,6 @@ import { useStore } from "./store";
 import { weekDays, firstOfMonth, lastOfMonth } from "./date";
 import { COLORS, applyTheme, watchSystemTheme } from "./theme";
 import { TopBar } from "./components/TopBar";
-import { MiniCalendar } from "./components/MiniCalendar";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { DatePickerModal } from "./components/DatePickerModal";
 import { DayView } from "./views/DayView";
@@ -165,18 +164,6 @@ function App() {
         </div>
       )}
       <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
-        {isWide && view !== "month" && (
-          <div
-            style={{
-              width: 220,
-              padding: 8,
-              flexShrink: 0,
-              overflowY: "auto",
-            }}
-          >
-            <MiniCalendar tasks={tasks} />
-          </div>
-        )}
         <div style={{ flex: 1, minWidth: 0 }}>
           {view === "day" && (
             <DayView day={selectedDate} tasks={tasks} onChange={reload} />

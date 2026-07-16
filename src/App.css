@@ -38,8 +38,10 @@ body {
 .task-line:hover {
   background: var(--bg-hover);
 }
-.task-line:hover .task-actions {
-  opacity: 1;
+.task-actions {
+  display: flex;
+  gap: var(--sp-1);
+  flex-shrink: 0;
 }
 
 /* Подчёркивание инпута задачи (как в tweek.so) */
