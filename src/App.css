@@ -49,12 +49,14 @@ body {
 }
 
 /* === Карточка задачи (tweek-style line) === */
+.task-block {
+  border-bottom: 1px solid var(--border-color);
+}
 .task-line {
   display: flex;
   align-items: center;
   padding: 0 var(--sp-2);
   border-radius: var(--radius-sm);
-  border-bottom: 1px solid var(--border-color);
   transition: background var(--duration-fast) var(--ease-standard);
   min-height: calc(var(--row-h) - 4px);
 }
@@ -65,6 +67,14 @@ body {
   display: flex;
   gap: var(--sp-1);
   flex-shrink: 0;
+}
+/* Блок подзадач — визуально обособлен от основной строки */
+.subtasks-area {
+  margin: 0 var(--sp-2) var(--sp-2) calc(var(--sp-4) + 14px);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--bg-tertiary);
+  border-left: 2px solid var(--accent);
+  border-radius: var(--radius-md);
 }
 
 /* Подчёркивание инпута задачи (как в tweek.so) */

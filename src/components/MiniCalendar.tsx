@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { Task } from "../api";
 import { fromEpochDay } from "../api";
 import { startOfWeek, firstOfMonth, isSameDay } from "../date";
@@ -20,6 +21,7 @@ const busyLevel = (n: number): BusyLevel =>
 /** Мини-календарь месяца с индикатором занятости дней. */
 export function MiniCalendar({ tasks, large, onSelect }: Props) {
   const { selectedDate, setSelectedDate, mondayFirst } = useStore();
+  const [collapsed, setCollapsed] = useState(false);
   const first = firstOfMonth(selectedDate);
   const gridStart = startOfWeek(first, mondayFirst);
 
@@ -59,10 +61,21 @@ export function MiniCalendar({ tasks, large, onSelect }: Props) {
           color: COLORS.text,
           marginBottom: "var(--sp-4)",
           textTransform: "capitalize",
+          display: "flex",
+          alignItems: "center",
+          gap: "var(--sp-2)",
+          cursor: "pointer",
+          userSelect: "none",
         }}
+        onClick={() => setCollapsed((v) => !v)}
       >
+        <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted }}>
+          {collapsed ? "▸" : "▾"}
+        </span>
         {first.toLocaleDateString("ru", { month: "long", year: "numeric" })}
       </div>
+      {!collapsed && (
+        <>
       <div style={{ display: "flex", marginBottom: 6 }}>
         {["П", "В", "С", "Ч", "П", "С", "В"].map((w, i) => (
           <div
@@ -119,6 +132,8 @@ export function MiniCalendar({ tasks, large, onSelect }: Props) {
           );
         })}
       </div>
+        </>
+      )}
     </div>
   );
 }

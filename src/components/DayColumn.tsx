@@ -80,6 +80,7 @@ export function DayColumn({
       }}
       onDrop={() => onDrop?.(day)}
       style={{
+        height: "100%",
         background: hovering ? COLORS.accent + "14" : past ? COLORS.tertiary : COLORS.card,
         border: `${today ? 2 : 1}px solid ${today ? COLORS.accent : COLORS.cardBorder}`,
         borderRadius: "var(--radius-lg)",

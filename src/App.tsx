@@ -8,9 +8,26 @@ import { SettingsPanel } from "./components/SettingsPanel";
 import { DatePickerModal } from "./components/DatePickerModal";
 import { DayView } from "./views/DayView";
 import { WeekView } from "./views/WeekView";
-import { WeekViewVertical } from "./views/WeekViewVertical";
 import { MonthView } from "./views/MonthView";
 import "./App.css";
+
+/** Разрешить id темы по mode + предпочтениям. */
+function resolveActiveTheme(): string {
+  const s = useStore.getState();
+  if (s.themeMode === "light") return s.preferredLightTheme;
+  if (s.themeMode === "dark") {
+    return s.useOledForDarkMode
+      ? s.preferredDarkTheme.replace(/^(dark|light)-/, "oled-")
+      : s.preferredDarkTheme;
+  }
+  // system
+  const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  return isDark
+    ? s.useOledForDarkMode
+      ? s.preferredDarkTheme.replace(/^(dark|light)-/, "oled-")
+      : s.preferredDarkTheme
+    : s.preferredLightTheme;
+}
 
 function App() {
   const {
@@ -18,73 +35,46 @@ function App() {
     view,
     tasks,
     mondayFirst,
-    theme,
-    scale,
+    themeMode,
+    preferredLightTheme,
+    preferredDarkTheme,
+    useOledForDarkMode,
+    uiScale,
     setSelectedDate,
     setView,
     setTasks,
-    toggleMondayFirst,
-    setTheme,
-    setScale,
   } = useStore();
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [datePickerOpen, setDatePickerOpen] = useState(false);
-  const [isWide, setIsWide] = useState(
-    typeof window !== "undefined" ? window.matchMedia("(min-width: 720px)").matches : true,
-  );
   const [rolloverCount, setRolloverCount] = useState(0);
 
-  // Тема: если "auto" — следим за системой, иначе применяем выбранный id.
+  // Тема: применяем разрешённый id, при system — следим за ОС.
   useEffect(() => {
-    const resolveAndApply = () => {
-      if (theme !== "auto") {
-        applyTheme(theme);
-        return;
-      }
-      const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-      // Авто-дефолт: тёмная slate (универсальный выбор).
-      applyTheme(isDark ? "dark-slate" : "light-slate");
-    };
-    resolveAndApply();
-    if (theme !== "auto") return;
-    return watchSystemTheme(resolveAndApply);
-  }, [theme]);
+    const apply = () => applyTheme(resolveActiveTheme());
+    apply();
+    if (themeMode !== "system") return;
+    return watchSystemTheme(apply);
+  }, [themeMode, preferredLightTheme, preferredDarkTheme, useOledForDarkMode]);
 
-  // Масштаб интерфейса: класс scale-<N> на <html>, --ui-scale множит размеры.
+  // Масштаб интерфейса через document.zoom (масштабирует ВЕСЬ интерфейс).
   useEffect(() => {
-    const html = document.documentElement;
-    html.classList.remove(
-      "scale-80", "scale-90", "scale-100", "scale-110", "scale-125", "scale-150",
-    );
-    html.classList.add(`scale-${scale}`);
-  }, [scale]);
+    (document.documentElement.style as unknown as { zoom: string }).zoom =
+      String(uiScale);
+  }, [uiScale]);
 
-  // Адаптивность по ширине окна через matchMedia — надёжнее в Tauri WebView,
-  // срабатывает сразу при пересечении порога, а не на каждый пиксель ресайза.
-  useEffect(() => {
-    const mq = window.matchMedia("(min-width: 720px)");
-    const handler = (e: MediaQueryListEvent) => setIsWide(e.matches);
-    mq.addEventListener("change", handler);
-    setIsWide(mq.matches);
-    return () => mq.removeEventListener("change", handler);
-  }, []);
-
-  // Авто-перенос невыполненных прошлых задач на сегодня (Automate).
-  // Запускается один раз при старте приложения.
+  // Авто-перенос невыполненных задач.
   useEffect(() => {
     (async () => {
       try {
-        const today = new Date();
-        const count = await api.rolloverOverdue(today);
-        setRolloverCount(count);
+        setRolloverCount(await api.rolloverOverdue(new Date()));
       } catch {
-        // не критично — просто не показываем плашку
+        /* некритично */
       }
     })();
   }, []);
 
-  // Загрузка задач при смене даты/вида.
+  // Загрузка задач.
   const reload = useCallback(async () => {
     let start: Date;
     let end: Date;
@@ -98,8 +88,7 @@ function App() {
       start = firstOfMonth(selectedDate);
       end = lastOfMonth(selectedDate);
     }
-    const loaded = await api.getTasks(start, end);
-    setTasks(loaded);
+    setTasks(await api.getTasks(start, end));
   }, [view, selectedDate, mondayFirst, setTasks]);
 
   useEffect(() => {
@@ -134,8 +123,7 @@ function App() {
         display: "flex",
         flexDirection: "column",
         color: COLORS.text,
-        fontFamily:
-          '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        fontFamily: "var(--font-ui)",
       }}
     >
       <TopBar
@@ -153,11 +141,11 @@ function App() {
           style={{
             background: COLORS.accent + "26",
             color: COLORS.text,
-            fontSize: 12,
-            padding: "6px 16px",
+            fontSize: "var(--fs-2xs)",
+            padding: "var(--sp-2) var(--sp-8)",
             display: "flex",
             alignItems: "center",
-            gap: 8,
+            gap: "var(--sp-2)",
           }}
         >
           <span>
@@ -165,7 +153,7 @@ function App() {
           </span>
           <button
             className="icon-btn"
-            style={{ marginLeft: "auto", fontSize: 14 }}
+            style={{ marginLeft: "auto", fontSize: "var(--fs-xs)" }}
             onClick={() => setRolloverCount(0)}
           >
             ✕
@@ -177,12 +165,7 @@ function App() {
           {view === "day" && (
             <DayView day={selectedDate} tasks={tasks} onChange={reload} />
           )}
-          {view === "week" &&
-            (isWide ? (
-              <WeekView tasks={tasks} onChange={reload} />
-            ) : (
-              <WeekViewVertical tasks={tasks} onChange={reload} />
-            ))}
+          {view === "week" && <WeekView tasks={tasks} onChange={reload} />}
           {view === "month" && (
             <MonthView
               tasks={tasks}
@@ -197,15 +180,7 @@ function App() {
       </div>
 
       {settingsOpen && (
-        <SettingsPanel
-          mondayFirst={mondayFirst}
-          theme={theme}
-          scale={scale}
-          onToggleMondayFirst={toggleMondayFirst}
-          onThemeChange={setTheme}
-          onScaleChange={setScale}
-          onClose={() => setSettingsOpen(false)}
-        />
+        <SettingsPanel onClose={() => setSettingsOpen(false)} />
       )}
       {datePickerOpen && (
         <DatePickerModal

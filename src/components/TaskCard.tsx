@@ -85,7 +85,7 @@ export function TaskCard({ task, onChange, onDragStart, onCreateNext }: Props) {
   };
 
   return (
-    <div style={{ borderBottom: "1px solid var(--border-color)" }}>
+    <div className="task-block">
     <div
       className="task-line"
       style={{

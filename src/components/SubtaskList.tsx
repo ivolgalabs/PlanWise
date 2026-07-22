@@ -45,9 +45,9 @@ export function SubtaskList({ taskId }: Props) {
   const done = items.filter((s) => s.isDone).length;
 
   return (
-    <div style={{ paddingLeft: "calc(var(--sp-4) + 14px)", paddingTop: "var(--sp-1)" }}>
-      <div style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted, marginBottom: 2 }}>
-        {items.length > 0 ? `подзадачи (${done}/${items.length})` : "подзадачи"}
+    <div className="subtasks-area">
+      <div style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted, marginBottom: 2, fontWeight: 600 }}>
+        {items.length > 0 ? `Подзадачи (${done}/${items.length})` : "Подзадачи"}
       </div>
       {items.map((s) => (
         <div
