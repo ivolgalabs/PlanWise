@@ -4,29 +4,48 @@
 
 :root {
   font-family: var(--font-ui);
-  font-size: clamp(13px, 1.05vw, 17px); /* адаптивный базовый масштаб */
   color: var(--text-primary);
 }
 
-/* Масштаб интерфейса в % (настройка пользователя). --ui-scale множит
- * все относительные размеры. Базовый 100% = системный rem. */
-html { --ui-scale: 1; }
-html.scale-80 { --ui-scale: 0.8; }
-html.scale-90 { --ui-scale: 0.9; }
-html.scale-100 { --ui-scale: 1; }
-html.scale-110 { --ui-scale: 1.1; }
-html.scale-125 { --ui-scale: 1.25; }
-html.scale-150 { --ui-scale: 1.5; }
+/* Масштаб интерфейса в %. font-size на <html> задаёт 1rem, на который
+ * завязаны ВСЕ --fs-* токены Universal UI. Множим базовый размер на
+ * --ui-scale + clamp для адаптива к ширине окна.
+ * ВАЖНО: класс scale-* должен идти ДО :root font-size, либо specificity
+ * выше — поэтому font-size задаём прямо на html.scale-*. */
+html { font-size: clamp(13px, 1.05vw, 17px); }
+html.scale-80  { font-size: calc(clamp(13px, 1.05vw, 17px) * 0.8); }
+html.scale-90  { font-size: calc(clamp(13px, 1.05vw, 17px) * 0.9); }
+html.scale-100 { font-size: calc(clamp(13px, 1.05vw, 17px) * 1); }
+html.scale-110 { font-size: calc(clamp(13px, 1.05vw, 17px) * 1.1); }
+html.scale-125 { font-size: calc(clamp(13px, 1.05vw, 17px) * 1.25); }
+html.scale-150 { font-size: calc(clamp(13px, 1.05vw, 17px) * 1.5); }
 
 * {
   box-sizing: border-box;
 }
 
-body {
+html, body, #root {
   margin: 0;
   padding: 0;
+  height: 100%;
+  overflow: hidden; /* без горизонтального скролла */
+}
+
+body {
   background: var(--bg-primary);
   color: var(--text-primary);
+}
+
+/* Flex-дети должны уметь сжиматься, иначе содержимое вылезает за поля. */
+.task-line,
+.day-column,
+.day-tasks {
+  min-width: 0;
+}
+
+/* Текст в строке задачи не должен растягивать контейнер. */
+.task-line input {
+  min-width: 0;
 }
 
 /* === Карточка задачи (tweek-style line) === */
