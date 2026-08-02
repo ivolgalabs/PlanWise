@@ -7,6 +7,7 @@ import {
   firstOfMonth,
   isSameDay,
   isPast,
+  isToday,
   weekDays,
 } from "../date";
 import { COLORS, setHex, accentTint, varTint } from "../theme";
@@ -180,6 +181,7 @@ export function MiniCalendar({ tasks, large, onSelect, droppable = true }: Props
           const inSelectedWeek =
             selectedWeek?.some((w) => isSameDay(w, day)) ?? false;
           const past = isPast(day);
+          const today = isToday(day);
           return (
             <CalendarDayCell
               key={i}
@@ -188,6 +190,7 @@ export function MiniCalendar({ tasks, large, onSelect, droppable = true }: Props
               selected={selected}
               inSelectedWeek={inSelectedWeek}
               past={past}
+              today={today}
               dayTasks={tasksForDay(day)}
               large={large}
               fs={fs}
@@ -213,6 +216,7 @@ function CalendarDayCell({
   selected,
   inSelectedWeek,
   past,
+  today,
   dayTasks,
   large,
   fs,
@@ -225,6 +229,8 @@ function CalendarDayCell({
   selected: boolean;
   inSelectedWeek: boolean;
   past: boolean;
+  /** Реальное «сегодня» — отдельный маркер (рамка), чтобы не путать с выбранным днём. */
+  today: boolean;
   dayTasks: Task[];
   large?: boolean;
   fs: number | string;
@@ -251,6 +257,7 @@ function CalendarDayCell({
         cursor: "pointer",
         borderRadius: "var(--radius-sm)",
         // Приоритет подсветки: drop-цель > выбранный день > выбранная неделя.
+        // «Сегодня» всегда помечается рамкой акцента — независимо от выбора.
         background: isOver
           ? accentTint(0.25)
           : selected
@@ -258,18 +265,23 @@ function CalendarDayCell({
             : inSelectedWeek
               ? accentTint(0.08)
               : "transparent",
+        boxShadow: today
+          ? `inset 0 0 0 1.5px ${COLORS.accent}`
+          : "none",
         outline: isOver ? `2px solid ${COLORS.accent}` : "none",
       }}
     >
       <div
         style={{
           fontSize: fs,
-          fontWeight: selected ? 700 : 400,
+          fontWeight: selected || today ? 700 : 400,
           color: inMonth
-            ? selected
+            ? selected || today
               ? COLORS.accent
               : COLORS.text
-            : varTint("--text-muted", 0.4),
+            : today
+              ? COLORS.accent
+              : varTint("--text-muted", 0.4),
         }}
       >
         {day.getDate()}
