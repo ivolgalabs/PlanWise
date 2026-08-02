@@ -21,7 +21,13 @@ const sortTasks = (arr: Task[]): Task[] =>
 
 export const browserApi = {
   async getTasks(startDay: number, endDay: number): Promise<Task[]> {
-    return sortTasks(load<Task>(K.tasks).filter((t) => t.date >= startDay && t.date <= endDay));
+    // Нормализуем notes: у старых записей localStorage поля нет (undefined),
+    // а Rust всегда отдаёт "" — приводим к единому виду, чтобы TaskCard не падал.
+    return sortTasks(
+      load<Task>(K.tasks)
+        .filter((t) => t.date >= startDay && t.date <= endDay)
+        .map((t) => ({ ...t, notes: t.notes ?? "" })),
+    );
   },
   async upsertTask(task: Task): Promise<Task> {
     const id = task.id || crypto.randomUUID();
