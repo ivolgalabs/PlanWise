@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Task } from "../api";
 import { fromEpochDay } from "../api";
-import { weekDays, isSameDay, dayWeight } from "../date";
+import { weekDays, isSameDay } from "../date";
 import { DayColumn } from "../components/DayColumn";
 import { MiniCalendar } from "../components/MiniCalendar";
 import { WeekShiftZone } from "../components/WeekShiftZone";
@@ -90,46 +90,18 @@ export function WeekView({ tasks, onChange }: Props) {
             ) : (
               <div style={{ display: "flex", height: "100%", minHeight: 0 }}>
                 <WeekShiftZone dir={-1} />
-                <div
-                  style={{
-                    display: "flex",
-                    gap: 4,
-                    padding: 4,
-                    flex: 1,
-                    minWidth: 0,
-                    height: "100%",
-                    minHeight: 0,
-                    alignItems: "stretch",
-                    overflowX: "auto",
-                  }}
-                >
-                  {days.map((d) => {
-                    // Все колонки читаемы: единый flex с min-width вместо
-                    // «0 0 88px» для прошлых дней (поля задач схлопывались в 0).
-                    // Сегодня — самая широкая. При нехватке места сетка
-                    // скроллится по горизонтали (overflowX контейнера).
-                    const today = dayWeight(d) === "today";
-                    return (
-                      <div
-                        key={d.toISOString()}
-                        style={{
-                          flex: today ? "1.3 1 0" : "1 1 0",
-                          minWidth: today ? 180 : 140,
-                          maxWidth: today ? 360 : 280,
-                          height: "100%",
-                          display: "flex",
-                          flexDirection: "column",
-                          minHeight: 0,
-                        }}
-                      >
-                        <DayColumn
-                          day={d}
-                          tasks={tasksForDay(d)}
-                          onChange={onChange}
-                        />
-                      </div>
-                    );
-                  })}
+                <div style={{ display: "flex", flexDirection: "column", gap: 4, padding: 4, flex: 1, minWidth: 0, height: "100%", minHeight: 0 }}>
+                  {/* Два ряда: Пн–Чт сверху, Пт–Вс снизу. Колонки равные и
+                      широкие — текст задач читается без обрезки. */}
+                  {[days.slice(0, 4), days.slice(4)].map((row, ri) => (
+                    <div key={ri} style={{ display: "flex", gap: 4, flex: 1, minHeight: 0 }}>
+                      {row.map((d) => (
+                        <div key={d.toISOString()} style={{ flex: 1, minWidth: 0, height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
+                          <DayColumn day={d} tasks={tasksForDay(d)} onChange={onChange} />
+                        </div>
+                      ))}
+                    </div>
+                  ))}
                 </div>
                 <WeekShiftZone dir={1} />
               </div>
