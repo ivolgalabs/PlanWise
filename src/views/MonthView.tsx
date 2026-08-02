@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import type { Task } from "../api";
 import { api, fromEpochDay } from "../api";
-import { startOfWeek, firstOfMonth, isSameDay, isToday, isPast } from "../date";
+import { startOfWeek, firstOfMonth, isSameDay, isToday, isPast, formatMinutes } from "../date";
 import { COLORS, accentTint, setHex, argbToHex } from "../theme";
 import { useStore } from "../store";
 import { TaskDndContext, dayId } from "../drag";
@@ -28,6 +28,22 @@ export function MonthView({ tasks, onSelectDay, onChange }: Props) {
   const [addTitle, setAddTitle] = useState("");
   const [addTime, setAddTime] = useState<number | null>(null);
   const [addColor, setAddColor] = useState<string | null>(null);
+
+  // Escape закрывает модалку добавления.
+  useEffect(() => {
+    if (!menuDay) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setMenuDay(null);
+        setAddTitle("");
+        setAddTime(null);
+        setAddColor(null);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [menuDay]);
+
   const first = firstOfMonth(selectedDate);
   const gridStart = startOfWeek(first, mondayFirst);
 
@@ -146,14 +162,71 @@ export function MonthView({ tasks, onSelectDay, onChange }: Props) {
             <div
               onClick={(e) => e.stopPropagation()}
               style={{
-                background: COLORS.card, border: `1px solid ${COLORS.cardBorder}`,
-                borderRadius: "var(--radius-xl)", padding: "var(--sp-6)",
-                width: 280, boxShadow: "var(--shadow-xl)",
+                background: COLORS.card,
+                border: `1px solid ${COLORS.cardBorder}`,
+                borderRadius: "var(--radius-xl)",
+                padding: "var(--sp-6)",
+                width: 460,
+                maxWidth: "92vw",
+                maxHeight: "85vh",
+                overflowY: "auto",
+                boxShadow: "var(--shadow-xl)",
               }}
             >
               <div style={{ fontSize: "var(--fs-md)", fontWeight: 600, color: COLORS.text, marginBottom: "var(--sp-4)", textTransform: "capitalize" }}>
                 {menuDay.toLocaleDateString("ru", { day: "numeric", month: "long", weekday: "long" })}
               </div>
+
+              {/* Список задач дня: клик — перейти к дню */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: "var(--sp-4)" }}>
+                {tasksForDay(menuDay).length === 0 && (
+                  <p style={{ margin: 0, fontSize: "var(--fs-2xs)", color: COLORS.muted }}>
+                    Нет задач на этот день
+                  </p>
+                )}
+                {tasksForDay(menuDay).map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => openDay(menuDay)}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "var(--sp-2)",
+                      textAlign: "left",
+                      padding: "var(--sp-1) var(--sp-2)",
+                      borderRadius: "var(--radius-sm)",
+                      border: "none",
+                      background: "transparent",
+                      cursor: "pointer",
+                      fontSize: "var(--fs-sm)",
+                      color: t.isDone ? COLORS.muted : COLORS.text,
+                      textDecoration: t.isDone ? "line-through" : "none",
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: "50%",
+                        flexShrink: 0,
+                        background:
+                          t.isDone || !t.colorSetId
+                            ? COLORS.muted
+                            : setHex(colorSets, t.colorSetId) ?? COLORS.muted,
+                      }}
+                    />
+                    {t.timeMinutes != null && (
+                      <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted, flexShrink: 0 }}>
+                        {formatMinutes(t.timeMinutes)}
+                      </span>
+                    )}
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
+                      {t.title}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
               <input
                 autoFocus
                 value={addTitle}
@@ -232,18 +305,8 @@ export function MonthView({ tasks, onSelectDay, onChange }: Props) {
                 ))}
               </div>
               <div style={{ display: "flex", gap: "var(--sp-2)" }}>
-                <button
-                  onClick={() => addTask(menuDay)}
-                  style={btnStyle(false)}
-                >
-                  Добавить
-                </button>
-                <button
-                  onClick={() => openDay(menuDay)}
-                  style={btnStyle(true)}
-                >
-                  Перейти к дню
-                </button>
+                <button onClick={() => addTask(menuDay)} style={btnStyle(false)}>Добавить</button>
+                <button onClick={() => openDay(menuDay)} style={btnStyle(true)}>Перейти к дню</button>
               </div>
             </div>
           </div>
