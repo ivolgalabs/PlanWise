@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import type { Task } from "./api";
+import { persist } from "zustand/middleware";
+import type { Task, ColorSet } from "./api";
 
 export type ViewKind = "day" | "week" | "month";
 export type ThemeMode = "light" | "dark" | "system";
@@ -17,36 +18,72 @@ interface PlannerState {
   preferredDarkTheme: string;
   /** Использовать OLED для тёмного режима. */
   useOledForDarkMode: boolean;
-  /** Масштаб интерфейса 0.7-2.0. */
+  /** Масштаб интерфейса 0.7-2.0 (document.zoom — масштабирует весь UI). */
   uiScale: number;
+  /** Множитель размера шрифта 0.8-1.6 (меняет --fs-* токены через html font-size). */
+  fontScale: number;
+  /** Авто-перенос невыполненных прошлых задач на сегодня (вкл/выкл). */
+  rolloverEnabled: boolean;
+  /** Категории (цвет-сеты) из БД — грузятся при старте. */
+  colorSets: ColorSet[];
   setSelectedDate: (d: Date) => void;
   setView: (v: ViewKind) => void;
   setTasks: (t: Task[]) => void;
+  setColorSets: (s: ColorSet[]) => void;
   toggleMondayFirst: () => void;
   setThemeMode: (m: ThemeMode) => void;
   setPreferredLightTheme: (t: string) => void;
   setPreferredDarkTheme: (t: string) => void;
   setUseOledForDarkMode: (v: boolean) => void;
   setUiScale: (s: number) => void;
+  setFontScale: (s: number) => void;
+  setRolloverEnabled: (v: boolean) => void;
 }
 
-export const useStore = create<PlannerState>((set) => ({
-  selectedDate: new Date(),
-  view: "week",
-  tasks: [],
-  mondayFirst: true,
-  themeMode: "system",
-  preferredLightTheme: "light-slate",
-  preferredDarkTheme: "dark-slate",
-  useOledForDarkMode: false,
-  uiScale: 1.0,
-  setSelectedDate: (d) => set({ selectedDate: d }),
-  setView: (v) => set({ view: v }),
-  setTasks: (t) => set({ tasks: t }),
-  toggleMondayFirst: () => set((s) => ({ mondayFirst: !s.mondayFirst })),
-  setThemeMode: (m) => set({ themeMode: m }),
-  setPreferredLightTheme: (t) => set({ preferredLightTheme: t }),
-  setPreferredDarkTheme: (t) => set({ preferredDarkTheme: t }),
-  setUseOledForDarkMode: (v) => set({ useOledForDarkMode: v }),
-  setUiScale: (s) => set({ uiScale: s }),
-}));
+export const useStore = create<PlannerState>()(
+  // persist: сохраняем настройки UI между запусками. tasks и selectedDate
+  // не персистим — задачи грузятся из SQLite, дата всегда стартует с сегодня.
+  persist(
+    (set) => ({
+      selectedDate: new Date(),
+      view: "week",
+      tasks: [],
+      mondayFirst: true,
+      themeMode: "system",
+      preferredLightTheme: "light-slate",
+      preferredDarkTheme: "dark-slate",
+      useOledForDarkMode: false,
+      uiScale: 1.0,
+      fontScale: 1.0,
+      rolloverEnabled: true,
+      colorSets: [],
+      setSelectedDate: (d) => set({ selectedDate: d }),
+      setView: (v) => set({ view: v }),
+      setTasks: (t) => set({ tasks: t }),
+      setColorSets: (s) => set({ colorSets: s }),
+      toggleMondayFirst: () => set((s) => ({ mondayFirst: !s.mondayFirst })),
+      setThemeMode: (m) => set({ themeMode: m }),
+      setPreferredLightTheme: (t) => set({ preferredLightTheme: t }),
+      setPreferredDarkTheme: (t) => set({ preferredDarkTheme: t }),
+      setUseOledForDarkMode: (v) => set({ useOledForDarkMode: v }),
+      setUiScale: (s) => set({ uiScale: s }),
+      setFontScale: (s) => set({ fontScale: s }),
+      setRolloverEnabled: (v) => set({ rolloverEnabled: v }),
+    }),
+    {
+      name: "todo-settings",
+      // Сохраняем только настройки UI — без tasks и selectedDate.
+      partialize: (s) => ({
+        view: s.view,
+        mondayFirst: s.mondayFirst,
+        themeMode: s.themeMode,
+        preferredLightTheme: s.preferredLightTheme,
+        preferredDarkTheme: s.preferredDarkTheme,
+        useOledForDarkMode: s.useOledForDarkMode,
+        uiScale: s.uiScale,
+        fontScale: s.fontScale,
+        rolloverEnabled: s.rolloverEnabled,
+      }),
+    },
+  ),
+);

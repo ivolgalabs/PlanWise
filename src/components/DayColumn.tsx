@@ -1,45 +1,59 @@
 import { useRef, useState } from "react";
+import { useDroppable } from "@dnd-kit/core";
 import type { Task } from "../api";
 import { api } from "../api";
-import { isToday, isPast } from "../date";
+import { isToday, isPast, dayWeight } from "../date";
 import { TaskCard } from "./TaskCard";
-import { COLORS } from "../theme";
+import { COLORS, accentTint } from "../theme";
+import { dayId } from "../drag";
 
 interface Props {
   day: Date;
   tasks: Task[];
   onChange: () => void;
-  onDragStart?: (t: Task) => void;
-  onDrop?: (day: Date) => void;
-  onDragOver?: (day: Date) => void;
-  hovering?: boolean;
 }
 
 /**
  * Колонка одного дня: заголовок, список строк-задач, поле ввода.
  * Enter в строке создаёт новую строку ниже (расширение).
+ * Является droppable-зоной для dnd-kit (задачи перетаскиваются между колонками).
  */
 export function DayColumn({
   day,
   tasks,
   onChange,
-  onDragStart,
-  onDrop,
-  onDragOver,
-  hovering,
 }: Props) {
   const [newTitle, setNewTitle] = useState("");
   const newInputRef = useRef<HTMLInputElement>(null);
   const today = isToday(day);
   const past = isPast(day);
+  const weight = dayWeight(day);
   const weekday = day.toLocaleDateString("ru", { weekday: "short" });
   const dayNum = day.getDate();
-  // Прошлые дни — приглушены (меньше контраста), будущие — ярче.
-  const dim = past ? 0.55 : 1;
+  // Иерархия по весу дня: past — бледный/компактный, today/tomorrow — крупные,
+  // near — нормальный, future — слегка уменьшенный.
+  const dim = weight === "past" ? 0.4 : weight === "future" ? 0.7 : 1;
+  // Размеры заголовка зависят от веса.
+  const headPad =
+    weight === "past"
+      ? "var(--sp-1) var(--sp-2)"
+      : weight === "future"
+        ? "var(--sp-1) var(--sp-3)"
+        : "var(--sp-2) var(--sp-3)";
+  const headFs =
+    weight === "past"
+      ? "var(--fs-2xs)"
+      : weight === "future"
+        ? "var(--fs-xs)"
+        : "var(--fs-sm)";
+  const headWeight = weight === "past" ? 400 : weight === "today" || weight === "tomorrow" ? 700 : 600;
 
   const epochDay = Math.floor(
     Date.UTC(day.getFullYear(), day.getMonth(), day.getDate()) / 86_400_000,
   );
+
+  // Зона приёма задач: подсвечивается при наведении (isOver).
+  const { setNodeRef, isOver } = useDroppable({ id: dayId(epochDay) });
 
   const addTask = async () => {
     const t = newTitle.trim();
@@ -71,17 +85,11 @@ export function DayColumn({
 
   return (
     <div
+      ref={setNodeRef}
       className="day-column"
-      onDragOver={(e) => {
-        if (onDrop) {
-          e.preventDefault();
-          onDragOver?.(day);
-        }
-      }}
-      onDrop={() => onDrop?.(day)}
       style={{
         height: "100%",
-        background: hovering ? COLORS.accent + "14" : past ? COLORS.tertiary : COLORS.card,
+        background: isOver ? accentTint(0.08) : past ? COLORS.tertiary : COLORS.card,
         border: `${today ? 2 : 1}px solid ${today ? COLORS.accent : COLORS.cardBorder}`,
         borderRadius: "var(--radius-lg)",
         display: "flex",
@@ -90,13 +98,25 @@ export function DayColumn({
         opacity: dim,
       }}
     >
-      <div className="day-header" style={{ padding: "var(--sp-2) var(--sp-3)" }}>
+      <div
+        className="day-header"
+        style={{
+          padding: headPad,
+          display: "flex",
+          alignItems: "baseline",
+          justifyContent: "space-between",
+          gap: "var(--sp-1)",
+        }}
+      >
         <span
           style={{
-            fontWeight: 600,
-            fontSize: "var(--fs-xs)",
+            fontWeight: headWeight,
+            fontSize: headFs,
             color: today ? COLORS.accent : past ? COLORS.muted : COLORS.secondary,
             textTransform: "uppercase",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
           }}
         >
           {past ? "✓ " : ""}
@@ -105,9 +125,10 @@ export function DayColumn({
         </span>
         <span
           style={{
-            float: "right",
-            fontSize: "var(--fs-2xs)",
-            color: today ? COLORS.accent : COLORS.muted,
+            fontSize: weight === "past" ? "var(--fs-xs)" : "var(--fs-sm)",
+            fontWeight: weight === "past" ? 600 : 700,
+            flexShrink: 0,
+            color: today ? COLORS.accent : past ? COLORS.muted : COLORS.text,
           }}
         >
           {dayNum}
@@ -115,15 +136,27 @@ export function DayColumn({
       </div>
       <div
         className="day-tasks"
-        style={{ padding: 4, flex: 1, overflowY: "auto", minHeight: 40 }}
+        style={{
+          padding: 4,
+          flex: 1,
+          overflowY: "auto",
+          minHeight: 0,
+          // Иерархия: прошедшие дни — мельче шрифт задач, будущие — чуть меньше.
+          fontSize:
+            weight === "past"
+              ? "var(--fs-2xs)"
+              : weight === "future"
+                ? "var(--fs-xs)"
+                : "var(--fs-sm)",
+        }}
       >
         {tasks.map((t) => (
           <TaskCard
             key={t.id}
             task={t}
             onChange={onChange}
-            onDragStart={onDragStart}
             onCreateNext={createNext}
+            showTime={false}
           />
         ))}
       </div>

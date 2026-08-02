@@ -1,28 +1,54 @@
 import { useEffect, useRef, useState } from "react";
+import { useDraggable, useDroppable } from "@dnd-kit/core";
 import type { Task } from "../api";
 import { api } from "../api";
-import { COLORS, colorSetHex } from "../theme";
+import { COLORS, accentTint, argbToHex, hexToArgb } from "../theme";
+import { useStore } from "../store";
 import { TimePicker } from "./TimePicker";
 import { SubtaskList } from "./SubtaskList";
+import { taskIdZone } from "../drag";
 
 interface Props {
   task: Task;
   onChange: () => void;
-  onDragStart?: (t: Task) => void;
   /** Создать новую пустую задачу сразу после этой (расширение по Enter). */
   onCreateNext?: (afterTaskId: string) => void;
+  /** Показывать ли пикер времени. По умолчанию true; в сетке недели — false. */
+  showTime?: boolean;
 }
 
 /**
  * Строка задачи (tweek-style line): чекбокс + inline-текст + цветная полоска
  * слева. Enter в редактируемой строке сохраняет и создаёт новую строку ниже.
- * Backspace в пустой — удаляет текущую и фокусирует предыдущую.
+ * Перетаскивается через @dnd-kit (useDraggable) — drag за всю строку, активация
+ * после сдвига мыши на 8px (обычный клик = ввод текста).
  */
-export function TaskCard({ task, onChange, onDragStart, onCreateNext }: Props) {
+export function TaskCard({ task, onChange, onCreateNext, showTime = true }: Props) {
   const [title, setTitle] = useState(task.title);
   const [editing, editingSetter] = useState(false);
   const [colorMenu, setColorMenu] = useState(false);
+  const [newCatOpen, setNewCatOpen] = useState(false);
+  const [newCatName, setNewCatName] = useState("");
+  const [newCatColor, setNewCatColor] = useState("#7eb8c4");
   const inputRef = useRef<HTMLInputElement>(null);
+  const newCatRef = useRef<HTMLInputElement>(null);
+  const { colorSets, setColorSets } = useStore();
+
+  // Перетаскивание задачи через dnd-kit. data.task читается в onDragEnd.
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    isDragging,
+  } = useDraggable({ id: task.id, data: { task } });
+  // Задача — также droppable-зона: на неё можно бросить подзадачу (прикрепить).
+  const { setNodeRef: setDropRef, isOver: isDropTarget } = useDroppable({
+    id: taskIdZone(task.id),
+  });
+  const dragStyle = transform
+    ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
+    : undefined;
 
   // Синхронизируем локальный title, если задача изменилась извне.
   useEffect(() => {
@@ -31,7 +57,22 @@ export function TaskCard({ task, onChange, onDragStart, onCreateNext }: Props) {
 
   const save = async (): Promise<Task> => {
     const t = title.trim();
-    if (t && t !== task.title) {
+    // Авто-удаление пустой задачи, у которой нет подзадач — чтобы пустые
+    // не копились (создаются через Enter, но потом забыты).
+    if (!t) {
+      try {
+        const subs = await api.getSubtasks(task.id);
+        if (subs.length === 0) {
+          await api.deleteTask(task.id);
+          onChange();
+          return task;
+        }
+      } catch {
+        /* не критично — оставим как есть */
+      }
+      return task;
+    }
+    if (t !== task.title) {
       const updated = await api.upsertTask({ ...task, title: t });
       onChange();
       return updated;
@@ -47,6 +88,23 @@ export function TaskCard({ task, onChange, onDragStart, onCreateNext }: Props) {
   const setColor = async (id: string | null) => {
     await api.upsertTask({ ...task, colorSetId: id });
     setColorMenu(false);
+    onChange();
+  };
+
+  // Создать новую категорию прямо из меню и сразу применить к задаче.
+  const createCategory = async () => {
+    const name = newCatName.trim();
+    if (!name) return;
+    const created = await api.upsertColorSet({
+      name,
+      color: hexToArgb(newCatColor),
+    });
+    setNewCatName("");
+    setNewCatColor("#7eb8c4");
+    setNewCatOpen(false);
+    setColorMenu(false);
+    setColorSets(await api.getColorSets());
+    await api.upsertTask({ ...task, colorSetId: created.id });
     onChange();
   };
 
@@ -77,7 +135,9 @@ export function TaskCard({ task, onChange, onDragStart, onCreateNext }: Props) {
     }
   };
 
-  const setHex = colorSetHex(task.colorSetId);
+  // Цвет категории задачи из загруженных сетов (undefined = без категории).
+  const taskSet = colorSets.find((s) => s.id === task.colorSetId);
+  const setHex = taskSet ? argbToHex(taskSet.color) : undefined;
 
   const setTime = async (m: number | null) => {
     await api.upsertTask({ ...task, timeMinutes: m });
@@ -85,19 +145,51 @@ export function TaskCard({ task, onChange, onDragStart, onCreateNext }: Props) {
   };
 
   return (
-    <div className="task-block">
     <div
-      className="task-line"
+      className="task-block"
+      ref={setDropRef}
+      style={{
+        background: isDropTarget ? accentTint(0.08) : undefined,
+        borderRadius: isDropTarget ? "var(--radius-sm)" : undefined,
+      }}
+    >
+    <div
+      ref={setNodeRef}
+      className={`task-line${isDragging ? " dragging" : ""}`}
       style={{
         position: "relative",
         display: "flex",
         alignItems: "center",
         background: task.isDone ? "transparent" : "transparent",
         borderRadius: 4,
+        ...dragStyle,
       }}
-      draggable={!!onDragStart}
-      onDragStart={() => onDragStart?.(task)}
+      {...attributes}
     >
+      {/* Ручка перетаскивания: ТОЛЬКО на ней listeners, чтобы клики по
+          чекбоксу/кнопкам внутри строки работали. Явная подсказка «тяни тут». */}
+      <span
+        className="task-drag-hint"
+        title="Зажмите и тяните на другой день"
+        {...listeners}
+        style={{
+          flexShrink: 0,
+          width: 20,
+          marginRight: 4,
+          textAlign: "center",
+          color: COLORS.secondary,
+          opacity: 0.75,
+          fontSize: 18,
+          fontWeight: 700,
+          lineHeight: 1,
+          letterSpacing: -3,
+          cursor: "grab",
+          userSelect: "none",
+          touchAction: "none",
+        }}
+      >
+        ⠿
+      </span>
       {/* Цветная полоска слева (маркер сета) */}
       <div
         style={{
@@ -126,18 +218,22 @@ export function TaskCard({ task, onChange, onDragStart, onCreateNext }: Props) {
         onKeyDown={onKeyDown}
         style={{
           flex: 1,
-          fontSize: 13,
+          fontSize: "inherit",
           border: "none",
           background: "transparent",
           outline: "none",
           padding: "4px 0",
+          minWidth: 0,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
           color: task.isDone ? COLORS.muted : COLORS.text,
           textDecoration: task.isDone ? "line-through" : "none",
         }}
         data-task-id={task.id}
+        title={task.title || undefined}
       />
-      {/* Время — бейдж всегда виден, пикер по клику */}
-      <TimePicker value={task.timeMinutes ?? null} onChange={setTime} />
+      {/* Время — бейдж всегда виден, пикер по клику (скрыт в сетке недели). */}
+      {showTime && <TimePicker value={task.timeMinutes ?? null} onChange={setTime} />}
       {/* Кнопки цвета/удаления — всегда видны (приглушены, ярче при hover) */}
       <div className="task-actions" style={{ display: "flex", gap: 2 }}>
         <button
@@ -156,25 +252,72 @@ export function TaskCard({ task, onChange, onDragStart, onCreateNext }: Props) {
       {colorMenu && (
         <div className="color-menu">
           <button
+            className="color-option"
             onClick={() => setColor(null)}
-            style={{ background: COLORS.setNone }}
             title="Без категории"
-          />
+          >
+            <span
+              className="color-swatch"
+              style={{ background: COLORS.setNone }}
+            />
+            <span className="color-name">Без категории</span>
+            {!task.colorSetId && <span className="color-check">✓</span>}
+          </button>
+          {colorSets
+            .filter((s) => s.id !== "cs-none")
+            .map((s) => (
+              <button
+                key={s.id}
+                className="color-option"
+                onClick={() => setColor(s.id)}
+                title={s.name}
+              >
+                <span
+                  className="color-swatch"
+                  style={{ background: argbToHex(s.color) }}
+                />
+                <span className="color-name">{s.name}</span>
+                {task.colorSetId === s.id && (
+                  <span className="color-check">✓</span>
+                )}
+              </button>
+            ))}
           <button
-            onClick={() => setColor("cs-work")}
-            style={{ background: COLORS.setWork }}
-            title="Работа"
-          />
-          <button
-            onClick={() => setColor("cs-personal")}
-            style={{ background: COLORS.setPersonal }}
-            title="Личное"
-          />
-          <button
-            onClick={() => setColor("cs-sport")}
-            style={{ background: COLORS.setSport }}
-            title="Спорт"
-          />
+            className="color-option"
+            onClick={() => {
+              setNewCatOpen(true);
+              requestAnimationFrame(() => newCatRef.current?.focus());
+            }}
+            title="Добавить категорию"
+          >
+            <span className="color-swatch color-swatch-add">+</span>
+            <span className="color-name">Новая категория</span>
+          </button>
+          {newCatOpen && (
+            <div
+              className="color-menu-new"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <input
+                ref={newCatRef}
+                value={newCatName}
+                onChange={(e) => setNewCatName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") createCategory();
+                  if (e.key === "Escape") setNewCatOpen(false);
+                }}
+                placeholder="Название категории"
+              />
+              <input
+                type="color"
+                value={newCatColor}
+                onChange={(e) => setNewCatColor(e.target.value)}
+              />
+              <button onClick={createCategory} title="Создать">
+                ✓
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

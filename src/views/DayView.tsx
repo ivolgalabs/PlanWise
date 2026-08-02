@@ -1,11 +1,13 @@
 import { useRef, useState } from "react";
+import { useDroppable } from "@dnd-kit/core";
 import type { Task } from "../api";
-import { api } from "../api";
-import { fromEpochDay } from "../api";
+import { api, fromEpochDay } from "../api";
 import { TaskCard } from "../components/TaskCard";
 import { MiniCalendar } from "../components/MiniCalendar";
-import { COLORS } from "../theme";
+import { COLORS, accentTint } from "../theme";
 import { useStore } from "../store";
+import { TaskDndContext, dayId } from "../drag";
+import { isToday } from "../date";
 
 interface Props {
   day: Date;
@@ -14,8 +16,9 @@ interface Props {
 }
 
 /**
- * Вид «День»: слева — крупный заголовок + задачи (увеличенный шрифт),
- * справа — мини-календарь (больше обычного) для навигации.
+ * Вид «День»: слева — крупный заголовок + задачи, справа — мини-календарь.
+ * Задачи можно перетаскивать на соседние дни через боковые drop-зоны
+ * (◀ вчера / завтра ▶) и на любой день в мини-календаре.
  */
 export function DayView({ day, tasks, onChange }: Props) {
   const [newTitle, setNewTitle] = useState("");
@@ -65,85 +68,165 @@ export function DayView({ day, tasks, onChange }: Props) {
     });
   };
 
+  // Завтра — для боковой drop-зоны (перенос задачи/подзадачи на завтра).
+  const nextDay = new Date(day);
+  nextDay.setDate(nextDay.getDate() + 1);
+
   return (
-    <div style={{ display: "flex", height: "100%", minHeight: 0 }}>
-      {/* Основная область — задачи */}
-      <div
-        style={{
-          flex: 1,
-          padding: "var(--sp-6) var(--sp-8)",
-          overflowY: "auto",
-          minWidth: 0,
-        }}
-      >
-        <h2
+    <TaskDndContext onChange={onChange}>
+      <div style={{ display: "flex", height: "100%", minHeight: 0 }}>
+        {/* Основная область — задачи */}
+        <DayTasksArea
+          day={day}
+          dayTasks={dayTasks}
+          onChange={onChange}
+          createNext={createNext}
+          newTitle={newTitle}
+          setNewTitle={setNewTitle}
+          addTask={addTask}
+          newInputRef={newInputRef}
+        />
+        {/* Боковая зона «завтра» — перенос задачи/подзадачи на завтра */}
+        <SideDayZone day={nextDay} label="завтра ▶" />
+        {/* Правая панель — мини-календарь (также droppable через дни) */}
+        <div
           style={{
-            fontSize: "var(--fs-xl)",
-            fontWeight: 700,
-            color: COLORS.text,
-            margin: "0 0 var(--sp-6)",
-            textTransform: "capitalize",
+            width: 280,
+            flexShrink: 0,
+            padding: "var(--sp-6) var(--sp-4)",
+            borderLeft: `1px solid ${COLORS.cardBorder}`,
+            overflowY: "auto",
           }}
         >
-          {day.toLocaleDateString("ru", {
-            day: "numeric",
-            month: "long",
-            weekday: "long",
-          })}
-        </h2>
-
-        <div>
-          {dayTasks.length === 0 && (
-            <p style={{ color: COLORS.muted, fontSize: "var(--fs-base)" }}>
-              Нет задач. Напишите ниже, чтобы добавить.
-            </p>
-          )}
-          {dayTasks.map((t) => (
-            <TaskCard
-              key={t.id}
-              task={t}
-              onChange={onChange}
-              onCreateNext={createNext}
-            />
-          ))}
+          <MiniCalendar tasks={tasks} large onSelect={(d) => setSelectedDate(d)} />
         </div>
-
-        {/* Inline-поле ввода — крупное */}
-        <input
-          ref={newInputRef}
-          className="inline-input"
-          value={newTitle}
-          onChange={(e) => setNewTitle(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") addTask();
-          }}
-          placeholder="+ добавить задачу"
-          style={{
-            width: "100%",
-            border: "none",
-            borderTop: `1px solid ${COLORS.cardBorder}`,
-            padding: "var(--sp-4) var(--sp-2)",
-            marginTop: "var(--sp-2)",
-            fontSize: "var(--fs-md)",
-            background: "transparent",
-            outline: "none",
-            color: COLORS.text,
-          }}
-        />
       </div>
+    </TaskDndContext>
+  );
+}
 
-      {/* Правая панель — мини-календарь крупнее */}
-      <div
+/** Боковая узкая зона для переноса задачи на соседний день. */
+function SideDayZone({ day, label }: { day: Date; label: string }) {
+  const ed = Math.floor(
+    Date.UTC(day.getFullYear(), day.getMonth(), day.getDate()) / 86_400_000,
+  );
+  const { setNodeRef, isOver } = useDroppable({ id: dayId(ed) });
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        width: 38,
+        flexShrink: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        writingMode: "vertical-rl",
+        fontSize: "var(--fs-2xs)",
+        fontWeight: 600,
+        color: isOver ? COLORS.accent : COLORS.muted,
+        background: isOver ? accentTint(0.12) : "transparent",
+        border: `1px dashed ${isOver ? COLORS.accent : COLORS.cardBorder}`,
+        borderRadius: "var(--radius-md)",
+        margin: "var(--sp-2)",
+        userSelect: "none",
+      }}
+      title={`Перетащите на ${day.toLocaleDateString("ru", { day: "numeric", month: "long" })}`}
+    >
+      {label}
+    </div>
+  );
+}
+
+/** Основная колонка задач дня (не droppable — дни в DayView обслуживает календарь). */
+function DayTasksArea({
+  day,
+  dayTasks,
+  onChange,
+  createNext,
+  newTitle,
+  setNewTitle,
+  addTask,
+  newInputRef,
+}: {
+  day: Date;
+  dayTasks: Task[];
+  onChange: () => void;
+  createNext: (afterId: string) => void;
+  newTitle: string;
+  setNewTitle: (v: string) => void;
+  addTask: () => void;
+  newInputRef: React.RefObject<HTMLInputElement | null>;
+}) {
+  // НЕ useDroppable: в DayView droppable-дни обслуживает MiniCalendar (ячейки)
+  // и SideDayZone (завтра). Здесь droppable с dayId(epochDay) дублировал бы
+  // ячейку календаря того же дня → @dnd-kit перезаписывал ref, ломая drag.
+  const today = isToday(day);
+  return (
+    <div
+      style={{
+        flex: 1,
+        padding: "var(--sp-6) var(--sp-8)",
+        overflowY: "auto",
+        minWidth: 0,
+        // Тонкая акцентная полоса слева для текущего дня.
+        boxShadow: today ? `inset 3px 0 0 ${COLORS.accent}` : "none",
+      }}
+    >
+      <h2
         style={{
-          width: 280,
-          flexShrink: 0,
-          padding: "var(--sp-6) var(--sp-4)",
-          borderLeft: `1px solid ${COLORS.cardBorder}`,
-          overflowY: "auto",
+          fontSize: "var(--fs-xl)",
+          fontWeight: 700,
+          color: today ? COLORS.accent : COLORS.text,
+          margin: "0 0 var(--sp-6)",
+          textTransform: "capitalize",
         }}
       >
-        <MiniCalendar tasks={tasks} large onSelect={(d) => setSelectedDate(d)} />
+        {day.toLocaleDateString("ru", {
+          day: "numeric",
+          month: "long",
+          weekday: "long",
+        })}
+        {today && " ●"}
+      </h2>
+
+      <div>
+        {dayTasks.length === 0 && (
+          <p style={{ color: COLORS.muted, fontSize: "var(--fs-base)" }}>
+            Нет задач. Напишите ниже, чтобы добавить.
+          </p>
+        )}
+        {dayTasks.map((t) => (
+          <TaskCard
+            key={t.id}
+            task={t}
+            onChange={onChange}
+            onCreateNext={createNext}
+          />
+        ))}
       </div>
+
+      {/* Inline-поле ввода — крупное */}
+      <input
+        ref={newInputRef}
+        className="inline-input"
+        value={newTitle}
+        onChange={(e) => setNewTitle(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") addTask();
+        }}
+        placeholder="+ добавить задачу"
+        style={{
+          width: "100%",
+          border: "none",
+          borderTop: `1px solid ${COLORS.cardBorder}`,
+          padding: "var(--sp-4) var(--sp-2)",
+          marginTop: "var(--sp-2)",
+          fontSize: "var(--fs-md)",
+          background: "transparent",
+          outline: "none",
+          color: COLORS.text,
+        }}
+      />
     </div>
   );
 }

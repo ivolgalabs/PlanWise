@@ -63,6 +63,20 @@ body {
 .task-line:hover {
   background: var(--bg-hover);
 }
+/* Перетаскивание через @dnd-kit: пока тянем — строка полупрозрачная
+   (поверх неё рендерится DragOverlay-призрак). */
+.task-line.dragging {
+  opacity: 0.3;
+  cursor: grabbing;
+}
+/* Подсказка-индикатор drag ярче при наведении на строку. */
+.task-line:hover .task-drag-hint {
+  opacity: 1;
+  color: var(--accent);
+}
+.task-drag-hint:active {
+  cursor: grabbing;
+}
 .task-actions {
   display: flex;
   gap: var(--sp-1);
@@ -151,23 +165,87 @@ input[type="checkbox"] {
   border-radius: var(--radius-lg);
   padding: var(--sp-2);
   display: flex;
-  gap: var(--sp-2);
+  flex-direction: column;
+  gap: 2px;
+  min-width: 170px;
   z-index: var(--z-dropdown);
   box-shadow: var(--shadow-lg);
 }
-.color-menu button {
-  width: calc(var(--fs-md) + 6px);
-  height: calc(var(--fs-md) + 6px);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-full);
+.color-menu .color-option {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  width: 100%;
+  padding: var(--sp-1) var(--sp-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
   cursor: pointer;
-  padding: 0;
+  font-size: var(--fs-sm);
+  color: var(--text-primary);
+  text-align: left;
+}
+.color-menu .color-option:hover {
+  background: var(--bg-hover);
+}
+.color-menu .color-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+.color-menu .color-swatch-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--fs-2xs);
+  color: var(--text-muted);
+  border: 1px dashed var(--border-color);
+}
+.color-menu .color-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.color-menu .color-check {
+  color: var(--accent);
+  font-size: var(--fs-2xs);
+  font-weight: 700;
 }
 .color-menu button.del-btn {
   background: transparent;
   color: var(--danger);
   border: 1px solid var(--border-color);
   font-size: var(--fs-2xs);
+}
+
+/* Создание новой категории прямо из меню цвета */
+.color-menu-new {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+.color-menu-new input[type="text"] {
+  width: 130px;
+  font-size: var(--fs-2xs);
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: var(--sp-1) var(--sp-2);
+  outline: none;
+}
+.color-menu-new input[type="color"] {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-full);
+  background: transparent;
+  cursor: pointer;
 }
 
 /* === Колонка дня === */

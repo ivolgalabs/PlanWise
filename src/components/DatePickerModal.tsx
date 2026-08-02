@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { startOfWeek, firstOfMonth, isSameDay } from "../date";
-import { COLORS } from "../theme";
+import { COLORS, accentTint, varTint } from "../theme";
 
 interface Props {
   initial: Date;
@@ -129,8 +129,8 @@ export function DatePickerModal({ initial, onPick, onClose }: Props) {
                     ? selected
                       ? COLORS.accent
                       : COLORS.text
-                    : COLORS.muted + "66",
-                  background: selected ? COLORS.accent + "26" : "transparent",
+                    : varTint("--text-muted", 0.4),
+                  background: selected ? accentTint(0.15) : "transparent",
                 }}
               >
                 {day.getDate()}

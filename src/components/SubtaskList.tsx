@@ -1,15 +1,18 @@
 import { useEffect, useState } from "react";
+import { useDraggable } from "@dnd-kit/core";
 import type { Subtask } from "../api";
 import { api } from "../api";
 import { COLORS } from "../theme";
+import { subtaskDragId } from "../drag";
 
 interface Props {
   taskId: string;
 }
 
 /**
- * Компактный чек-лист подзадач прямо под задачей — без отдельной кнопки
- * раскрытия. Inline-добавление: поле всегда видно, Enter добавляет строку.
+ * Чек-лист подзадач под задачей: всегда виден — заголовок (если есть подзадачи),
+ * список (строки draggable) и поле ввода «+ подзадача». Поле всегда на месте,
+ * поэтому добавить подзадачу можно в любом виде.
  */
 export function SubtaskList({ taskId }: Props) {
   const [items, setItems] = useState<Subtask[]>([]);
@@ -44,44 +47,30 @@ export function SubtaskList({ taskId }: Props) {
 
   const done = items.filter((s) => s.isDone).length;
 
+  // Всегда показываем блок подзадач: заголовок (если есть подзадачи) + список
+  // + поле ввода. Это решает «нельзя добавить подзадачу» — поле всегда на месте.
   return (
     <div className="subtasks-area">
-      <div style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted, marginBottom: 2, fontWeight: 600 }}>
-        {items.length > 0 ? `Подзадачи (${done}/${items.length})` : "Подзадачи"}
-      </div>
-      {items.map((s) => (
+      {items.length > 0 && (
         <div
-          key={s.id}
           style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "var(--sp-2)",
-            padding: "1px 0",
+            fontSize: "var(--fs-2xs)",
+            color: COLORS.muted,
+            marginBottom: 2,
+            fontWeight: 600,
+            userSelect: "none",
           }}
         >
-          <input
-            type="checkbox"
-            checked={s.isDone}
-            onChange={() => toggle(s)}
-            style={{ margin: 0 }}
-          />
-          <span
-            style={{
-              flex: 1,
-              fontSize: "var(--fs-2xs)",
-              color: s.isDone ? COLORS.muted : COLORS.text,
-              textDecoration: s.isDone ? "line-through" : "none",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {s.title}
-          </span>
-          <button onClick={() => del(s.id)} className="chip-btn" title="Удалить">
-            ✕
-          </button>
+          Подзадачи ({done}/{items.length})
         </div>
+      )}
+      {items.map((s) => (
+        <SubtaskRow
+          key={s.id}
+          subtask={s}
+          onToggle={() => toggle(s)}
+          onDelete={() => del(s.id)}
+        />
       ))}
       <input
         value={newTitle}
@@ -101,6 +90,78 @@ export function SubtaskList({ taskId }: Props) {
           color: COLORS.text,
         }}
       />
+    </div>
+  );
+}
+
+/** Строка подзадачи — draggable (можно перетащить в другой день → promote,
+ *  или на другую задачу → сменить родителя). */
+function SubtaskRow({
+  subtask,
+  onToggle,
+  onDelete,
+}: {
+  subtask: Subtask;
+  onToggle: () => void;
+  onDelete: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: subtaskDragId(subtask.id),
+    data: { subtask },
+  });
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "var(--sp-2)",
+        padding: "1px 0",
+        opacity: isDragging ? 0.4 : undefined,
+      }}
+      {...attributes}
+    >
+      {/* Ручка перетаскивания подзадачи: listeners ТОЛЬКО тут, чтобы чекбокс и
+          кнопку ✕ можно было кликать. Явная подсказка «тяни тут». */}
+      <span
+        {...listeners}
+        title="Перетащите на день (→ задача) или на другую задачу"
+        style={{
+          flexShrink: 0,
+          width: 12,
+          textAlign: "center",
+          color: COLORS.muted,
+          opacity: 0.5,
+          fontSize: 12,
+          cursor: "grab",
+          userSelect: "none",
+          touchAction: "none",
+        }}
+      >
+        ⋮
+      </span>
+      <input
+        type="checkbox"
+        checked={subtask.isDone}
+        onChange={onToggle}
+        style={{ margin: 0 }}
+      />
+      <span
+        style={{
+          flex: 1,
+          fontSize: "var(--fs-2xs)",
+          color: subtask.isDone ? COLORS.muted : COLORS.text,
+          textDecoration: subtask.isDone ? "line-through" : "none",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {subtask.title}
+      </span>
+      <button onClick={onDelete} className="chip-btn" title="Удалить">
+        ✕
+      </button>
     </div>
   );
 }

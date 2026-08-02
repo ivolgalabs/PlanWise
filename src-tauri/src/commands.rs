@@ -107,6 +107,41 @@ pub fn get_color_sets(state: State<'_, Db>) -> Vec<ColorSet> {
     .collect()
 }
 
+/// Создать/обновить категорию (цвет-сет). Пустой id — новая категория.
+#[tauri::command]
+pub fn upsert_color_set(state: State<'_, Db>, mut set: ColorSet) -> ColorSet {
+    let conn = state.0.lock().unwrap();
+    if set.id.is_empty() {
+        set.id = Uuid::new_v4().to_string();
+    }
+    conn.execute(
+        "INSERT INTO color_sets (id, name, color, sort_order) VALUES (?1, ?2, ?3, ?4)
+         ON CONFLICT(id) DO UPDATE SET name=excluded.name, color=excluded.color,
+           sort_order=excluded.sort_order",
+        rusqlite::params![set.id, set.name, set.color, set.sort_order],
+    )
+    .expect("upsert_color_set execute");
+    set
+}
+
+/// Удалить категорию. Задачи с ней становятся «без категории» (NULL).
+#[tauri::command]
+pub fn delete_color_set(state: State<'_, Db>, id: String) {
+    let conn = state.0.lock().unwrap();
+    // Служебный сет «Без категории» (cs-none) удалять нельзя — на него
+    // завязан NULL-смысл color_set_id.
+    if id == "cs-none" {
+        return;
+    }
+    conn.execute(
+        "UPDATE tasks SET color_set_id = NULL, updated_at = ?1 WHERE color_set_id = ?2",
+        rusqlite::params![now_ms(), id],
+    )
+    .expect("delete_color_set tasks");
+    conn.execute("DELETE FROM color_sets WHERE id = ?1", [id])
+        .expect("delete_color_set");
+}
+
 /// Перенос всех невыполненных задач строго ДО todayEpochDay на сегодня.
 /// Возвращает количество перенесённых задач (для плашки в UI).
 #[tauri::command]

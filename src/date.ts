@@ -57,6 +57,29 @@ export const isFuture = (d: Date): boolean => {
   return day.getTime() > today.getTime();
 };
 
+/**
+ * Визуальный «вес» дня для иерархии отображения:
+ *  - "today"    — сегодня (крупный, акцент)
+ *  - "tomorrow" — завтра (крупный, яркий)
+ *  - "near"     — ближайшие 2-3 дня (нормальный)
+ *  - "future"   — далёкое будущее (уменьшенный)
+ *  - "past"     — прошлое (бледный, компактный)
+ */
+export type DayWeight = "today" | "tomorrow" | "near" | "future" | "past";
+
+export const dayWeight = (d: Date): DayWeight => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const day = new Date(d);
+  day.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((day.getTime() - today.getTime()) / 86_400_000);
+  if (diffDays === 0) return "today";
+  if (diffDays === 1) return "tomorrow";
+  if (diffDays < 0) return "past";
+  if (diffDays <= 3) return "near";
+  return "future";
+};
+
 /** Форматировать минуты (0-1439) в "ЧЧ:ММ". */
 export const formatMinutes = (m: number | null | undefined): string | null => {
   if (m == null) return null;

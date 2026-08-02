@@ -1,10 +1,13 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useDroppable } from "@dnd-kit/core";
 import type { Task } from "../api";
-import { fromEpochDay, api } from "../api";
-import { weekDays, isSameDay, isToday, isPast } from "../date";
+import { api, fromEpochDay } from "../api";
+import { weekDays, isSameDay, isToday, isPast, dayWeight } from "../date";
 import { TaskCard } from "../components/TaskCard";
-import { COLORS } from "../theme";
+import { WeekShiftZone } from "../components/WeekShiftZone";
+import { COLORS, accentTint } from "../theme";
 import { useStore } from "../store";
+import { dayId } from "../drag";
 
 interface Props {
   tasks: Task[];
@@ -13,12 +16,11 @@ interface Props {
 
 /**
  * Вид «Неделя» (вертикальный): дни сверху вниз, с inline-полем ввода
- * в каждом дне, расширяемыми строками и перетаскиванием.
+ * в каждом дне и расширяемыми строками. Каждый день — droppable-зона
+ * для перетаскивания задач (@dnd-kit).
  */
 export function WeekViewVertical({ tasks, onChange }: Props) {
   const { selectedDate, mondayFirst } = useStore();
-  const [dragTask, setDragTask] = useState<Task | null>(null);
-  const [hoverDay, setHoverDay] = useState<Date | null>(null);
   const [titlesByDay, setTitlesByDay] = useState<Record<string, string>>({});
   const days = weekDays(selectedDate, mondayFirst);
 
@@ -58,88 +60,154 @@ export function WeekViewVertical({ tasks, onChange }: Props) {
     });
   };
 
-  const onDrop = async (day: Date) => {
-    if (dragTask && !isSameDay(fromEpochDay(dragTask.date), day)) {
-      await api.moveTask(dragTask.id, day);
-      onChange();
-    }
-    setDragTask(null);
-    setHoverDay(null);
-  };
+  return (
+    <div style={{ display: "flex", height: "100%", minHeight: 0 }}>
+      <WeekShiftZone dir={-1} />
+      <div
+        style={{
+          flex: 1,
+          minWidth: 0,
+          overflowY: "auto",
+          padding: "var(--sp-4)",
+        }}
+      >
+        {days.map((d) => (
+          <DayRow
+            key={d.toISOString()}
+            day={d}
+            dayTasks={tasksForDay(d)}
+            onChange={onChange}
+            createNext={createNext}
+            title={titlesByDay[dayKey(d)] ?? ""}
+            setTitle={(v) =>
+              setTitlesByDay((m) => ({ ...m, [dayKey(d)]: v }))
+            }
+            addTask={() => addTask(d)}
+          />
+        ))}
+      </div>
+      <WeekShiftZone dir={1} />
+    </div>
+  );
+}
+
+/** Один день-строка: droppable-зона + задачи + inline-поле ввода. */
+function DayRow({
+  day,
+  dayTasks,
+  onChange,
+  createNext,
+  title,
+  setTitle,
+  addTask,
+}: {
+  day: Date;
+  dayTasks: Task[];
+  onChange: () => void;
+  createNext: (afterId: string, day: Date) => void;
+  title: string;
+  setTitle: (v: string) => void;
+  addTask: () => void;
+}) {
+  const today = isToday(day);
+  const past = isPast(day);
+  const weight = dayWeight(day);
+  const ed = Math.floor(
+    Date.UTC(day.getFullYear(), day.getMonth(), day.getDate()) / 86_400_000,
+  );
+  const { setNodeRef, isOver } = useDroppable({ id: dayId(ed) });
+  const weekday = day.toLocaleDateString("ru", { weekday: "short" });
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Иерархия: past — бледный/компактный, today/tomorrow — крупные.
+  const dim = weight === "past" ? 0.4 : weight === "future" ? 0.75 : 1;
+  const headFs =
+    weight === "past"
+      ? "var(--fs-2xs)"
+      : weight === "future"
+        ? "var(--fs-xs)"
+        : weight === "today" || weight === "tomorrow"
+          ? "var(--fs-md)"
+          : "var(--fs-sm)";
+  const headWeight =
+    weight === "past" ? 400 : weight === "today" || weight === "tomorrow" ? 700 : 600;
+  const headColor =
+    weight === "today"
+      ? COLORS.accent
+      : weight === "tomorrow"
+        ? COLORS.text
+        : past
+          ? COLORS.muted
+          : COLORS.secondary;
 
   return (
-    <div style={{ overflowY: "auto", height: "100%", padding: "var(--sp-4)" }}>
-      {days.map((d) => {
-        const today = isToday(d);
-        const past = isPast(d);
-        const hovering = !!hoverDay && isSameDay(hoverDay, d);
-        const weekday = d.toLocaleDateString("ru", { weekday: "short" });
-        const dayTasks = tasksForDay(d);
-        const k = dayKey(d);
-        return (
-          <div
-            key={d.toISOString()}
-            onDragOver={(e) => {
-              e.preventDefault();
-              setHoverDay(d);
-            }}
-            onDrop={() => onDrop(d)}
-            style={{
-              marginBottom: "var(--sp-4)",
-              opacity: past ? 0.6 : 1,
-            }}
-          >
-            <div
-              style={{
-                padding: "var(--sp-2) var(--sp-3)",
-                fontWeight: 600,
-                fontSize: "var(--fs-sm)",
-                color: today ? COLORS.accent : past ? COLORS.muted : COLORS.secondary,
-                background: hovering ? COLORS.accent + "14" : "transparent",
-                borderRadius: "var(--radius-md)",
-                textTransform: "capitalize",
-              }}
-            >
-              {past ? "✓ " : ""}
-              {weekday} {d.getDate()}
-              {today && " ●"}
-            </div>
-            <div style={{ paddingLeft: "var(--sp-6)" }}>
-              {dayTasks.map((t) => (
-                <TaskCard
-                  key={t.id}
-                  task={t}
-                  onChange={onChange}
-                  onDragStart={setDragTask}
-                  onCreateNext={(id) => createNext(id, d)}
-                />
-              ))}
-              {/* Inline-поле ввода нового задачи */}
-              <input
-                value={titlesByDay[k] ?? ""}
-                onChange={(e) =>
-                  setTitlesByDay((m) => ({ ...m, [k]: e.target.value }))
-                }
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") addTask(d);
-                }}
-                placeholder="+ добавить"
-                className="inline-input"
-                style={{
-                  width: "100%",
-                  border: "none",
-                  borderTop: `1px solid ${COLORS.cardBorder}`,
-                  padding: "var(--sp-2) var(--sp-1)",
-                  fontSize: "var(--fs-sm)",
-                  background: "transparent",
-                  outline: "none",
-                  color: COLORS.text,
-                }}
-              />
-            </div>
-          </div>
-        );
-      })}
+    <div
+      ref={setNodeRef}
+      style={{
+        marginBottom: "var(--sp-4)",
+        opacity: dim,
+        borderRadius: "var(--radius-md)",
+        background: isOver ? accentTint(0.08) : "transparent",
+      }}
+    >
+      <div
+        style={{
+          padding:
+            weight === "past"
+              ? "var(--sp-1) var(--sp-3)"
+              : "var(--sp-2) var(--sp-3)",
+          fontWeight: headWeight,
+          fontSize: headFs,
+          color: headColor,
+          textTransform: "capitalize",
+        }}
+      >
+        {past ? "✓ " : ""}
+        {weekday} {day.getDate()}
+        {today && " ●"}
+      </div>
+      <div
+        style={{
+          paddingLeft: "var(--sp-6)",
+          // Иерархия: прошедшие дни — мельче шрифт задач, будущие — чуть меньше.
+          fontSize:
+            weight === "past"
+              ? "var(--fs-2xs)"
+              : weight === "future"
+                ? "var(--fs-xs)"
+                : "var(--fs-sm)",
+        }}
+      >
+        {dayTasks.map((t) => (
+          <TaskCard
+            key={t.id}
+            task={t}
+            onChange={onChange}
+            onCreateNext={(id) => createNext(id, day)}
+          />
+        ))}
+        {/* Inline-поле ввода новой задачи */}
+        <input
+          ref={inputRef}
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") addTask();
+          }}
+          placeholder="+ добавить"
+          className="inline-input"
+          style={{
+            width: "100%",
+            border: "none",
+            borderTop: `1px solid ${COLORS.cardBorder}`,
+            padding: "var(--sp-2) var(--sp-1)",
+            fontSize: "var(--fs-sm)",
+            background: "transparent",
+            outline: "none",
+            color: COLORS.text,
+          }}
+        />
+      </div>
     </div>
   );
 }

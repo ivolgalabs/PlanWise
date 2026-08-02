@@ -1,9 +1,17 @@
 import { useState } from "react";
+import { useDroppable } from "@dnd-kit/core";
 import type { Task } from "../api";
 import { fromEpochDay } from "../api";
-import { startOfWeek, firstOfMonth, isSameDay } from "../date";
-import { COLORS } from "../theme";
+import {
+  startOfWeek,
+  firstOfMonth,
+  isSameDay,
+  isPast,
+  weekDays,
+} from "../date";
+import { COLORS, setHex, accentTint, varTint } from "../theme";
 import { useStore } from "../store";
+import { calendarDayId } from "../drag";
 
 interface Props {
   tasks: Task[];
@@ -11,22 +19,39 @@ interface Props {
   large?: boolean;
   /** Колбэк выбора дня (если не задан — использует store.setSelectedDate). */
   onSelect?: (d: Date) => void;
+  /**
+   * Являются ли ячейки droppable-целями для drag задач?
+   * true — в DayView (календарь как цель переноса на произвольный день).
+   * false — в WeekView, чтобы ячейки не перехватывали collision у дней недели.
+   */
+  droppable?: boolean;
 }
 
-type BusyLevel = "free" | "light" | "heavy";
+/** Максимум точек-задач в ячейке; остаток показываем как «+N». */
+const MAX_DOTS = 4;
 
-const busyLevel = (n: number): BusyLevel =>
-  n === 0 ? "free" : n <= 2 ? "light" : "heavy";
-
-/** Мини-календарь месяца с индикатором занятости дней. */
-export function MiniCalendar({ tasks, large, onSelect }: Props) {
-  const { selectedDate, setSelectedDate, mondayFirst } = useStore();
+/**
+ * Мини-календарь месяца с точками-задачами: задачи в прошедших днях — серые,
+ * в сегодня/будущем — в цвете выбранной пользователем категории (несколько
+ * задач — несколько цветов). В виде «Неделя» подсвечивается неделя выбранной
+ * даты, в «Дне» — сам выбранный день.
+ */
+export function MiniCalendar({ tasks, large, onSelect, droppable = true }: Props) {
+  const { selectedDate, setSelectedDate, mondayFirst, view } = useStore();
   const [collapsed, setCollapsed] = useState(false);
-  const first = firstOfMonth(selectedDate);
+  // Месяц календаря — собственное состояние, отвязанное от выбранной даты:
+  // можно свободно листать вперёд/назад, не сдвигая выбранный день.
+  const [calMonth, setCalMonth] = useState<Date>(() => firstOfMonth(selectedDate));
+  const first = firstOfMonth(calMonth);
   const gridStart = startOfWeek(first, mondayFirst);
 
-  const countForDay = (d: Date): number =>
-    tasks.filter((t) => isSameDay(fromEpochDay(t.date), d)).length;
+  // Неделя выбранной даты — подсветка в виде «Неделя», чтобы было видно,
+  // какой диапазон пользователь сейчас смотрит.
+  const selectedWeek =
+    view === "week" ? weekDays(selectedDate, mondayFirst) : null;
+
+  const tasksForDay = (d: Date): Task[] =>
+    tasks.filter((t) => isSameDay(fromEpochDay(t.date), d));
 
   const cells: Date[] = Array.from({ length: 42 }, (_, i) => {
     const d = new Date(gridStart);
@@ -63,17 +88,62 @@ export function MiniCalendar({ tasks, large, onSelect }: Props) {
           textTransform: "capitalize",
           display: "flex",
           alignItems: "center",
-          gap: "var(--sp-2)",
-          cursor: "pointer",
+          gap: "var(--sp-1)",
           userSelect: "none",
         }}
-        onClick={() => setCollapsed((v) => !v)}
       >
-        <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted }}>
-          {collapsed ? "▸" : "▾"}
+        <button
+          className="icon-btn"
+          onClick={() =>
+            setCalMonth(
+              new Date(first.getFullYear(), first.getMonth() - 1, 1),
+            )
+          }
+          title="Предыдущий месяц"
+          style={{ fontSize: large ? "var(--fs-xs)" : 11, padding: "0 4px" }}
+        >
+          ‹
+        </button>
+        <span
+          style={{ cursor: "pointer", flex: 1, textAlign: "center" }}
+          onClick={() => setCollapsed((v) => !v)}
+          title={collapsed ? "Развернуть" : "Свернуть"}
+        >
+          {first.toLocaleDateString("ru", { month: "long", year: "numeric" })}
         </span>
-        {first.toLocaleDateString("ru", { month: "long", year: "numeric" })}
+        <button
+          className="icon-btn"
+          onClick={() =>
+            setCalMonth(
+              new Date(first.getFullYear(), first.getMonth() + 1, 1),
+            )
+          }
+          title="Следующий месяц"
+          style={{ fontSize: large ? "var(--fs-xs)" : 11, padding: "0 4px" }}
+        >
+          ›
+        </button>
       </div>
+      {/* Быстрый возврат к сегодняшнему дню/месяцу. */}
+      {!collapsed && (
+        <button
+          className="icon-btn"
+          onClick={() => {
+            const today = new Date();
+            setCalMonth(firstOfMonth(today));
+            setSelectedDate(today);
+          }}
+          style={{
+            fontSize: large ? "var(--fs-2xs)" : 9,
+            marginBottom: "var(--sp-2)",
+            padding: "2px 6px",
+            alignSelf: "flex-start",
+          }}
+          title="Перейти к сегодняшнему дню"
+        >
+          Сегодня
+        </button>
+      )}
       {!collapsed && (
         <>
       <div style={{ display: "flex", marginBottom: 6 }}>
@@ -101,34 +171,24 @@ export function MiniCalendar({ tasks, large, onSelect }: Props) {
         {cells.map((day, i) => {
           const inMonth = day.getMonth() === first.getMonth();
           const selected = isSameDay(day, selectedDate);
-          const level = busyLevel(countForDay(day));
+          const inSelectedWeek =
+            selectedWeek?.some((w) => isSameDay(w, day)) ?? false;
+          const past = isPast(day);
           return (
-            <div
+            <CalendarDayCell
               key={i}
-              onClick={() => pick(day)}
-              style={{
-                textAlign: "center",
-                padding: cellPad,
-                cursor: "pointer",
-                borderRadius: "var(--radius-sm)",
-                background: selected ? COLORS.accent + "26" : "transparent",
-              }}
-            >
-              <div
-                style={{
-                  fontSize: fs,
-                  fontWeight: selected ? 700 : 400,
-                  color: inMonth
-                    ? selected
-                      ? COLORS.accent
-                      : COLORS.text
-                    : COLORS.muted + "66",
-                }}
-              >
-                {day.getDate()}
-              </div>
-              <BusyDot level={level} large={large} />
-            </div>
+              day={day}
+              inMonth={inMonth}
+              selected={selected}
+              inSelectedWeek={inSelectedWeek}
+              past={past}
+              dayTasks={tasksForDay(day)}
+              large={large}
+              fs={fs}
+              cellPad={cellPad}
+              droppable={droppable}
+              onPick={pick}
+            />
           );
         })}
       </div>
@@ -138,36 +198,135 @@ export function MiniCalendar({ tasks, large, onSelect }: Props) {
   );
 }
 
-function BusyDot({
-  level,
+/** Ячейка дня календаря — droppable-зона для переноса задач (@dnd-kit),
+ *  если droppable=true. В WeekView отключается (droppable=false), чтобы ячейки
+ *  не перехватывали collision у дней недели. */
+function CalendarDayCell({
+  day,
+  inMonth,
+  selected,
+  inSelectedWeek,
+  past,
+  dayTasks,
   large,
+  fs,
+  cellPad,
+  droppable,
+  onPick,
 }: {
-  level: BusyLevel;
+  day: Date;
+  inMonth: boolean;
+  selected: boolean;
+  inSelectedWeek: boolean;
+  past: boolean;
+  dayTasks: Task[];
   large?: boolean;
+  fs: number | string;
+  cellPad: string;
+  droppable: boolean;
+  onPick: (d: Date) => void;
 }) {
-  const sz = large ? 4 : 3;
-  if (level === "free") return <div style={{ height: sz }} />;
-  if (level === "light")
-    return (
+  const epochDay = Math.floor(
+    Date.UTC(day.getFullYear(), day.getMonth(), day.getDate()) / 86_400_000,
+  );
+  const { setNodeRef, isOver } = useDroppable({
+    // dc: — отдельное пространство имён, чтобы ячейка календаря не конфликтовала
+    // с основной droppable-зоной того же дня (d:). См. calendarDayId в drag.tsx.
+    id: calendarDayId(epochDay),
+    disabled: !droppable,
+  });
+  return (
+    <div
+      ref={setNodeRef}
+      onClick={() => onPick(day)}
+      style={{
+        textAlign: "center",
+        padding: cellPad,
+        cursor: "pointer",
+        borderRadius: "var(--radius-sm)",
+        // Приоритет подсветки: drop-цель > выбранный день > выбранная неделя.
+        background: isOver
+          ? accentTint(0.25)
+          : selected
+            ? accentTint(0.15)
+            : inSelectedWeek
+              ? accentTint(0.08)
+              : "transparent",
+        outline: isOver ? `2px solid ${COLORS.accent}` : "none",
+      }}
+    >
       <div
         style={{
-          width: sz,
-          height: sz,
-          margin: "2px auto 0",
-          borderRadius: "50%",
-          background: COLORS.accent,
+          fontSize: fs,
+          fontWeight: selected ? 700 : 400,
+          color: inMonth
+            ? selected
+              ? COLORS.accent
+              : COLORS.text
+            : varTint("--text-muted", 0.4),
         }}
-      />
-    );
+      >
+        {day.getDate()}
+      </div>
+              <DayDots dayTasks={dayTasks} past={past} large={large} />
+    </div>
+  );
+}
+
+/** Точки-задачи дня: в прошлом и выполненные — серые, будущие — в цвете
+ *  выбранной пользователем категории; задачи без категории — нейтральные. */
+function DayDots({
+  dayTasks,
+  past,
+  large,
+}: {
+  dayTasks: Task[];
+  past: boolean;
+  large?: boolean;
+}) {
+  const { colorSets } = useStore();
+  const sz = large ? 4 : 3;
+  const visible = dayTasks.slice(0, MAX_DOTS);
+  const rest = dayTasks.length - visible.length;
   return (
     <div
       style={{
-        width: large ? 14 : 10,
-        height: 3,
-        margin: "2px auto 0",
-        borderRadius: 2,
-        background: COLORS.setSport,
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        gap: 2,
+        marginTop: 2,
+        minHeight: sz,
+        flexWrap: "wrap",
       }}
-    />
+    >
+      {visible.map((t) => (
+        <div
+          key={t.id}
+          title={t.title || undefined}
+          style={{
+            width: sz,
+            height: sz,
+            borderRadius: "50%",
+            flexShrink: 0,
+            background:
+              past || t.isDone || !t.colorSetId
+                ? COLORS.muted
+                : setHex(colorSets, t.colorSetId) ?? COLORS.muted,
+          }}
+        />
+      ))}
+      {rest > 0 && (
+        <span
+          style={{
+            fontSize: large ? "var(--fs-2xs)" : 7,
+            lineHeight: 1,
+            color: COLORS.muted,
+          }}
+        >
+          +{rest}
+        </span>
+      )}
+    </div>
   );
 }

@@ -1,5 +1,5 @@
+use core_base::fs_utils::FsUtils;
 use rusqlite::Connection;
-use std::fs;
 use std::sync::Mutex;
 use tauri::{AppHandle, Manager};
 
@@ -15,7 +15,7 @@ pub fn init(app: &AppHandle) -> Mutex<Connection> {
         .path()
         .app_data_dir()
         .expect("app data dir not resolvable");
-    fs::create_dir_all(&app_dir).ok();
+    FsUtils::ensure_dir(&app_dir).ok();
     let db_path = app_dir.join("daily_planner.sqlite");
     let mut conn = Connection::open(db_path).expect("failed to open sqlite db");
 

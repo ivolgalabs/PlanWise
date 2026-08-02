@@ -1,19 +1,31 @@
+import { useState } from "react";
 import { useStore } from "../store";
-import { THEME_FAMILIES } from "../theme";
+import { THEME_FAMILIES, argbToHex, hexToArgb } from "../theme";
 import type { ThemeMode } from "../store";
+import { api } from "../api";
 import "./SettingsPanel.css";
 
 interface Props {
   onClose: () => void;
+  /** Перезагрузить категории после правок (App обновляет store.colorSets). */
+  onSetsChanged: () => void;
 }
 
 const SCALE_PRESETS = [0.7, 0.85, 1.0, 1.25, 1.5, 1.75, 2.0];
+const FONT_PRESETS = [0.8, 0.9, 1.0, 1.1, 1.25, 1.4, 1.6];
+
+/** Черновик категории для редактирования (id "" = ещё не создана). */
+interface SetDraft {
+  id: string;
+  name: string;
+  color: number;
+}
 
 /**
  * Полноценное окно настроек: Оформление (тема свотчами + режим +
- * OLED + масштаб ползунком) и Неделя.
+ * OLED + масштаб ползунком), Неделя и Категории (цвет-сеты).
  */
-export function SettingsPanel({ onClose }: Props) {
+export function SettingsPanel({ onClose, onSetsChanged }: Props) {
   const {
     mondayFirst,
     themeMode,
@@ -21,13 +33,56 @@ export function SettingsPanel({ onClose }: Props) {
     preferredDarkTheme,
     useOledForDarkMode,
     uiScale,
+    fontScale,
+    rolloverEnabled,
+    colorSets,
     toggleMondayFirst,
     setThemeMode,
     setPreferredLightTheme,
     setPreferredDarkTheme,
     setUseOledForDarkMode,
     setUiScale,
+    setFontScale,
+    setRolloverEnabled,
   } = useStore();
+
+  // Черновики категорий для редактирования (служебный cs-none скрыт).
+  const [drafts, setDrafts] = useState<SetDraft[]>(() =>
+    colorSets
+      .filter((s) => s.id !== "cs-none")
+      .map((s) => ({ id: s.id, name: s.name, color: s.color })),
+  );
+
+  const patchDraft = (id: string, patch: Partial<SetDraft>) =>
+    setDrafts((ds) => ds.map((d) => (d.id === id ? { ...d, ...patch } : d)));
+
+  const addDraft = () =>
+    setDrafts((ds) => [
+      ...ds,
+      { id: "", name: "Новая категория", color: hexToArgb("#7eb8c4") },
+    ]);
+
+  const saveDraft = async (d: SetDraft) => {
+    const saved = await api.upsertColorSet({
+      id: d.id || undefined,
+      name: d.name.trim() || "Без названия",
+      color: d.color,
+    });
+    // Новая категория получает id от Rust — обновляем черновик, чтобы
+    // повторное сохранение не создавало дубль.
+    setDrafts((ds) =>
+      ds.map((x) => (x.id === d.id ? { ...x, id: saved.id } : x)),
+    );
+    onSetsChanged();
+  };
+
+  const removeDraft = async (d: SetDraft) => {
+    if (d.id) {
+      await api.deleteColorSet(d.id);
+      onSetsChanged();
+    }
+    setDrafts((ds) => ds.filter((x) => x.id !== d.id));
+  };
 
   const modes: { mode: ThemeMode; label: string }[] = [
     { mode: "light", label: "☀️ Светлая" },
@@ -75,6 +130,43 @@ export function SettingsPanel({ onClose }: Props) {
                   key={s}
                   onClick={() => setUiScale(s)}
                   className={`preset-btn ${Math.abs(uiScale - s) < 0.01 ? "active" : ""}`}
+                >
+                  {Math.round(s * 100)}%
+                </button>
+              ))}
+            </div>
+          </section>
+
+          {/* ── Размер шрифта ── */}
+          <section className="settings-section">
+            <div className="section-head">
+              <div>
+                <h3 className="section-title">🔤 Размер шрифта</h3>
+                <p className="section-hint">Меняет только текст, без масштабирования всего интерфейса</p>
+              </div>
+              <span className="scale-badge">{Math.round(fontScale * 100)}%</span>
+            </div>
+            <input
+              type="range"
+              min={0.8}
+              max={1.6}
+              step={0.05}
+              value={fontScale}
+              onChange={(e) => setFontScale(parseFloat(e.target.value))}
+              className="scale-slider"
+            />
+            <div className="scale-marks">
+              <span>80%</span>
+              <span>100%</span>
+              <span>130%</span>
+              <span>160%</span>
+            </div>
+            <div className="scale-presets">
+              {FONT_PRESETS.map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setFontScale(s)}
+                  className={`preset-btn ${Math.abs(fontScale - s) < 0.01 ? "active" : ""}`}
                 >
                   {Math.round(s * 100)}%
                 </button>
@@ -194,6 +286,62 @@ export function SettingsPanel({ onClose }: Props) {
               />
               <span>Начинается с понедельника</span>
             </label>
+          </section>
+
+          {/* ── Задачи ── */}
+          <section className="settings-section">
+            <h3 className="section-title">Задачи</h3>
+            <label className="oled-toggle">
+              <input
+                type="checkbox"
+                checked={rolloverEnabled}
+                onChange={(e) => setRolloverEnabled(e.target.checked)}
+              />
+              <span>Авто-перенос невыполненных задач на сегодня</span>
+            </label>
+          </section>
+
+          {/* ── Категории (цвет-сеты) ── */}
+          <section className="settings-section">
+            <div className="section-head">
+              <div>
+                <h3 className="section-title">🎨 Категории</h3>
+                <p className="section-hint">Свои названия и цвета для задач; применяются в меню цвета, календаре и поиске</p>
+              </div>
+              <button className="preset-btn" onClick={addDraft}>+ Добавить</button>
+            </div>
+            <div className="set-list">
+              {drafts.map((d) => (
+                <div key={d.id || "__new__"} className="set-row">
+                  <input
+                    type="color"
+                    value={argbToHex(d.color)}
+                    onChange={(e) => patchDraft(d.id, { color: hexToArgb(e.target.value) })}
+                    className="set-color"
+                    title="Цвет категории"
+                  />
+                  <input
+                    type="text"
+                    value={d.name}
+                    onChange={(e) => patchDraft(d.id, { name: e.target.value })}
+                    placeholder="Название категории"
+                    className="set-name"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") saveDraft(d);
+                    }}
+                  />
+                  <button className="preset-btn" onClick={() => saveDraft(d)} title="Сохранить">
+                    💾
+                  </button>
+                  <button className="preset-btn danger" onClick={() => removeDraft(d)} title="Удалить категорию">
+                    ✕
+                  </button>
+                </div>
+              ))}
+              {drafts.length === 0 && (
+                <p className="section-hint">Категорий пока нет — добавьте первую.</p>
+              )}
+            </div>
           </section>
         </div>
       </div>

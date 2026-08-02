@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "./api";
 import { useStore } from "./store";
-import { weekDays, firstOfMonth, lastOfMonth } from "./date";
-import { COLORS, applyTheme, watchSystemTheme } from "./theme";
+import { COLORS, applyTheme, watchSystemTheme, accentTint } from "./theme";
 import { TopBar } from "./components/TopBar";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { DatePickerModal } from "./components/DatePickerModal";
+import { SearchBar } from "./components/SearchBar";
+import { SearchResults } from "./views/SearchResults";
 import { DayView } from "./views/DayView";
 import { WeekView } from "./views/WeekView";
 import { MonthView } from "./views/MonthView";
@@ -40,14 +41,21 @@ function App() {
     preferredDarkTheme,
     useOledForDarkMode,
     uiScale,
+    fontScale,
+    rolloverEnabled,
     setSelectedDate,
     setView,
     setTasks,
+    setColorSets,
   } = useStore();
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [rolloverCount, setRolloverCount] = useState(0);
+  // Поиск: полоса поиска открыта, текст, фильтр по цвету-сету.
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchColor, setSearchColor] = useState<string | null>(null);
 
   // Тема: применяем разрешённый id, при system — следим за ОС.
   useEffect(() => {
@@ -63,8 +71,15 @@ function App() {
       String(uiScale);
   }, [uiScale]);
 
-  // Авто-перенос невыполненных задач.
+  // Размер шрифта: множитель на базовый font-size <html>, от которого зависят
+  // все --fs-* токены Universal UI. Не трогает zoom, только текст.
   useEffect(() => {
+    document.documentElement.style.fontSize = `calc(clamp(13px, 1.05vw, 17px) * ${fontScale})`;
+  }, [fontScale]);
+
+  // Авто-перенос невыполненных задач (если включён в настройках).
+  useEffect(() => {
+    if (!rolloverEnabled) return;
     (async () => {
       try {
         setRolloverCount(await api.rolloverOverdue(new Date()));
@@ -72,28 +87,27 @@ function App() {
         /* некритично */
       }
     })();
-  }, []);
+  }, [rolloverEnabled]);
 
-  // Загрузка задач.
+  // Загрузка задач. Грузим ВСЕ задачи одним запросом (широкий диапазон дат):
+  // правый мини-календарь можно листать на любой месяц, поэтому ограничивать
+  // выборку видимым окном нельзя — иначе на будущих неделях не будет задач.
   const reload = useCallback(async () => {
-    let start: Date;
-    let end: Date;
-    if (view === "day") {
-      start = end = selectedDate;
-    } else if (view === "week") {
-      const days = weekDays(selectedDate, mondayFirst);
-      start = days[0];
-      end = days[6];
-    } else {
-      start = firstOfMonth(selectedDate);
-      end = lastOfMonth(selectedDate);
-    }
-    setTasks(await api.getTasks(start, end));
-  }, [view, selectedDate, mondayFirst, setTasks]);
+    setTasks(await api.getTasks(new Date(0), new Date(9999, 0, 1)));
+  }, [setTasks]);
 
   useEffect(() => {
     reload();
   }, [reload]);
+
+  // Загрузка категорий (цвет-сетов) — при старте и после правок в настройках.
+  const reloadSets = useCallback(async () => {
+    setColorSets(await api.getColorSets());
+  }, [setColorSets]);
+
+  useEffect(() => {
+    reloadSets();
+  }, [reloadSets]);
 
   const shift = (dir: number) => {
     if (view === "day") {
@@ -135,11 +149,30 @@ function App() {
         onNext={() => shift(1)}
         onOpenSettings={() => setSettingsOpen(true)}
         onOpenDatePicker={() => setDatePickerOpen(true)}
+        searchActive={searchOpen}
+        onToggleSearch={() => {
+          setSearchOpen((v) => !v);
+          setSearchQuery("");
+          setSearchColor(null);
+        }}
       />
+      {searchOpen && (
+        <SearchBar
+          query={searchQuery}
+          onQuery={setSearchQuery}
+          color={searchColor}
+          onColor={setSearchColor}
+          onClose={() => {
+            setSearchOpen(false);
+            setSearchQuery("");
+            setSearchColor(null);
+          }}
+        />
+      )}
       {rolloverCount > 0 && (
         <div
           style={{
-            background: COLORS.accent + "26",
+            background: accentTint(0.15),
             color: COLORS.text,
             fontSize: "var(--fs-2xs)",
             padding: "var(--sp-2) var(--sp-8)",
@@ -162,6 +195,20 @@ function App() {
       )}
       <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
+          {/* Активный поиск заменяет вид списком результатов по всем задачам. */}
+          {searchOpen && (searchQuery.trim() !== "" || searchColor !== null) ? (
+            <SearchResults
+              tasks={tasks}
+              query={searchQuery}
+              color={searchColor}
+              onJumpToDay={(d) => {
+                setSelectedDate(d);
+                setView("day");
+              }}
+              onChange={reload}
+            />
+          ) : (
+            <>
           {view === "day" && (
             <DayView day={selectedDate} tasks={tasks} onChange={reload} />
           )}
@@ -176,11 +223,13 @@ function App() {
               }}
             />
           )}
+            </>
+          )}
         </div>
       </div>
 
       {settingsOpen && (
-        <SettingsPanel onClose={() => setSettingsOpen(false)} />
+        <SettingsPanel onClose={() => setSettingsOpen(false)} onSetsChanged={reloadSets} />
       )}
       {datePickerOpen && (
         <DatePickerModal

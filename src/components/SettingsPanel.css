@@ -284,3 +284,48 @@
   font-size: var(--fs-sm);
   font-weight: 700;
 }
+
+/* ── Категории (цвет-сеты) ── */
+.set-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+}
+
+.set-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.set-color {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.set-name {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--fs-sm);
+  color: var(--text-primary);
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: var(--sp-1) var(--sp-2);
+  outline: none;
+}
+
+.preset-btn.danger {
+  color: var(--text-muted);
+}
+.preset-btn.danger:hover {
+  color: var(--text-primary);
+  border-color: var(--accent);
+}

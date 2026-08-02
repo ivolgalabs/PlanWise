@@ -4,6 +4,8 @@
  * Плюс режим "system" (следует за prefers-color-scheme).
  */
 
+import type { ColorSet } from "./api";
+
 export type ThemeMode = "light" | "dark" | "oled";
 
 export interface PaletteDef {
@@ -109,23 +111,37 @@ export const COLORS = {
   hover: "var(--bg-hover)",
   tertiary: "var(--bg-tertiary)",
   setNone: "var(--bg-tertiary)",
-  setWork: "#c9a87c",
-  setPersonal: "#7eb8c4",
-  setSport: "#e8a87c",
 } as const;
 
-export const colorSetHex = (id: string | null): string => {
-  switch (id) {
-    case "cs-work":
-      return COLORS.setWork;
-    case "cs-personal":
-      return COLORS.setPersonal;
-    case "cs-sport":
-      return COLORS.setSport;
-    default:
-      return COLORS.setNone;
-  }
+/**
+ * HEX цвета категории по её ARGB из БД. null, если категории нет
+ * (задача без категории или сет удалён).
+ */
+export const setHex = (sets: ColorSet[], id: string | null): string | null => {
+  if (!id) return null;
+  const s = sets.find((c) => c.id === id);
+  return s ? argbToHex(s.color) : null;
 };
+
+/** HEX (#RRGGBB) -> ARGB int (0xFFRRGGBB) для БД. */
+export const hexToArgb = (hex: string): number => {
+  const h = hex.replace("#", "");
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  return (0xff << 24) | (r << 16) | (g << 8) | b;
+};
+
+/**
+ * Тон CSS-переменной с прозрачностью (валидный CSS через color-mix).
+ * ВАЖНО: нельзя писать `var(--x) + "26"` — это невалидное значение,
+ * браузер молча отбрасывает декларацию, и подсветка не отображается.
+ */
+export const varTint = (variable: string, alpha: number): string =>
+  `color-mix(in srgb, var(${variable}) ${Math.round(alpha * 100)}%, transparent)`;
+
+/** Акцент с прозрачностью. */
+export const accentTint = (alpha: number): string => varTint("--accent", alpha);
 
 export const argbToHex = (argb: number): string => {
   const r = (argb >> 16) & 0xff;

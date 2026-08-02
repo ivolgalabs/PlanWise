@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { COLORS } from "../theme";
+import { COLORS, accentTint } from "../theme";
 import { formatMinutes, parseTimeToMinutes } from "../date";
 
 interface Props {
@@ -82,7 +82,7 @@ function badgeStyle(hasTime: boolean): React.CSSProperties {
   return {
     fontSize: "var(--fs-2xs)",
     color: hasTime ? COLORS.accent : COLORS.muted,
-    background: hasTime ? COLORS.accent + "1A" : "transparent",
+    background: hasTime ? accentTint(0.1) : "transparent",
     padding: "1px 6px",
     borderRadius: "var(--radius-full)",
   };
@@ -97,7 +97,7 @@ function presetBtn(active: boolean): React.CSSProperties {
   return {
     fontSize: "var(--fs-2xs)", padding: "3px 6px", cursor: "pointer",
     border: `1px solid ${active ? COLORS.accent : COLORS.cardBorder}`,
-    background: active ? COLORS.accent + "1A" : "transparent",
+    background: active ? accentTint(0.1) : "transparent",
     color: active ? COLORS.accent : COLORS.text, borderRadius: "var(--radius-sm)",
   };
 }
