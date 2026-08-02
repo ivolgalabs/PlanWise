@@ -113,25 +113,15 @@ export function DayColumn({
             fontWeight: headWeight,
             fontSize: headFs,
             color: today ? COLORS.accent : past ? COLORS.muted : COLORS.secondary,
-            textTransform: "uppercase",
+            textTransform: "capitalize",
             whiteSpace: "nowrap",
             overflow: "hidden",
             textOverflow: "ellipsis",
           }}
         >
           {past ? "✓ " : ""}
-          {weekday}
+          {`${weekday}, ${dayNum}`}
           {today && " ●"}
-        </span>
-        <span
-          style={{
-            fontSize: weight === "past" ? "var(--fs-xs)" : "var(--fs-sm)",
-            fontWeight: weight === "past" ? 600 : 700,
-            flexShrink: 0,
-            color: today ? COLORS.accent : past ? COLORS.muted : COLORS.text,
-          }}
-        >
-          {dayNum}
         </span>
       </div>
       <div

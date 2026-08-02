@@ -114,7 +114,12 @@ export function SettingsPanel({ onClose, onSetsChanged }: Props) {
           <section className="settings-section">
             <div className="section-head">
               <div>
-                <h3 className="section-title">🔍 Масштаб интерфейса</h3>
+                <h3
+                  className="section-title"
+                  style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)" }}
+                >
+                  <Icon name="search" size={14} /> Масштаб интерфейса
+                </h3>
                 <p className="section-hint">От 70% до 200% — применяется ко всем элементам</p>
               </div>
               <span className="scale-badge">{Math.round(uiScale * 100)}%</span>
@@ -151,7 +156,7 @@ export function SettingsPanel({ onClose, onSetsChanged }: Props) {
           <section className="settings-section">
             <div className="section-head">
               <div>
-                <h3 className="section-title">🔤 Размер шрифта</h3>
+                <h3 className="section-title">Размер шрифта</h3>
                 <p className="section-hint">Меняет только текст, без масштабирования всего интерфейса</p>
               </div>
               <span className="scale-badge">{Math.round(fontScale * 100)}%</span>
@@ -186,7 +191,12 @@ export function SettingsPanel({ onClose, onSetsChanged }: Props) {
 
           {/* ── Режим темы ── */}
           <section className="settings-section">
-            <h3 className="section-title">🎨 Режим оформления</h3>
+            <h3
+              className="section-title"
+              style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)" }}
+            >
+              <Icon name="palette" size={14} /> Режим оформления
+            </h3>
             <p className="section-hint">Мгновенное переключение между светлой/тёмной/системной</p>
             <div className="mode-row">
               {modes.map((m) => (
@@ -213,7 +223,7 @@ export function SettingsPanel({ onClose, onSetsChanged }: Props) {
                 checked={useOledForDarkMode}
                 onChange={(e) => setUseOledForDarkMode(e.target.checked)}
               />
-              <span>🖤 Использовать OLED (True Black) для тёмного режима</span>
+              <span>Использовать OLED (True Black) для тёмного режима</span>
             </label>
 
             {/* Текущие предпочтения */}
@@ -342,7 +352,12 @@ export function SettingsPanel({ onClose, onSetsChanged }: Props) {
           <section className="settings-section">
             <div className="section-head">
               <div>
-                <h3 className="section-title">🎨 Категории</h3>
+                <h3
+                  className="section-title"
+                  style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)" }}
+                >
+                  <Icon name="palette" size={14} /> Категории
+                </h3>
                 <p className="section-hint">Свои названия и цвета для задач; применяются в меню цвета, календаре и поиске</p>
               </div>
               <button

@@ -66,9 +66,14 @@ export function MiniCalendar({ tasks, large, onSelect, droppable = true }: Props
   };
 
   // Масштаб: large — крупнее шрифт/ячейки.
-  const fs = large ? "var(--fs-sm)" : 9;
-  const cellPad = large ? "8px 0" : "3px 0";
-  const monthFs = large ? "var(--fs-md)" : 11;
+  const fs = large ? "var(--fs-sm)" : "var(--fs-2xs)";
+  const cellPad = large ? "8px 0" : "2px 0";
+  const monthFs = large ? "var(--fs-md)" : "var(--fs-sm)";
+  // Заголовки дней недели — в порядке начала недели, согласованы с сеткой
+  // (startOfWeek(first, mondayFirst)), иначе колонки разъезжаются.
+  const weekdays = mondayFirst
+    ? ["П", "В", "С", "Ч", "П", "С", "В"]
+    : ["В", "П", "В", "С", "Ч", "П", "С"];
 
   return (
     <div
@@ -76,7 +81,7 @@ export function MiniCalendar({ tasks, large, onSelect, droppable = true }: Props
         background: COLORS.card,
         border: `1px solid ${COLORS.cardBorder}`,
         borderRadius: "var(--radius-lg)",
-        padding: large ? "var(--sp-6)" : 10,
+        padding: large ? "var(--sp-6)" : "var(--sp-4)",
       }}
     >
       <div
@@ -100,7 +105,7 @@ export function MiniCalendar({ tasks, large, onSelect, droppable = true }: Props
             )
           }
           title="Предыдущий месяц"
-          style={{ fontSize: large ? "var(--fs-xs)" : 11, padding: "0 4px" }}
+          style={{ fontSize: large ? "var(--fs-xs)" : "var(--fs-sm)", padding: "0 4px" }}
         >
           ‹
         </button>
@@ -119,7 +124,7 @@ export function MiniCalendar({ tasks, large, onSelect, droppable = true }: Props
             )
           }
           title="Следующий месяц"
-          style={{ fontSize: large ? "var(--fs-xs)" : 11, padding: "0 4px" }}
+          style={{ fontSize: large ? "var(--fs-xs)" : "var(--fs-sm)", padding: "0 4px" }}
         >
           ›
         </button>
@@ -134,7 +139,7 @@ export function MiniCalendar({ tasks, large, onSelect, droppable = true }: Props
             setSelectedDate(today);
           }}
           style={{
-            fontSize: large ? "var(--fs-2xs)" : 9,
+            fontSize: "var(--fs-2xs)",
             marginBottom: "var(--sp-2)",
             padding: "2px 6px",
             alignSelf: "flex-start",
@@ -147,13 +152,13 @@ export function MiniCalendar({ tasks, large, onSelect, droppable = true }: Props
       {!collapsed && (
         <>
       <div style={{ display: "flex", marginBottom: 6 }}>
-        {["П", "В", "С", "Ч", "П", "С", "В"].map((w, i) => (
+        {weekdays.map((w, i) => (
           <div
             key={i}
             style={{
               flex: 1,
               textAlign: "center",
-              fontSize: large ? "var(--fs-2xs)" : 8,
+              fontSize: "var(--fs-2xs)",
               color: COLORS.muted,
             }}
           >
@@ -319,7 +324,7 @@ function DayDots({
       {rest > 0 && (
         <span
           style={{
-            fontSize: large ? "var(--fs-2xs)" : 7,
+            fontSize: "var(--fs-2xs)",
             lineHeight: 1,
             color: COLORS.muted,
           }}

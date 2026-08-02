@@ -238,7 +238,7 @@ export function TaskDndContext({ children, onChange }: TaskDndContextProps) {
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(0,0,0,.4)",
+            background: "var(--overlay)",
             zIndex: 300,
             display: "flex",
             alignItems: "center",
@@ -317,7 +317,7 @@ function DragGhost({ task }: { task: Task }) {
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 6,
+        gap: "var(--sp-3)",
         padding: "6px 10px",
         maxWidth: 280,
         background: COLORS.card,
@@ -358,7 +358,7 @@ function SubtaskGhost({ subtask }: { subtask: Subtask }) {
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 6,
+        gap: "var(--sp-3)",
         padding: "5px 10px",
         maxWidth: 260,
         background: COLORS.card,

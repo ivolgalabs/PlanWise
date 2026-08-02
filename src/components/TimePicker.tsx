@@ -45,7 +45,7 @@ export function TimePicker({ value, onChange }: Props) {
           <button style={presetBtn(value === null)} onClick={() => { onChange(null); setEditing(false); }}>
             в течение дня
           </button>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 4, margin: "4px 0" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-2)", margin: "var(--sp-2) 0" }}>
             {presets.map((p) => (
               <button key={p.m} style={presetBtn(value === p.m)} onClick={() => { onChange(p.m); setEditing(false); }}>
                 {p.label}
@@ -62,7 +62,7 @@ export function TimePicker({ value, onChange }: Props) {
                 setCustom("");
               }
             }}
-            style={{ display: "flex", gap: 4 }}
+            style={{ display: "flex", gap: "var(--sp-2)" }}
           >
             <input
               autoFocus

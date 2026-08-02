@@ -5,6 +5,9 @@
 :root {
   font-family: var(--font-ui);
   color: var(--text-primary);
+  /* Единый полупрозрачный оверлей модалок/диалогов: цвет текста темы
+   * с прозрачностью, чтобы адаптировался к светлой/тёмной теме. */
+  --overlay: color-mix(in srgb, var(--text-primary) 25%, transparent);
 }
 
 /* Масштаб интерфейса в %. font-size на <html> задаёт 1rem, на который

@@ -180,7 +180,7 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true }: Prop
         style={{
           flexShrink: 0,
           width: 20,
-          marginRight: 4,
+          marginRight: "var(--sp-2)",
           textAlign: "center",
           color: COLORS.secondary,
           opacity: 0.75,
@@ -194,9 +194,9 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true }: Prop
       {/* Цветная полоска слева (маркер сета) */}
       <div
         style={{
-          width: 3,
+          width: "calc(var(--sp-2) - 1px)",
           alignSelf: "stretch",
-          borderRadius: 2,
+          borderRadius: "var(--radius-xs)",
           marginRight: 6,
           background: task.colorSetId ? setHex : "transparent",
         }}

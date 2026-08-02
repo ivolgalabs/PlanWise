@@ -164,7 +164,7 @@ function DayRow({
         }}
       >
         {past ? "✓ " : ""}
-        {weekday} {day.getDate()}
+        {`${weekday}, ${day.getDate()}`}
         {today && " ●"}
       </div>
       <div

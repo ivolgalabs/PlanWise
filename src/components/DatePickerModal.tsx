@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { startOfWeek, firstOfMonth, isSameDay } from "../date";
 import { COLORS, accentTint, varTint } from "../theme";
+import { useStore } from "../store";
 
 interface Props {
   initial: Date;
@@ -10,9 +11,10 @@ interface Props {
 
 /** Модалка выбора произвольной даты (прыжок). */
 export function DatePickerModal({ initial, onPick, onClose }: Props) {
+  const { mondayFirst } = useStore();
   const [cursor, setCursor] = useState(initial);
   const first = firstOfMonth(cursor);
-  const gridStart = startOfWeek(first, true);
+  const gridStart = startOfWeek(first, mondayFirst);
 
   const cells: Date[] = Array.from({ length: 42 }, (_, i) => {
     const d = new Date(gridStart);
@@ -25,13 +27,19 @@ export function DatePickerModal({ initial, onPick, onClose }: Props) {
     year: "numeric",
   });
 
+  // Заголовки дней недели — в порядке начала недели, согласованы с сеткой
+  // (startOfWeek(first, mondayFirst)), иначе колонки разъезжаются.
+  const weekdays = mondayFirst
+    ? ["П", "В", "С", "Ч", "П", "С", "В"]
+    : ["В", "П", "В", "С", "Ч", "П", "С"];
+
   return (
     <div
       onClick={onClose}
       style={{
         position: "fixed",
         inset: 0,
-        background: "rgba(90,82,64,.3)",
+        background: "var(--overlay)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -43,16 +51,16 @@ export function DatePickerModal({ initial, onPick, onClose }: Props) {
         style={{
           background: COLORS.card,
           border: `1px solid ${COLORS.cardBorder}`,
-          borderRadius: 10,
-          padding: 16,
-          width: 260,
+          borderRadius: "var(--radius-xl)",
+          padding: "var(--sp-6)",
+          width: 280,
         }}
       >
         <div
           style={{
             display: "flex",
             alignItems: "center",
-            marginBottom: 12,
+            marginBottom: "var(--sp-4)",
           }}
         >
           <button
@@ -67,7 +75,7 @@ export function DatePickerModal({ initial, onPick, onClose }: Props) {
             style={{
               flex: 1,
               textAlign: "center",
-              fontSize: 13,
+              fontSize: "var(--fs-sm)",
               fontWeight: 600,
               color: COLORS.text,
               textTransform: "capitalize",
@@ -85,13 +93,13 @@ export function DatePickerModal({ initial, onPick, onClose }: Props) {
           </button>
         </div>
         <div style={{ display: "flex", marginBottom: 4 }}>
-          {["П", "В", "С", "Ч", "П", "С", "В"].map((w, i) => (
+          {weekdays.map((w, i) => (
             <div
               key={i}
               style={{
                 flex: 1,
                 textAlign: "center",
-                fontSize: 9,
+                fontSize: "var(--fs-2xs)",
                 color: COLORS.muted,
               }}
             >
@@ -120,7 +128,7 @@ export function DatePickerModal({ initial, onPick, onClose }: Props) {
                 }}
                 style={{
                   padding: "4px 0",
-                  fontSize: 11,
+                  fontSize: "var(--fs-xs)",
                   border: "none",
                   borderRadius: 4,
                   cursor: "pointer",

@@ -139,7 +139,7 @@ export function MonthView({ tasks, onSelectDay, onChange }: Props) {
             onClick={() => { setMenuDay(null); setAddTitle(""); setAddTime(null); setAddColor(null); }}
             style={{
               position: "fixed", inset: 0,
-              background: "rgba(0,0,0,.25)", zIndex: 200,
+              background: "var(--overlay)", zIndex: 200,
               display: "flex", alignItems: "center", justifyContent: "center",
             }}
           >
@@ -169,12 +169,12 @@ export function MonthView({ tasks, onSelectDay, onChange }: Props) {
               />
               {/* Время задачи */}
               <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)", marginBottom: "var(--sp-3)" }}>
-                <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted, minWidth: 48 }}>Время</span>
+                <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted, minWidth: "var(--island-h)" }}>Время</span>
                 <TimePicker value={addTime} onChange={setAddTime} />
               </div>
               {/* Цвет (категория) задачи */}
               <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)", marginBottom: "var(--sp-4)" }}>
-                <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted, minWidth: 48 }}>Цвет</span>
+                <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted, minWidth: "var(--island-h)" }}>Цвет</span>
                 <button
                   onClick={() => setAddColor(null)}
                   title="Без категории"

@@ -17,9 +17,10 @@ export function ViewSwitcher({ view, onChange }: Props) {
     <div
       style={{
         display: "inline-flex",
-        background: "#EDE6D5",
-        borderRadius: 8,
+        background: "var(--bg-tertiary)",
+        borderRadius: "var(--radius-md)",
         padding: 2,
+        gap: 2,
       }}
     >
       {items.map((it) => {
@@ -29,15 +30,18 @@ export function ViewSwitcher({ view, onChange }: Props) {
             key={it.key}
             onClick={() => onChange(it.key)}
             style={{
-              fontSize: 11,
+              fontSize: "var(--fs-xs)",
               padding: "4px 10px",
               border: "none",
-              borderRadius: 6,
+              borderRadius: "var(--radius-sm)",
               cursor: "pointer",
               fontWeight: active ? 600 : 400,
               color: active ? COLORS.text : COLORS.muted,
-              background: active ? COLORS.card : "transparent",
-              boxShadow: active ? "0 1px 2px rgba(0,0,0,.06)" : "none",
+              background: active ? "var(--bg-secondary)" : "transparent",
+              boxShadow: active ? "var(--shadow-sm)" : "none",
+              height: "var(--control-h-sm)",
+              display: "inline-flex",
+              alignItems: "center",
             }}
           >
             {it.label}
