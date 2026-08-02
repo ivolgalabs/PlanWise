@@ -138,7 +138,7 @@ export function MiniCalendar({ tasks, large, onSelect, droppable = true }: Props
           onClick={() => {
             const today = new Date();
             setCalMonth(firstOfMonth(today));
-            setSelectedDate(today);
+            pick(today);
           }}
           style={{
             fontSize: "var(--fs-2xs)",
