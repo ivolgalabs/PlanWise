@@ -276,8 +276,9 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
           и настройкой «Время задач»). */}
       {effectiveShowTime && <TimePicker value={task.timeMinutes ?? null} onChange={setTime} compact={compact} />}
       {/* Заметка — кнопка рядом со временем, скрывается настройкой и в
-          компактной сетке недели. Подсвечена, если текст непустой. */}
-      {showTime && visibility.notes && (
+          компактной сетке недели (не влезает). Подсвечена, если текст
+          непустой. */}
+      {showTime && visibility.notes && !compact && (
         <button
           className="chip-btn"
           onClick={() => setNotesOpen((v) => !v)}
@@ -385,7 +386,7 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
     </div>
     {/* Панель заметки — раскрывается по клику на иконку, автосохранение
         по blur; Escape сохраняет и сворачивает. */}
-    {showTime && visibility.notes && notesOpen && (
+    {showTime && visibility.notes && !compact && notesOpen && (
       <div className="notes-panel">
         <textarea
           ref={notesRef}
