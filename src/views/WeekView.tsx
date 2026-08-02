@@ -10,6 +10,7 @@ import { Icon } from "../components/Icon";
 import { COLORS } from "../theme";
 import { useStore } from "../store";
 import { TaskDndContext } from "../drag";
+import { SomedayColumn } from "../components/SomedayColumn";
 
 interface Props {
   tasks: Task[];
@@ -108,6 +109,11 @@ export function WeekView({ tasks, onChange }: Props) {
             )}
           </div>
         </div>
+        {/* Колонка «Когда-нибудь» — справа от сетки (скрывается настройкой
+            и в узком окне, как календарь). */}
+        {visibility.someday && !narrow && (
+          <SomedayColumn tasks={tasks.filter((t) => t.someday)} onChange={onChange} />
+        )}
         {/* Календарь скрыт в узком окне — он крадёт дефицитную ширину.
             Также скрывается настройками видимости (showCal). */}
         {showCal && !narrow && !calNarrow && (

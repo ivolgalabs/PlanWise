@@ -388,6 +388,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged }: Props)
               ["taskTime", "Время задач"],
               ["subtasks", "Подзадачи"],
               ["notes", "Заметки"],
+              ["someday", "«Когда-нибудь»"],
               ["taskActions", "Кнопки «цвет» и «удалить» в задачах"],
               ["rolloverBanner", "Баннер «Перенесено задач»"],
             ] as [keyof VisibilityState, string][]).map(([k, label]) => (

@@ -7,6 +7,7 @@ import { MiniCalendar } from "../components/MiniCalendar";
 import { COLORS, accentTint } from "../theme";
 import { useStore } from "../store";
 import { TaskDndContext, dayId } from "../drag";
+import { SomedayColumn } from "../components/SomedayColumn";
 import { isToday } from "../date";
 
 interface Props {
@@ -112,6 +113,10 @@ export function DayView({ day, tasks, onChange }: Props) {
         {/* Боковая зона «завтра» — перенос задачи/подзадачи на завтра;
             в узком окне (tiny) скрыта, чтобы не красть ширину у задач */}
         {!tiny && <SideDayZone day={nextDay} label="завтра ▶" />}
+        {/* Колонка «Когда-нибудь» — задачи без даты; скрывается настройкой. */}
+        {visibility.someday && (
+          <SomedayColumn tasks={tasks.filter((t) => t.someday)} onChange={onChange} />
+        )}
         {/* Правая панель — мини-календарь (также droppable через дни);
             скрывается настройками видимости и в узком окне (narrow). */}
         {visibility.miniCalendar && !narrow && (

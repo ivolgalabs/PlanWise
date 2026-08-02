@@ -59,6 +59,9 @@ export const taskIdZone = (taskId: string): string => `t:${taskId}`;
 export const weekShiftId = (dir: 1 | -1): string =>
   dir === 1 ? "w:next" : "w:prev";
 
+/** id droppable-зоны «Когда-нибудь» (колонка задач без даты). */
+export const somedayZoneId = "sd:someday";
+
 /** Распарсить id задачи-цели из droppable-зоны. null, если это не задача. */
 export const parseTaskZone = (id: string | number | undefined | null): string | null => {
   if (id == null) return null;
@@ -163,6 +166,12 @@ export function TaskDndContext({ children, onChange }: TaskDndContextProps) {
 
     // ── Задача → день: перенос задачи.
     if (task) {
+      // Задача → «Когда-нибудь»: снять привязку ко дню.
+      if (over === somedayZoneId) {
+        await api.setSomeday(task.id);
+        onChange();
+        return;
+      }
       // Боковые зоны «соседняя неделя»: перенос на ±7 дней от позиции задачи.
       if (over === "w:prev" || over === "w:next") {
         const dir = over === "w:next" ? 1 : -1;
