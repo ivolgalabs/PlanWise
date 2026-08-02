@@ -13,7 +13,7 @@ pub fn get_tasks(state: State<'_, Db>, start_day: i64, end_day: i64) -> Vec<Task
     let conn = state.0.lock().unwrap();
     let mut stmt = conn
         .prepare(
-            "SELECT id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes
+            "SELECT id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes
              FROM tasks WHERE date BETWEEN ?1 AND ?2 ORDER BY time_minutes IS NULL, time_minutes ASC, sort_order ASC",
         )
         .expect("prepare get_tasks");
@@ -29,6 +29,7 @@ pub fn get_tasks(state: State<'_, Db>, start_day: i64, end_day: i64) -> Vec<Task
             updated_at: row.get(7)?,
             device_id: row.get(8)?,
             time_minutes: row.get(9)?,
+            notes: row.get(10)?,
         })
     })
     .expect("query get_tasks")
@@ -47,13 +48,13 @@ pub fn upsert_task(state: State<'_, Db>, mut task: Task) -> Task {
     }
     task.updated_at = now_ms();
     conn.execute(
-        "INSERT INTO tasks (id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+        "INSERT INTO tasks (id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
          ON CONFLICT(id) DO UPDATE SET
            title=excluded.title, date=excluded.date, is_done=excluded.is_done,
            color_set_id=excluded.color_set_id, sort_order=excluded.sort_order,
            updated_at=excluded.updated_at, device_id=excluded.device_id,
-           time_minutes=excluded.time_minutes",
+           time_minutes=excluded.time_minutes, notes=excluded.notes",
         rusqlite::params![
             task.id,
             task.title,
@@ -65,6 +66,7 @@ pub fn upsert_task(state: State<'_, Db>, mut task: Task) -> Task {
             task.updated_at,
             task.device_id,
             task.time_minutes,
+            task.notes,
         ],
     )
     .expect("upsert_task execute");
@@ -249,7 +251,7 @@ pub fn export_to(state: State<'_, Db>, path: String) -> Result<(), String> {
     }
     {
         let mut stmt = conn
-            .prepare("SELECT id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes FROM tasks ORDER BY sort_order ASC")
+            .prepare("SELECT id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes FROM tasks ORDER BY sort_order ASC")
             .map_err(|e| e.to_string())?;
         let rows = stmt
             .query_map([], |r| {
@@ -264,6 +266,7 @@ pub fn export_to(state: State<'_, Db>, path: String) -> Result<(), String> {
                     "updatedAt": r.get::<_, i64>(7)?,
                     "deviceId": r.get::<_, String>(8)?,
                     "timeMinutes": r.get::<_, Option<i64>>(9)?,
+                    "notes": r.get::<_, String>(10)?,
                 }))
             })
             .map_err(|e| e.to_string())?;
@@ -343,8 +346,8 @@ pub fn import_from(state: State<'_, Db>, path: String) -> Result<usize, String> 
     }
     for t in tasks {
         tx.execute(
-            "INSERT INTO tasks (id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            "INSERT INTO tasks (id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
             rusqlite::params![
                 t.get("id").and_then(|x| x.as_str()).unwrap_or(""),
                 t.get("title").and_then(|x| x.as_str()).unwrap_or(""),
@@ -356,6 +359,7 @@ pub fn import_from(state: State<'_, Db>, path: String) -> Result<usize, String> 
                 t.get("updatedAt").and_then(|x| x.as_i64()).unwrap_or(0),
                 t.get("deviceId").and_then(|x| x.as_str()).unwrap_or(""),
                 t.get("timeMinutes").and_then(|x| x.as_i64()),
+                t.get("notes").and_then(|x| x.as_str()).unwrap_or(""),
             ],
         )
         .map_err(|e| e.to_string())?;

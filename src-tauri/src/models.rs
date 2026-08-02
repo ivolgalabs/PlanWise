@@ -14,6 +14,8 @@ pub struct Task {
     pub device_id: String,
     #[serde(default)]
     pub time_minutes: Option<i32>, // 0-1439, NULL = «в течение дня»
+    #[serde(default)]
+    pub notes: String, // заметка к задаче, '' = нет
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -34,4 +36,29 @@ pub struct Subtask {
     pub is_done: bool,
     pub sort_order: f64,
     pub created_at: i64,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Старый JSON без поля notes (фоллбек, старые бэкапы) десериализуется
+    /// в пустую строку за счёт #[serde(default)].
+    #[test]
+    fn task_deserializes_without_notes() {
+        let t: Task = serde_json::from_value(serde_json::json!({
+            "id": "a",
+            "title": "T",
+            "date": 0,
+            "isDone": false,
+            "colorSetId": null,
+            "sortOrder": 0.0,
+            "createdAt": 0,
+            "updatedAt": 0,
+            "deviceId": "d",
+            "timeMinutes": null,
+        }))
+        .expect("parse task without notes");
+        assert_eq!(t.notes, "");
+    }
 }
