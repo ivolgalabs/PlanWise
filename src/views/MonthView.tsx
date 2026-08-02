@@ -408,9 +408,7 @@ function MonthTaskPreview({ task, past }: { task: Task; past: boolean }) {
         textDecoration: task.isDone ? "line-through" : "none",
         whiteSpace: "normal",
         overflow: "hidden",
-        display: "-webkit-box",
-        WebkitLineClamp: 2,
-        WebkitBoxOrient: "vertical",
+        display: "flex",
         lineHeight: 1.4,
         padding: "1px 0",
         cursor: "grab",
@@ -433,7 +431,18 @@ function MonthTaskPreview({ task, past }: { task: Task; past: boolean }) {
               : setHex(colorSets, task.colorSetId) ?? COLORS.muted,
         }}
       />
-      {task.title}
+      <span
+        style={{
+          flex: 1,
+          minWidth: 0,
+          display: "-webkit-box",
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: "vertical",
+          overflow: "hidden",
+        }}
+      >
+        {task.title}
+      </span>
     </div>
   );
 }
