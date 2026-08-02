@@ -401,15 +401,16 @@ function MonthTaskPreview({ task, past }: { task: Task; past: boolean }) {
       {...listeners}
       {...attributes}
       style={{
-        display: "flex",
         alignItems: "center",
         gap: 4,
         fontSize: "var(--fs-xs)",
         color: task.isDone ? COLORS.muted : past ? COLORS.muted : COLORS.text,
         textDecoration: task.isDone ? "line-through" : "none",
-        whiteSpace: "nowrap",
+        whiteSpace: "normal",
         overflow: "hidden",
-        textOverflow: "ellipsis",
+        display: "-webkit-box",
+        WebkitLineClamp: 2,
+        WebkitBoxOrient: "vertical",
         lineHeight: 1.4,
         padding: "1px 0",
         cursor: "grab",
