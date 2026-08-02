@@ -7,6 +7,7 @@ import { SettingsPanel } from "./components/SettingsPanel";
 import { DatePickerModal } from "./components/DatePickerModal";
 import { SearchBar } from "./components/SearchBar";
 import { SearchResults } from "./views/SearchResults";
+import type { PeriodFilter, StatusFilter, SortKey } from "./views/SearchResults";
 import { DayView } from "./views/DayView";
 import { WeekView } from "./views/WeekView";
 import { MonthView } from "./views/MonthView";
@@ -53,10 +54,14 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [rolloverCount, setRolloverCount] = useState(0);
-  // Поиск: полоса поиска открыта, текст, фильтр по цвету-сету.
+  // Поиск: полоса поиска открыта, текст, фильтр по цвету-сету,
+  // период, статус и сортировка результатов.
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchColor, setSearchColor] = useState<string | null>(null);
+  const [searchPeriod, setSearchPeriod] = useState<PeriodFilter>("all");
+  const [searchStatus, setSearchStatus] = useState<StatusFilter>("all");
+  const [searchSort, setSearchSort] = useState<SortKey>("dateAsc");
 
   // Тема: применяем разрешённый id, при system — следим за ОС.
   useEffect(() => {
@@ -160,6 +165,9 @@ function App() {
           setSearchOpen((v) => !v);
           setSearchQuery("");
           setSearchColor(null);
+          setSearchPeriod("all");
+          setSearchStatus("all");
+          setSearchSort("dateAsc");
         }}
         visibility={visibility}
       />
@@ -169,10 +177,19 @@ function App() {
           onQuery={setSearchQuery}
           color={searchColor}
           onColor={setSearchColor}
+          period={searchPeriod}
+          status={searchStatus}
+          sort={searchSort}
+          onPeriod={setSearchPeriod}
+          onStatus={setSearchStatus}
+          onSort={setSearchSort}
           onClose={() => {
             setSearchOpen(false);
             setSearchQuery("");
             setSearchColor(null);
+            setSearchPeriod("all");
+            setSearchStatus("all");
+            setSearchSort("dateAsc");
           }}
         />
       )}
@@ -204,16 +221,32 @@ function App() {
       <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           {/* Активный поиск заменяет вид списком результатов по всем задачам. */}
-          {searchOpen && (searchQuery.trim() !== "" || searchColor !== null) ? (
+          {searchOpen &&
+          (searchQuery.trim() !== "" ||
+            searchColor !== null ||
+            searchPeriod !== "all" ||
+            searchStatus !== "all" ||
+            searchSort !== "dateAsc") ? (
             <SearchResults
               tasks={tasks}
               query={searchQuery}
               color={searchColor}
+              period={searchPeriod}
+              status={searchStatus}
+              sort={searchSort}
               onJumpToDay={(d) => {
                 setSelectedDate(d);
                 setView("day");
               }}
               onChange={reload}
+              onResetFilters={() => {
+                // Сброс всех фильтров; поиск остаётся открытым.
+                setSearchQuery("");
+                setSearchColor(null);
+                setSearchPeriod("all");
+                setSearchStatus("all");
+                setSearchSort("dateAsc");
+              }}
             />
           ) : (
             <>

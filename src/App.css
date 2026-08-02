@@ -155,6 +155,22 @@ input[type="checkbox"] {
   opacity: 1;
 }
 
+/* Чип с текстом: категории, период, статус, сортировка (поиск). */
+.text-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  font-size: var(--fs-2xs);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.text-chip:hover { background: var(--bg-hover); }
+
 /* === Меню выбора цвета === */
 .color-menu {
   position: absolute;
