@@ -220,3 +220,154 @@ pub fn delete_subtask(state: State<'_, Db>, id: String) {
     conn.execute("DELETE FROM subtasks WHERE id = ?1", [id])
         .expect("delete_subtask");
 }
+
+/// Экспорт всех данных в JSON-файл по пути (бэкап).
+#[tauri::command]
+pub fn export_to(state: State<'_, Db>, path: String) -> Result<(), String> {
+    let conn = state.0.lock().unwrap();
+    let mut sets: Vec<serde_json::Value> = Vec::new();
+    let mut tasks: Vec<serde_json::Value> = Vec::new();
+    let mut subs: Vec<serde_json::Value> = Vec::new();
+
+    {
+        let mut stmt = conn
+            .prepare("SELECT id, name, color, sort_order FROM color_sets ORDER BY sort_order ASC")
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([], |r| {
+                Ok(serde_json::json!({
+                    "id": r.get::<_, String>(0)?,
+                    "name": r.get::<_, String>(1)?,
+                    "color": r.get::<_, i64>(2)?,
+                    "sortOrder": r.get::<_, i64>(3)?,
+                }))
+            })
+            .map_err(|e| e.to_string())?;
+        for row in rows {
+            sets.push(row.map_err(|e| e.to_string())?);
+        }
+    }
+    {
+        let mut stmt = conn
+            .prepare("SELECT id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes FROM tasks ORDER BY sort_order ASC")
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([], |r| {
+                Ok(serde_json::json!({
+                    "id": r.get::<_, String>(0)?,
+                    "title": r.get::<_, String>(1)?,
+                    "date": r.get::<_, i64>(2)?,
+                    "isDone": r.get::<_, i64>(3)? != 0,
+                    "colorSetId": r.get::<_, Option<String>>(4)?,
+                    "sortOrder": r.get::<_, i64>(5)?,
+                    "createdAt": r.get::<_, i64>(6)?,
+                    "updatedAt": r.get::<_, i64>(7)?,
+                    "deviceId": r.get::<_, String>(8)?,
+                    "timeMinutes": r.get::<_, Option<i64>>(9)?,
+                }))
+            })
+            .map_err(|e| e.to_string())?;
+        for row in rows {
+            tasks.push(row.map_err(|e| e.to_string())?);
+        }
+    }
+    {
+        let mut stmt = conn
+            .prepare("SELECT id, task_id, title, is_done, sort_order, created_at FROM subtasks ORDER BY sort_order ASC")
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([], |r| {
+                Ok(serde_json::json!({
+                    "id": r.get::<_, String>(0)?,
+                    "taskId": r.get::<_, String>(1)?,
+                    "title": r.get::<_, String>(2)?,
+                    "isDone": r.get::<_, i64>(3)? != 0,
+                    "sortOrder": r.get::<_, i64>(4)?,
+                    "createdAt": r.get::<_, i64>(5)?,
+                }))
+            })
+            .map_err(|e| e.to_string())?;
+        for row in rows {
+            subs.push(row.map_err(|e| e.to_string())?);
+        }
+    }
+
+    let payload = serde_json::json!({
+        "version": 1,
+        "exportedAt": chrono::Utc::now().timestamp_millis(),
+        "colorSets": sets,
+        "tasks": tasks,
+        "subtasks": subs,
+    });
+    std::fs::write(&path, serde_json::to_string_pretty(&payload).map_err(|e| e.to_string())?)
+        .map_err(|e| e.to_string())
+}
+
+/// Импорт данных из JSON (полная замена). Возвращает число задач.
+#[tauri::command]
+pub fn import_from(state: State<'_, Db>, path: String) -> Result<usize, String> {
+    let raw = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    let v: serde_json::Value = serde_json::from_str(&raw).map_err(|e| e.to_string())?;
+    let tasks = v.get("tasks").and_then(|t| t.as_array()).ok_or("Нет массива tasks")?;
+    // Клонируем в собственные векторы: &Vec::new() не живёт дольше выражения.
+    let sets: Vec<serde_json::Value> =
+        v.get("colorSets").and_then(|t| t.as_array()).cloned().unwrap_or_default();
+    let subs: Vec<serde_json::Value> =
+        v.get("subtasks").and_then(|t| t.as_array()).cloned().unwrap_or_default();
+
+    // conn — MutexGuard<Connection>, поэтому обычная transaction()
+    // (unchecked_transaction не нужен: активных prepared-стейтментов нет).
+    let mut conn = state.0.lock().unwrap();
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+    tx.execute("DELETE FROM subtasks", []).map_err(|e| e.to_string())?;
+    tx.execute("DELETE FROM tasks", []).map_err(|e| e.to_string())?;
+    tx.execute("DELETE FROM color_sets", []).map_err(|e| e.to_string())?;
+
+    for s in sets {
+        tx.execute(
+            "INSERT INTO color_sets (id, name, color, sort_order) VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params![
+                s.get("id").and_then(|x| x.as_str()).unwrap_or(""),
+                s.get("name").and_then(|x| x.as_str()).unwrap_or(""),
+                s.get("color").and_then(|x| x.as_i64()).unwrap_or(0),
+                s.get("sortOrder").and_then(|x| x.as_i64()).unwrap_or(0),
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    for t in tasks {
+        tx.execute(
+            "INSERT INTO tasks (id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            rusqlite::params![
+                t.get("id").and_then(|x| x.as_str()).unwrap_or(""),
+                t.get("title").and_then(|x| x.as_str()).unwrap_or(""),
+                t.get("date").and_then(|x| x.as_i64()).unwrap_or(0),
+                t.get("isDone").and_then(|x| x.as_bool()).unwrap_or(false) as i64,
+                t.get("colorSetId").and_then(|x| x.as_str()),
+                t.get("sortOrder").and_then(|x| x.as_i64()).unwrap_or(0),
+                t.get("createdAt").and_then(|x| x.as_i64()).unwrap_or(0),
+                t.get("updatedAt").and_then(|x| x.as_i64()).unwrap_or(0),
+                t.get("deviceId").and_then(|x| x.as_str()).unwrap_or(""),
+                t.get("timeMinutes").and_then(|x| x.as_i64()),
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    for s in subs {
+        tx.execute(
+            "INSERT INTO subtasks (id, task_id, title, is_done, sort_order, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            rusqlite::params![
+                s.get("id").and_then(|x| x.as_str()).unwrap_or(""),
+                s.get("taskId").and_then(|x| x.as_str()).unwrap_or(""),
+                s.get("title").and_then(|x| x.as_str()).unwrap_or(""),
+                s.get("isDone").and_then(|x| x.as_bool()).unwrap_or(false) as i64,
+                s.get("sortOrder").and_then(|x| x.as_i64()).unwrap_or(0),
+                s.get("createdAt").and_then(|x| x.as_i64()).unwrap_or(0),
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    tx.commit().map_err(|e| e.to_string())?;
+    Ok(tasks.len())
+}

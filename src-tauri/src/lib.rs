@@ -9,6 +9,7 @@ use tauri::Manager;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let conn = db::init(&app.handle());
             app.manage(Db(conn));
@@ -26,6 +27,8 @@ pub fn run() {
             commands::get_subtasks,
             commands::upsert_subtask,
             commands::delete_subtask,
+            commands::export_to,
+            commands::import_from,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

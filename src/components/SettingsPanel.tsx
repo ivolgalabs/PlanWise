@@ -1,8 +1,10 @@
 import { useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import { useStore } from "../store";
-import { THEME_FAMILIES, argbToHex, hexToArgb } from "../theme";
+import { COLORS, THEME_FAMILIES, argbToHex, hexToArgb } from "../theme";
 import type { ThemeMode, VisibilityState } from "../store";
-import { api } from "../api";
+import { api, isTauri } from "../api";
 import { Icon, type IconName } from "./Icon";
 import "./SettingsPanel.css";
 
@@ -85,6 +87,41 @@ export function SettingsPanel({ onClose, onSetsChanged }: Props) {
       onSetsChanged();
     }
     setDrafts((ds) => ds.filter((x) => x.id !== d.id));
+  };
+
+  // ── Экспорт/импорт данных (JSON-бэкап) ──
+  const [dataMsg, setDataMsg] = useState("");
+  const [dataError, setDataError] = useState(false);
+  const onExport = async () => {
+    // В браузере диалог сохранения недоступен — только в Tauri-приложении.
+    if (!isTauri()) {
+      setDataError(false);
+      setDataMsg("Доступно в приложении");
+      return;
+    }
+    const d = new Date();
+    const name = `daily-planner-backup-${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}.json`;
+    const path = await save({ defaultPath: name, filters: [{ name: "JSON", extensions: ["json"] }] });
+    if (!path) return;
+    try {
+      await invoke("export_to", { path });
+      setDataError(false); setDataMsg("Экспортировано ✓");
+    } catch (e) { setDataError(true); setDataMsg(String(e)); }
+  };
+  const onImport = async () => {
+    if (!isTauri()) {
+      setDataError(false);
+      setDataMsg("Доступно в приложении");
+      return;
+    }
+    const path = await open({ filters: [{ name: "JSON", extensions: ["json"] }] });
+    if (!path || Array.isArray(path)) return;
+    if (!window.confirm("Данные будут ЗАМЕНЕНЫ данными из файла. Продолжить?")) return;
+    try {
+      const n = await invoke<number>("import_from", { path });
+      setDataError(false); setDataMsg(`Импортировано задач: ${n}`);
+      onSetsChanged();
+    } catch (e) { setDataError(true); setDataMsg(String(e)); }
   };
 
   const modes: { mode: ThemeMode; icon: IconName; label: string }[] = [
@@ -409,6 +446,25 @@ export function SettingsPanel({ onClose, onSetsChanged }: Props) {
               {drafts.length === 0 && (
                 <p className="section-hint">Категорий пока нет — добавьте первую.</p>
               )}
+            </div>
+          </section>
+
+          {/* ── Данные ── */}
+          <section className="settings-section">
+            <div className="section-head">
+              <div>
+                <h3 className="section-title">Данные</h3>
+                <p className="section-hint">Экспорт — полный бэкап; импорт заменяет текущие данные</p>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: "var(--sp-2)" }}>
+              <button className="preset-btn" onClick={onExport} title="Сохранить бэкап в файл">
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><Icon name="save" size={14} /> Экспорт…</span>
+              </button>
+              <button className="preset-btn" onClick={onImport} title="Загрузить данные из файла">
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><Icon name="trash" size={14} /> Импорт…</span>
+              </button>
+              {dataMsg && <span style={{ fontSize: "var(--fs-2xs)", color: dataError ? "var(--danger, #c0392b)" : COLORS.muted }}>{dataMsg}</span>}
             </div>
           </section>
         </div>
