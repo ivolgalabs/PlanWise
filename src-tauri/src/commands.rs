@@ -239,7 +239,7 @@ pub fn export_to(state: State<'_, Db>, path: String) -> Result<(), String> {
                     "id": r.get::<_, String>(0)?,
                     "name": r.get::<_, String>(1)?,
                     "color": r.get::<_, i64>(2)?,
-                    "sortOrder": r.get::<_, i64>(3)?,
+                    "sortOrder": r.get::<_, f64>(3)?,
                 }))
             })
             .map_err(|e| e.to_string())?;
@@ -259,7 +259,7 @@ pub fn export_to(state: State<'_, Db>, path: String) -> Result<(), String> {
                     "date": r.get::<_, i64>(2)?,
                     "isDone": r.get::<_, i64>(3)? != 0,
                     "colorSetId": r.get::<_, Option<String>>(4)?,
-                    "sortOrder": r.get::<_, i64>(5)?,
+                    "sortOrder": r.get::<_, f64>(5)?,
                     "createdAt": r.get::<_, i64>(6)?,
                     "updatedAt": r.get::<_, i64>(7)?,
                     "deviceId": r.get::<_, String>(8)?,
@@ -282,7 +282,7 @@ pub fn export_to(state: State<'_, Db>, path: String) -> Result<(), String> {
                     "taskId": r.get::<_, String>(1)?,
                     "title": r.get::<_, String>(2)?,
                     "isDone": r.get::<_, i64>(3)? != 0,
-                    "sortOrder": r.get::<_, i64>(4)?,
+                    "sortOrder": r.get::<_, f64>(4)?,
                     "createdAt": r.get::<_, i64>(5)?,
                 }))
             })
@@ -308,6 +308,11 @@ pub fn export_to(state: State<'_, Db>, path: String) -> Result<(), String> {
 pub fn import_from(state: State<'_, Db>, path: String) -> Result<usize, String> {
     let raw = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
     let v: serde_json::Value = serde_json::from_str(&raw).map_err(|e| e.to_string())?;
+    if let Some(ver) = v.get("version").and_then(|x| x.as_i64()) {
+        if ver != 1 {
+            return Err("Неподдерживаемая версия бэкапа".to_string());
+        }
+    }
     let tasks = v.get("tasks").and_then(|t| t.as_array()).ok_or("Нет массива tasks")?;
     // Клонируем в собственные векторы: &Vec::new() не живёт дольше выражения.
     let sets: Vec<serde_json::Value> =
@@ -330,7 +335,7 @@ pub fn import_from(state: State<'_, Db>, path: String) -> Result<usize, String> 
                 s.get("id").and_then(|x| x.as_str()).unwrap_or(""),
                 s.get("name").and_then(|x| x.as_str()).unwrap_or(""),
                 s.get("color").and_then(|x| x.as_i64()).unwrap_or(0),
-                s.get("sortOrder").and_then(|x| x.as_i64()).unwrap_or(0),
+                s.get("sortOrder").and_then(|x| x.as_f64()).unwrap_or(0.0),
             ],
         )
         .map_err(|e| e.to_string())?;
@@ -345,7 +350,7 @@ pub fn import_from(state: State<'_, Db>, path: String) -> Result<usize, String> 
                 t.get("date").and_then(|x| x.as_i64()).unwrap_or(0),
                 t.get("isDone").and_then(|x| x.as_bool()).unwrap_or(false) as i64,
                 t.get("colorSetId").and_then(|x| x.as_str()),
-                t.get("sortOrder").and_then(|x| x.as_i64()).unwrap_or(0),
+                t.get("sortOrder").and_then(|x| x.as_f64()).unwrap_or(0.0),
                 t.get("createdAt").and_then(|x| x.as_i64()).unwrap_or(0),
                 t.get("updatedAt").and_then(|x| x.as_i64()).unwrap_or(0),
                 t.get("deviceId").and_then(|x| x.as_str()).unwrap_or(""),
@@ -362,7 +367,7 @@ pub fn import_from(state: State<'_, Db>, path: String) -> Result<usize, String> 
                 s.get("taskId").and_then(|x| x.as_str()).unwrap_or(""),
                 s.get("title").and_then(|x| x.as_str()).unwrap_or(""),
                 s.get("isDone").and_then(|x| x.as_bool()).unwrap_or(false) as i64,
-                s.get("sortOrder").and_then(|x| x.as_i64()).unwrap_or(0),
+                s.get("sortOrder").and_then(|x| x.as_f64()).unwrap_or(0.0),
                 s.get("createdAt").and_then(|x| x.as_i64()).unwrap_or(0),
             ],
         )

@@ -101,7 +101,10 @@ export function SettingsPanel({ onClose, onSetsChanged }: Props) {
     }
     const d = new Date();
     const name = `daily-planner-backup-${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}.json`;
-    const path = await save({ defaultPath: name, filters: [{ name: "JSON", extensions: ["json"] }] });
+    let path: string | null;
+    try {
+      path = await save({ defaultPath: name, filters: [{ name: "JSON", extensions: ["json"] }] });
+    } catch (e) { setDataError(true); setDataMsg(String(e)); return; }
     if (!path) return;
     try {
       await invoke("export_to", { path });
@@ -114,7 +117,10 @@ export function SettingsPanel({ onClose, onSetsChanged }: Props) {
       setDataMsg("Доступно в приложении");
       return;
     }
-    const path = await open({ filters: [{ name: "JSON", extensions: ["json"] }] });
+    let path: string | string[] | null;
+    try {
+      path = await open({ filters: [{ name: "JSON", extensions: ["json"] }] });
+    } catch (e) { setDataError(true); setDataMsg(String(e)); return; }
     if (!path || Array.isArray(path)) return;
     if (!window.confirm("Данные будут ЗАМЕНЕНЫ данными из файла. Продолжить?")) return;
     try {
