@@ -290,7 +290,7 @@ function App() {
       )}
       {datePickerOpen && (
         <DatePickerModal
-          initial={selectedDate}
+          tasks={tasks}
           onPick={setSelectedDate}
           onClose={() => setDatePickerOpen(false)}
         />

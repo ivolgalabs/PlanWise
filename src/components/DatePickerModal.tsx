@@ -1,38 +1,24 @@
-import { useState } from "react";
-import { startOfWeek, firstOfMonth, isSameDay } from "../date";
-import { COLORS, accentTint, varTint } from "../theme";
-import { useStore } from "../store";
-import { Icon } from "./Icon";
+import { useEffect } from "react";
+import type { Task } from "../api";
+import { MiniCalendar } from "./MiniCalendar";
 
 interface Props {
-  initial: Date;
+  tasks: Task[];
   onPick: (d: Date) => void;
   onClose: () => void;
 }
 
-/** Модалка выбора произвольной даты (прыжок). */
-export function DatePickerModal({ initial, onPick, onClose }: Props) {
-  const { mondayFirst } = useStore();
-  const [cursor, setCursor] = useState(initial);
-  const first = firstOfMonth(cursor);
-  const gridStart = startOfWeek(first, mondayFirst);
-
-  const cells: Date[] = Array.from({ length: 42 }, (_, i) => {
-    const d = new Date(gridStart);
-    d.setDate(gridStart.getDate() + i);
-    return d;
-  });
-
-  const monthTitle = first.toLocaleDateString("ru", {
-    month: "long",
-    year: "numeric",
-  });
-
-  // Заголовки дней недели — в порядке начала недели, согласованы с сеткой
-  // (startOfWeek(first, mondayFirst)), иначе колонки разъезжаются.
-  const weekdays = mondayFirst
-    ? ["П", "В", "С", "Ч", "П", "С", "В"]
-    : ["В", "П", "В", "С", "Ч", "П", "С"];
+/** Модалка выбора даты: крупный мини-календарь с точками задач.
+ *  Переиспользует MiniCalendar — единый источник правды для подсветок,
+ *  навигации по месяцам и кнопки «Сегодня». Escape закрывает. */
+export function DatePickerModal({ tasks, onPick, onClose }: Props) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   return (
     <div
@@ -49,106 +35,20 @@ export function DatePickerModal({ initial, onPick, onClose }: Props) {
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        style={{
-          background: COLORS.card,
-          border: `1px solid ${COLORS.cardBorder}`,
-          borderRadius: "var(--radius-xl)",
-          padding: "var(--sp-6)",
-          width: 280,
-        }}
+        style={{ width: 440, maxWidth: "92vw" }}
       >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            marginBottom: "var(--sp-4)",
+        {/* droppable=false: в модалке drag не нужен, ячейки не должны
+            перехватывать dnd-события. onSelect → onPick (выбор даты)
+            + onClose: выбор дня закрывает модалку. */}
+        <MiniCalendar
+          tasks={tasks}
+          large
+          onSelect={(d) => {
+            onPick(d);
+            onClose();
           }}
-        >
-          <button
-            className="icon-btn"
-            onClick={() =>
-              setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))
-            }
-            title="Предыдущий месяц"
-          >
-            <Icon name="chevronL" size={14} />
-          </button>
-          <div
-            style={{
-              flex: 1,
-              textAlign: "center",
-              fontSize: "var(--fs-sm)",
-              fontWeight: 600,
-              color: COLORS.text,
-              textTransform: "capitalize",
-            }}
-          >
-            {monthTitle}
-          </div>
-          <button
-            className="icon-btn"
-            onClick={() =>
-              setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))
-            }
-            title="Следующий месяц"
-          >
-            <Icon name="chevronR" size={14} />
-          </button>
-        </div>
-        <div style={{ display: "flex", marginBottom: 4 }}>
-          {weekdays.map((w, i) => (
-            <div
-              key={i}
-              style={{
-                flex: 1,
-                textAlign: "center",
-                fontSize: "var(--fs-2xs)",
-                color: COLORS.muted,
-              }}
-            >
-              {w}
-            </div>
-          ))}
-        </div>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(7, 1fr)",
-            gap: 2,
-          }}
-        >
-          {cells.map((day, i) => {
-            const inMonth = day.getMonth() === first.getMonth();
-            const selected = isSameDay(day, initial);
-            return (
-              <button
-                key={i}
-                onClick={() => {
-                  onPick(
-                    new Date(day.getFullYear(), day.getMonth(), day.getDate()),
-                  );
-                  onClose();
-                }}
-                style={{
-                  padding: "4px 0",
-                  fontSize: "var(--fs-xs)",
-                  border: "none",
-                  borderRadius: 4,
-                  cursor: "pointer",
-                  fontWeight: selected ? 700 : 400,
-                  color: inMonth
-                    ? selected
-                      ? COLORS.accent
-                      : COLORS.text
-                    : varTint("--text-muted", 0.4),
-                  background: selected ? accentTint(0.15) : "transparent",
-                }}
-              >
-                {day.getDate()}
-              </button>
-            );
-          })}
-        </div>
+          droppable={false}
+        />
       </div>
     </div>
   );
