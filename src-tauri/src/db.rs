@@ -9,15 +9,10 @@ pub struct Db(pub Mutex<Connection>);
 use refinery::embed_migrations;
 embed_migrations!("migrations");
 
-/// Инициализирует SQLite в app_data_dir и прогоняет миграции (refinery).
-pub fn init(app: &AppHandle) -> Mutex<Connection> {
-    let app_dir = app
-        .path()
-        .app_data_dir()
-        .expect("app data dir not resolvable");
-    FsUtils::ensure_dir(&app_dir).ok();
-    let db_path = app_dir.join("daily_planner.sqlite");
-    let mut conn = Connection::open(db_path).expect("failed to open sqlite db");
+/// Открывает SQLite по пути и прогоняет миграции (refinery).
+/// Вынесено из init, чтобы тесты могли открывать in-memory БД.
+pub fn open(path: impl AsRef<std::path::Path>) -> Connection {
+    let mut conn = Connection::open(path).expect("failed to open sqlite db");
 
     // Включаем WAL для лучшей конкурентности и быстродействия.
     conn.pragma_update(None, "journal_mode", "WAL").ok();
@@ -26,5 +21,47 @@ pub fn init(app: &AppHandle) -> Mutex<Connection> {
         .run(&mut conn)
         .expect("failed to run migrations");
 
-    Mutex::new(conn)
+    conn
+}
+
+/// Инициализирует SQLite в app_data_dir и прогоняет миграции (refinery).
+pub fn init(app: &AppHandle) -> Mutex<Connection> {
+    let app_dir = app
+        .path()
+        .app_data_dir()
+        .expect("app data dir not resolvable");
+    FsUtils::ensure_dir(&app_dir).ok();
+    let db_path = app_dir.join("daily_planner.sqlite");
+    Mutex::new(open(db_path))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Миграции применяются к in-memory БД, и у tasks есть колонка notes
+    /// с default '' (фича «Заметки»).
+    #[test]
+    fn migrations_add_notes_column() {
+        let conn = open(":memory:");
+        let has_notes: bool = conn
+            .query_row(
+                "SELECT COUNT(*) > 0 FROM pragma_table_info('tasks') WHERE name = 'notes'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("query pragma_table_info");
+        assert!(has_notes, "после миграций у tasks должна быть колонка notes");
+
+        conn.execute(
+            "INSERT INTO tasks (id, title, date, created_at, updated_at, device_id)
+             VALUES ('t1', 'Тест', 0, 0, 0, 'dev')",
+            [],
+        )
+        .expect("insert task");
+        let notes: String = conn
+            .query_row("SELECT notes FROM tasks WHERE id = 't1'", [], |row| row.get(0))
+            .expect("select notes");
+        assert_eq!(notes, "", "default notes — пустая строка");
+    }
 }
