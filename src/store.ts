@@ -104,6 +104,17 @@ export const useStore = create<PlannerState>()(
         rolloverEnabled: s.rolloverEnabled,
         visibility: s.visibility,
       }),
+      // Дефолтный shallow-merge zustand заменяет visibility целиком —
+      // новые флаги (например, notes) терялись бы у старых установок.
+      // Мёржим visibility поверх дефолта.
+      merge: (persisted, current) => ({
+        ...current,
+        ...(persisted as Partial<PlannerState>),
+        visibility: {
+          ...current.visibility,
+          ...((persisted as Partial<PlannerState>)?.visibility ?? {}),
+        },
+      }),
     },
   ),
 );
