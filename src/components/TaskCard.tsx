@@ -39,6 +39,9 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
   // Защита от двойного save: Enter (onKeyDown) и следующий за ним blur
   // (onBlur) вызывают save дважды подряд — пропускаем повторный вызов.
   const savedRef = useRef<number>(0);
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [notesValue, setNotesValue] = useState(task.notes);
+  const notesRef = useRef<HTMLTextAreaElement>(null);
   const { colorSets, setColorSets, visibility } = useStore();
 
   // Перетаскивание задачи через dnd-kit. data.task читается в onDragEnd.
@@ -61,6 +64,16 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
   useEffect(() => {
     if (!editing) setTitle(task.title);
   }, [task.title, editing]);
+
+  // Синхронизируем локальный текст заметки, если задача изменилась извне.
+  useEffect(() => {
+    if (!notesOpen) setNotesValue(task.notes);
+  }, [task.notes, notesOpen]);
+
+  // При открытии панели растягиваем textarea под содержимое заметки.
+  useEffect(() => {
+    if (notesOpen && notesRef.current) growNotes(notesRef.current);
+  }, [notesOpen]);
 
   const save = async (): Promise<Task> => {
     const t = title.trim();
@@ -162,6 +175,19 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
     onChange();
   };
 
+  const saveNotes = async () => {
+    if (notesValue !== task.notes) {
+      await api.upsertTask({ ...task, notes: notesValue });
+      onChange();
+    }
+  };
+
+  // Авто-высота textarea по контенту (без скроллбара).
+  const growNotes = (el: HTMLTextAreaElement) => {
+    el.style.height = "auto";
+    el.style.height = el.scrollHeight + "px";
+  };
+
   return (
     <div
       className="task-block"
@@ -249,6 +275,22 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
       {/* Время — бейдж всегда виден, пикер по клику (скрыт в сетке недели
           и настройкой «Время задач»). */}
       {effectiveShowTime && <TimePicker value={task.timeMinutes ?? null} onChange={setTime} />}
+      {/* Заметка — кнопка рядом со временем, скрывается настройкой и в
+          компактной сетке недели. Подсвечена, если текст непустой. */}
+      {showTime && visibility.notes && (
+        <button
+          className="chip-btn"
+          onClick={() => setNotesOpen((v) => !v)}
+          title="Заметка"
+          style={{
+            opacity: task.notes ? 1 : 0.5,
+            color: task.notes ? COLORS.accent : COLORS.muted,
+            flexShrink: 0,
+          }}
+        >
+          <Icon name="note" size={14} />
+        </button>
+      )}
       {/* Кнопки цвета/удаления — приглушены, ярче при hover; скрываются
           настройкой «Кнопки „цвет“ и „удалить“ в задачах». */}
       {visibility.taskActions && (
@@ -341,6 +383,29 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
         </div>
       )}
     </div>
+    {/* Панель заметки — раскрывается по клику на иконку, автосохранение
+        по blur; Escape сохраняет и сворачивает. */}
+    {showTime && visibility.notes && notesOpen && (
+      <div className="notes-panel">
+        <textarea
+          ref={notesRef}
+          value={notesValue}
+          onChange={(e) => setNotesValue(e.target.value)}
+          onInput={(e) => growNotes(e.currentTarget)}
+          onBlur={() => saveNotes()}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              e.preventDefault();
+              saveNotes();
+              setNotesOpen(false);
+            }
+          }}
+          placeholder="Заметка…"
+          rows={2}
+          autoFocus
+        />
+      </div>
+    )}
     {/* Подзадачи скрываются настройкой «Подзадачи». */}
     {visibility.subtasks && <SubtaskList taskId={task.id} />}
     </div>

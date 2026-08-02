@@ -94,6 +94,33 @@ body {
   border-radius: var(--radius-md);
 }
 
+/* Панель заметки — тот же отступ, что у подзадач, без акцент-бордера */
+.notes-panel {
+  margin: 0 var(--sp-2) var(--sp-2) calc(var(--sp-4) + 14px);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+}
+.notes-panel textarea {
+  width: 100%;
+  resize: none;
+  overflow: hidden;
+  border: none;
+  border-bottom: 1px solid transparent;
+  background: transparent;
+  outline: none;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--fs-2xs);
+  line-height: 1.5;
+}
+.notes-panel textarea::placeholder {
+  color: var(--text-muted);
+}
+.notes-panel textarea:focus {
+  border-bottom-color: var(--accent);
+}
+
 /* Подчёркивание инпута задачи (как в tweek.so) */
 .task-line input[type="text"],
 .task-line input:not([type]) {
