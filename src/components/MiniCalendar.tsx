@@ -12,6 +12,7 @@ import {
 import { COLORS, setHex, accentTint, varTint } from "../theme";
 import { useStore } from "../store";
 import { calendarDayId } from "../drag";
+import { Icon } from "./Icon";
 
 interface Props {
   tasks: Task[];
@@ -105,9 +106,9 @@ export function MiniCalendar({ tasks, large, onSelect, droppable = true }: Props
             )
           }
           title="Предыдущий месяц"
-          style={{ fontSize: large ? "var(--fs-xs)" : "var(--fs-sm)", padding: "0 4px" }}
+          style={{ padding: "0 4px" }}
         >
-          ‹
+          <Icon name="chevronL" size={14} />
         </button>
         <span
           style={{ cursor: "pointer", flex: 1, textAlign: "center" }}
@@ -124,9 +125,9 @@ export function MiniCalendar({ tasks, large, onSelect, droppable = true }: Props
             )
           }
           title="Следующий месяц"
-          style={{ fontSize: large ? "var(--fs-xs)" : "var(--fs-sm)", padding: "0 4px" }}
+          style={{ padding: "0 4px" }}
         >
-          ›
+          <Icon name="chevronR" size={14} />
         </button>
       </div>
       {/* Быстрый возврат к сегодняшнему дню/месяцу. */}

@@ -12,14 +12,19 @@ interface Props {
   onClose: () => void;
   /** Перезагрузить категории после правок (App обновляет store.colorSets). */
   onSetsChanged: () => void;
+  /** Перезагрузить задачи после импорта (App обновляет store.tasks). */
+  onTasksChanged: () => void;
 }
 
 const SCALE_PRESETS = [0.7, 0.85, 1.0, 1.25, 1.5, 1.75, 2.0];
 const FONT_PRESETS = [0.8, 0.9, 1.0, 1.1, 1.25, 1.4, 1.6];
 
-/** Черновик категории для редактирования (id "" = ещё не создана). */
+/** Черновик категории для редактирования (id "" = ещё не создана).
+ *  clientKey — уникальный ключ строки (crypto.randomUUID): у несохранённых
+ *  черновиков id совпадает (""), поэтому React-key и патчи идут по clientKey. */
 interface SetDraft {
   id: string;
+  clientKey: string;
   name: string;
   color: number;
 }
@@ -28,7 +33,7 @@ interface SetDraft {
  * Полноценное окно настроек: Оформление (тема свотчами + режим +
  * OLED + масштаб ползунком), Неделя и Категории (цвет-сеты).
  */
-export function SettingsPanel({ onClose, onSetsChanged }: Props) {
+export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged }: Props) {
   const {
     mondayFirst,
     themeMode,
@@ -55,16 +60,16 @@ export function SettingsPanel({ onClose, onSetsChanged }: Props) {
   const [drafts, setDrafts] = useState<SetDraft[]>(() =>
     colorSets
       .filter((s) => s.id !== "cs-none")
-      .map((s) => ({ id: s.id, name: s.name, color: s.color })),
+      .map((s) => ({ id: s.id, clientKey: crypto.randomUUID(), name: s.name, color: s.color })),
   );
 
-  const patchDraft = (id: string, patch: Partial<SetDraft>) =>
-    setDrafts((ds) => ds.map((d) => (d.id === id ? { ...d, ...patch } : d)));
+  const patchDraft = (clientKey: string, patch: Partial<SetDraft>) =>
+    setDrafts((ds) => ds.map((d) => (d.clientKey === clientKey ? { ...d, ...patch } : d)));
 
   const addDraft = () =>
     setDrafts((ds) => [
       ...ds,
-      { id: "", name: "Новая категория", color: hexToArgb("#7eb8c4") },
+      { id: "", clientKey: crypto.randomUUID(), name: "Новая категория", color: hexToArgb("#7eb8c4") },
     ]);
 
   const saveDraft = async (d: SetDraft) => {
@@ -76,7 +81,7 @@ export function SettingsPanel({ onClose, onSetsChanged }: Props) {
     // Новая категория получает id от Rust — обновляем черновик, чтобы
     // повторное сохранение не создавало дубль.
     setDrafts((ds) =>
-      ds.map((x) => (x.id === d.id ? { ...x, id: saved.id } : x)),
+      ds.map((x) => (x.clientKey === d.clientKey ? { ...x, id: saved.id } : x)),
     );
     onSetsChanged();
   };
@@ -86,7 +91,7 @@ export function SettingsPanel({ onClose, onSetsChanged }: Props) {
       await api.deleteColorSet(d.id);
       onSetsChanged();
     }
-    setDrafts((ds) => ds.filter((x) => x.id !== d.id));
+    setDrafts((ds) => ds.filter((x) => x.clientKey !== d.clientKey));
   };
 
   // ── Экспорт/импорт данных (JSON-бэкап) ──
@@ -127,6 +132,7 @@ export function SettingsPanel({ onClose, onSetsChanged }: Props) {
       const n = await invoke<number>("import_from", { path });
       setDataError(false); setDataMsg(`Импортировано задач: ${n}`);
       onSetsChanged();
+      onTasksChanged();
     } catch (e) { setDataError(true); setDataMsg(String(e)); }
   };
 
@@ -413,18 +419,18 @@ export function SettingsPanel({ onClose, onSetsChanged }: Props) {
             </div>
             <div className="set-list">
               {drafts.map((d) => (
-                <div key={d.id || "__new__"} className="set-row">
+                <div key={d.clientKey} className="set-row">
                   <input
                     type="color"
                     value={argbToHex(d.color)}
-                    onChange={(e) => patchDraft(d.id, { color: hexToArgb(e.target.value) })}
+                    onChange={(e) => patchDraft(d.clientKey, { color: hexToArgb(e.target.value) })}
                     className="set-color"
                     title="Цвет категории"
                   />
                   <input
                     type="text"
                     value={d.name}
-                    onChange={(e) => patchDraft(d.id, { name: e.target.value })}
+                    onChange={(e) => patchDraft(d.clientKey, { name: e.target.value })}
                     placeholder="Название категории"
                     className="set-name"
                     onKeyDown={(e) => {

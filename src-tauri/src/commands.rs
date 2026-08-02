@@ -308,10 +308,11 @@ pub fn export_to(state: State<'_, Db>, path: String) -> Result<(), String> {
 pub fn import_from(state: State<'_, Db>, path: String) -> Result<usize, String> {
     let raw = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
     let v: serde_json::Value = serde_json::from_str(&raw).map_err(|e| e.to_string())?;
-    if let Some(ver) = v.get("version").and_then(|x| x.as_i64()) {
-        if ver != 1 {
-            return Err("Неподдерживаемая версия бэкапа".to_string());
-        }
+    // Строгая проверка версии: отсутствие поля или не-целое значение
+    // (например, float 1.5) дают unwrap_or(0) → ошибка.
+    let version = v.get("version").and_then(|x| x.as_i64()).unwrap_or(0);
+    if version != 1 {
+        return Err("Неподдерживаемая версия бэкапа".to_string());
     }
     let tasks = v.get("tasks").and_then(|t| t.as_array()).ok_or("Нет массива tasks")?;
     // Клонируем в собственные векторы: &Vec::new() не живёт дольше выражения.

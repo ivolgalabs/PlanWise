@@ -51,6 +51,7 @@ export function DayColumn({
   const epochDay = Math.floor(
     Date.UTC(day.getFullYear(), day.getMonth(), day.getDate()) / 86_400_000,
   );
+  const dayKey = `${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`;
 
   // Зона приёма задач: подсвечивается при наведении (isOver).
   const { setNodeRef, isOver } = useDroppable({ id: dayId(epochDay) });
@@ -72,13 +73,14 @@ export function DayColumn({
     const sort = after ? after.sortOrder + 1 : Date.now();
     await api.upsertTask({ title: "", date: epochDay, sortOrder: sort });
     onChange();
-    // Фокус новой строки после ре-рендера.
+    // Фокус новой строки после ре-рендера — ищем ТОЛЬКО внутри своей колонки
+    // (data-day-key), чтобы не сфокусировать пустую строку соседнего дня.
     requestAnimationFrame(() => {
-      const inputs = document.querySelectorAll<HTMLInputElement>(
-        `input[data-task-id]`,
-      );
-      // Найдём пустую (только что созданную).
-      const empty = Array.from(inputs).find((i) => i.value === "");
+      const container = document.querySelector(`[data-day-key="${dayKey}"]`);
+      if (!container) return;
+      const empty = Array.from(
+        container.querySelectorAll<HTMLInputElement>("input[data-task-id]"),
+      ).find((i) => i.value === "");
       empty?.focus();
     });
   };
@@ -86,6 +88,7 @@ export function DayColumn({
   return (
     <div
       ref={setNodeRef}
+      data-day-key={dayKey}
       className="day-column"
       style={{
         height: "100%",

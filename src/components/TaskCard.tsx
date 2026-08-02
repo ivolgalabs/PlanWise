@@ -68,18 +68,21 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
     const now = Date.now();
     if (now - savedRef.current < 300) return task;
     savedRef.current = now;
-    // Авто-удаление пустой задачи, у которой нет подзадач — чтобы пустые
-    // не копились (создаются через Enter, но потом забыты).
+    // Авто-удаление при пустом тексте — ТОЛЬКО если задача изначально была
+    // пустой (создана Enter-ом и забыта). Очистка заголовка у существующей
+    // задачи (Ctrl+A + Delete + blur) не должна её удалять.
     if (!t) {
-      try {
-        const subs = await api.getSubtasks(task.id);
-        if (subs.length === 0) {
-          await api.deleteTask(task.id);
-          onChange();
-          return task;
+      if (!task.title) {
+        try {
+          const subs = await api.getSubtasks(task.id);
+          if (subs.length === 0) {
+            await api.deleteTask(task.id);
+            onChange();
+            return task;
+          }
+        } catch {
+          /* не критично — оставим как есть */
         }
-      } catch {
-        /* не критично — оставим как есть */
       }
       return task;
     }

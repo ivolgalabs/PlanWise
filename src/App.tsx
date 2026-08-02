@@ -6,6 +6,7 @@ import { TopBar } from "./components/TopBar";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { DatePickerModal } from "./components/DatePickerModal";
 import { SearchBar } from "./components/SearchBar";
+import { Icon } from "./components/Icon";
 import { SearchResults } from "./views/SearchResults";
 import type { PeriodFilter, StatusFilter, SortKey } from "./views/SearchResults";
 import { DayView } from "./views/DayView";
@@ -225,10 +226,11 @@ function App() {
           </span>
           <button
             className="icon-btn"
-            style={{ marginLeft: "auto", fontSize: "var(--fs-xs)" }}
+            style={{ marginLeft: "auto" }}
             onClick={() => setRolloverCount(0)}
+            title="Скрыть"
           >
-            ✕
+            <Icon name="close" size={14} />
           </button>
         </div>
       )}
@@ -284,7 +286,7 @@ function App() {
       </div>
 
       {settingsOpen && (
-        <SettingsPanel onClose={() => setSettingsOpen(false)} onSetsChanged={reloadSets} />
+        <SettingsPanel onClose={() => setSettingsOpen(false)} onSetsChanged={reloadSets} onTasksChanged={reload} />
       )}
       {datePickerOpen && (
         <DatePickerModal

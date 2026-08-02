@@ -5,9 +5,9 @@ import type { ReactNode } from "react";
 interface IconProps { name: IconName; size?: number; title?: string; }
 export type IconName =
   | "search" | "calendar" | "gear" | "chevronL" | "chevronR" | "close"
-  | "check" | "plus" | "drag" | "dots" | "clock" | "palette" | "grid"
+  | "plus" | "drag" | "dots" | "clock" | "palette" | "grid"
   | "list" | "calendarHide" | "sun" | "moon" | "monitor" | "trash"
-  | "save" | "filter" | "sort";
+  | "save";
 
 const PATHS: Record<IconName, ReactNode> = {
   search: <><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></>,
@@ -16,7 +16,6 @@ const PATHS: Record<IconName, ReactNode> = {
   chevronL: <path d="M15 18l-6-6 6-6" />,
   chevronR: <path d="M9 18l6-6-6-6" />,
   close: <path d="M18 6L6 18M6 6l12 12" />,
-  check: <path d="M20 6L9 17l-5-5" />,
   plus: <path d="M12 5v14M5 12h14" />,
   drag: <><circle cx="9" cy="6" r="1.4" /><circle cx="15" cy="6" r="1.4" /><circle cx="9" cy="12" r="1.4" /><circle cx="15" cy="12" r="1.4" /><circle cx="9" cy="18" r="1.4" /><circle cx="15" cy="18" r="1.4" /></>,
   dots: <><circle cx="12" cy="5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="19" r="1.5" /></>,
@@ -30,8 +29,6 @@ const PATHS: Record<IconName, ReactNode> = {
   monitor: <><rect x="2" y="4" width="20" height="13" rx="2" /><path d="M8 21h8M12 17v4" /></>,
   trash: <><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" /><path d="M10 11v6M14 11v6" /></>,
   save: <><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><path d="M17 21v-8H7v8M7 3v5h8" /></>,
-  filter: <path d="M22 3H2l8 9.5V19l4 2v-8.5L22 3z" />,
-  sort: <><path d="M11 5h10M11 9h7M11 13h4" /><path d="M3 5l2-2 2 2M5 3v18M3 19l2 2 2-2" /></>,
 };
 
 export function Icon({ name, size = 16, title }: IconProps) {

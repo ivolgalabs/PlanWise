@@ -2,6 +2,7 @@ import { useState } from "react";
 import { startOfWeek, firstOfMonth, isSameDay } from "../date";
 import { COLORS, accentTint, varTint } from "../theme";
 import { useStore } from "../store";
+import { Icon } from "./Icon";
 
 interface Props {
   initial: Date;
@@ -68,8 +69,9 @@ export function DatePickerModal({ initial, onPick, onClose }: Props) {
             onClick={() =>
               setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))
             }
+            title="Предыдущий месяц"
           >
-            ‹
+            <Icon name="chevronL" size={14} />
           </button>
           <div
             style={{
@@ -88,8 +90,9 @@ export function DatePickerModal({ initial, onPick, onClose }: Props) {
             onClick={() =>
               setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))
             }
+            title="Следующий месяц"
           >
-            ›
+            <Icon name="chevronR" size={14} />
           </button>
         </div>
         <div style={{ display: "flex", marginBottom: 4 }}>
