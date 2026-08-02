@@ -13,8 +13,9 @@ pub fn get_tasks(state: State<'_, Db>, start_day: i64, end_day: i64) -> Vec<Task
     let conn = state.0.lock().unwrap();
     let mut stmt = conn
         .prepare(
-            "SELECT id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes
-             FROM tasks WHERE date BETWEEN ?1 AND ?2 ORDER BY time_minutes IS NULL, time_minutes ASC, sort_order ASC",
+            "SELECT id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes, someday
+             FROM tasks WHERE date BETWEEN ?1 AND ?2 AND someday = 0
+             ORDER BY time_minutes IS NULL, time_minutes ASC, sort_order ASC",
         )
         .expect("prepare get_tasks");
     stmt.query_map([start_day, end_day], |row| {
@@ -30,6 +31,7 @@ pub fn get_tasks(state: State<'_, Db>, start_day: i64, end_day: i64) -> Vec<Task
             device_id: row.get(8)?,
             time_minutes: row.get(9)?,
             notes: row.get(10)?,
+            someday: row.get::<_, i64>(11)? != 0,
         })
     })
     .expect("query get_tasks")
@@ -48,13 +50,14 @@ pub fn upsert_task(state: State<'_, Db>, mut task: Task) -> Task {
     }
     task.updated_at = now_ms();
     conn.execute(
-        "INSERT INTO tasks (id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+        "INSERT INTO tasks (id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes, someday)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
          ON CONFLICT(id) DO UPDATE SET
            title=excluded.title, date=excluded.date, is_done=excluded.is_done,
            color_set_id=excluded.color_set_id, sort_order=excluded.sort_order,
            updated_at=excluded.updated_at, device_id=excluded.device_id,
-           time_minutes=excluded.time_minutes, notes=excluded.notes",
+           time_minutes=excluded.time_minutes, notes=excluded.notes,
+           someday=excluded.someday",
         rusqlite::params![
             task.id,
             task.title,
@@ -67,6 +70,7 @@ pub fn upsert_task(state: State<'_, Db>, mut task: Task) -> Task {
             task.device_id,
             task.time_minutes,
             task.notes,
+            task.someday as i64,
         ],
     )
     .expect("upsert_task execute");
@@ -84,10 +88,52 @@ pub fn delete_task(state: State<'_, Db>, id: String) {
 pub fn move_task(state: State<'_, Db>, id: String, new_date: i64) {
     let conn = state.0.lock().unwrap();
     conn.execute(
-        "UPDATE tasks SET date = ?1, updated_at = ?2 WHERE id = ?3",
+        "UPDATE tasks SET date = ?1, someday = 0, updated_at = ?2 WHERE id = ?3",
         rusqlite::params![new_date, now_ms(), id],
     )
     .expect("move_task");
+}
+
+/// Задачи «Когда-нибудь» — без привязки ко дню.
+#[tauri::command]
+pub fn get_someday_tasks(state: State<'_, Db>) -> Vec<Task> {
+    let conn = state.0.lock().unwrap();
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes, someday
+             FROM tasks WHERE someday = 1 ORDER BY sort_order ASC, created_at ASC",
+        )
+        .expect("prepare get_someday_tasks");
+    stmt.query_map([], |row| {
+        Ok(Task {
+            id: row.get(0)?,
+            title: row.get(1)?,
+            date: row.get(2)?,
+            is_done: row.get::<_, i64>(3)? != 0,
+            color_set_id: row.get(4)?,
+            sort_order: row.get(5)?,
+            created_at: row.get(6)?,
+            updated_at: row.get(7)?,
+            device_id: row.get(8)?,
+            time_minutes: row.get(9)?,
+            notes: row.get(10)?,
+            someday: row.get::<_, i64>(11)? != 0,
+        })
+    })
+    .expect("query get_someday_tasks")
+    .filter_map(|r| r.ok())
+    .collect()
+}
+
+/// Переместить задачу в «Когда-нибудь» (дата сбрасывается).
+#[tauri::command]
+pub fn set_someday(state: State<'_, Db>, id: String) {
+    let conn = state.0.lock().unwrap();
+    conn.execute(
+        "UPDATE tasks SET someday = 1, date = 0, updated_at = ?1 WHERE id = ?2",
+        rusqlite::params![now_ms(), id],
+    )
+    .expect("set_someday");
 }
 
 #[tauri::command]
@@ -152,7 +198,7 @@ pub fn rollover_overdue(state: State<'_, Db>, today_epoch_day: i64) -> i64 {
     // Сначала считаем, сколько строк затронем.
     let count: i64 = conn
         .query_row(
-            "SELECT COUNT(*) FROM tasks WHERE is_done = 0 AND date < ?1",
+            "SELECT COUNT(*) FROM tasks WHERE is_done = 0 AND date < ?1 AND someday = 0",
             [today_epoch_day],
             |row| row.get(0),
         )
@@ -161,7 +207,7 @@ pub fn rollover_overdue(state: State<'_, Db>, today_epoch_day: i64) -> i64 {
         return 0;
     }
     conn.execute(
-        "UPDATE tasks SET date = ?1, updated_at = ?2 WHERE is_done = 0 AND date < ?1",
+        "UPDATE tasks SET date = ?1, updated_at = ?2 WHERE is_done = 0 AND date < ?1 AND someday = 0",
         rusqlite::params![today_epoch_day, now_ms()],
     )
     .expect("rollover_overdue execute");
@@ -251,7 +297,7 @@ pub fn export_to(state: State<'_, Db>, path: String) -> Result<(), String> {
     }
     {
         let mut stmt = conn
-            .prepare("SELECT id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes FROM tasks ORDER BY sort_order ASC")
+            .prepare("SELECT id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes, someday FROM tasks ORDER BY sort_order ASC")
             .map_err(|e| e.to_string())?;
         let rows = stmt
             .query_map([], |r| {
@@ -267,6 +313,7 @@ pub fn export_to(state: State<'_, Db>, path: String) -> Result<(), String> {
                     "deviceId": r.get::<_, String>(8)?,
                     "timeMinutes": r.get::<_, Option<i64>>(9)?,
                     "notes": r.get::<_, String>(10)?,
+                    "someday": r.get::<_, i64>(11)? != 0,
                 }))
             })
             .map_err(|e| e.to_string())?;
@@ -346,8 +393,8 @@ pub fn import_from(state: State<'_, Db>, path: String) -> Result<usize, String> 
     }
     for t in tasks {
         tx.execute(
-            "INSERT INTO tasks (id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            "INSERT INTO tasks (id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes, someday)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
             rusqlite::params![
                 t.get("id").and_then(|x| x.as_str()).unwrap_or(""),
                 t.get("title").and_then(|x| x.as_str()).unwrap_or(""),
@@ -360,6 +407,7 @@ pub fn import_from(state: State<'_, Db>, path: String) -> Result<usize, String> 
                 t.get("deviceId").and_then(|x| x.as_str()).unwrap_or(""),
                 t.get("timeMinutes").and_then(|x| x.as_i64()),
                 t.get("notes").and_then(|x| x.as_str()).unwrap_or(""),
+                t.get("someday").and_then(|x| x.as_bool()).unwrap_or(false) as i64,
             ],
         )
         .map_err(|e| e.to_string())?;

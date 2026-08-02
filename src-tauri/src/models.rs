@@ -16,6 +16,8 @@ pub struct Task {
     pub time_minutes: Option<i32>, // 0-1439, NULL = «в течение дня»
     #[serde(default)]
     pub notes: String, // заметка к задаче, '' = нет
+    #[serde(default)]
+    pub someday: bool, // «Когда-нибудь»: задача без привязки ко дню
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -60,5 +62,18 @@ mod tests {
         }))
         .expect("parse task without notes");
         assert_eq!(t.notes, "");
+    }
+
+    /// Старый JSON без someday десериализуется в false.
+    #[test]
+    fn task_deserializes_without_someday() {
+        let t: Task = serde_json::from_value(serde_json::json!({
+            "id": "a", "title": "T", "date": 0, "isDone": false,
+            "colorSetId": null, "sortOrder": 0.0, "createdAt": 0,
+            "updatedAt": 0, "deviceId": "d", "timeMinutes": null,
+            "notes": "",
+        }))
+        .expect("parse task without someday");
+        assert!(!t.someday);
     }
 }

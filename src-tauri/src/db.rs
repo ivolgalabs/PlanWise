@@ -64,4 +64,26 @@ mod tests {
             .expect("select notes");
         assert_eq!(notes, "", "default notes — пустая строка");
     }
+
+    /// V5: у tasks есть колонка someday с default 0.
+    #[test]
+    fn migrations_add_someday_column() {
+        let conn = open(":memory:");
+        let has: bool = conn
+            .query_row(
+                "SELECT COUNT(*) > 0 FROM pragma_table_info('tasks') WHERE name = 'someday'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("pragma someday");
+        assert!(has, "после миграций у tasks должна быть колонка someday");
+        let default: i64 = conn
+            .query_row(
+                "SELECT someday FROM tasks WHERE id = 'x'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+        assert_eq!(default, 0);
+    }
 }

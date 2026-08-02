@@ -20,6 +20,8 @@ pub fn run() {
             commands::upsert_task,
             commands::delete_task,
             commands::move_task,
+            commands::get_someday_tasks,
+            commands::set_someday,
             commands::get_color_sets,
             commands::upsert_color_set,
             commands::delete_color_set,
