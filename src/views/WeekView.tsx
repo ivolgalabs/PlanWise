@@ -91,23 +91,18 @@ export function WeekView({ tasks, onChange }: Props) {
                   }}
                 >
                   {days.map((d) => {
-                    // Компактность как в месяце, но для колонок: прошедшие дни
-                    // — узкие, сегодня/завтра — широкие, будущие — средние.
-                    const w = dayWeight(d);
-                    const flex =
-                      w === "past"
-                        ? "0 0 88px"
-                        : w === "future"
-                          ? "1 1 120px"
-                          : "1.2 1 150px";
-                    const maxW = w === "past" ? 120 : 320;
+                    // Все колонки читаемы: единый flex с min-width вместо
+                    // «0 0 88px» для прошлых дней (поля задач схлопывались в 0).
+                    // Сегодня — самая широкая. При нехватке места сетка
+                    // скроллится по горизонтали (overflowX контейнера).
+                    const today = dayWeight(d) === "today";
                     return (
                       <div
                         key={d.toISOString()}
                         style={{
-                          flex,
-                          minWidth: 0,
-                          maxWidth: maxW,
+                          flex: today ? "1.3 1 0" : "1 1 0",
+                          minWidth: today ? 180 : 140,
+                          maxWidth: today ? 360 : 280,
                           height: "100%",
                           display: "flex",
                           flexDirection: "column",

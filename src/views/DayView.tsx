@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import type { Task } from "../api";
 import { api, fromEpochDay } from "../api";
@@ -24,6 +24,28 @@ export function DayView({ day, tasks, onChange }: Props) {
   const [newTitle, setNewTitle] = useState("");
   const newInputRef = useRef<HTMLInputElement>(null);
   const { setSelectedDate, visibility } = useStore();
+
+  // В узком окне прячем правую панель календаря — она крадёт ширину у задач.
+  // matchMedia реагирует на ресайз окна (как narrow в WeekView).
+  const [narrow, setNarrow] = useState(
+    () => window.matchMedia("(max-width: 700px)").matches,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 700px)");
+    const handler = (e: MediaQueryListEvent) => setNarrow(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+  // В совсем узком окне прячем и боковую зону «завтра».
+  const [tiny, setTiny] = useState(
+    () => window.matchMedia("(max-width: 560px)").matches,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 560px)");
+    const handler = (e: MediaQueryListEvent) => setTiny(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
 
   const dayTasks = tasks
     .filter((t) => {
@@ -86,11 +108,12 @@ export function DayView({ day, tasks, onChange }: Props) {
           addTask={addTask}
           newInputRef={newInputRef}
         />
-        {/* Боковая зона «завтра» — перенос задачи/подзадачи на завтра */}
-        <SideDayZone day={nextDay} label="завтра ▶" />
+        {/* Боковая зона «завтра» — перенос задачи/подзадачи на завтра;
+            в узком окне (tiny) скрыта, чтобы не красть ширину у задач */}
+        {!tiny && <SideDayZone day={nextDay} label="завтра ▶" />}
         {/* Правая панель — мини-календарь (также droppable через дни);
-            скрывается настройками видимости. */}
-        {visibility.miniCalendar && (
+            скрывается настройками видимости и в узком окне (narrow). */}
+        {visibility.miniCalendar && !narrow && (
           <div
             style={{
               width: 280,
