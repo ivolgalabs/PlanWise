@@ -247,35 +247,49 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
         onChange={toggleDone}
         style={{ marginRight: compact ? 4 : 6, flexShrink: 0 }}
       />
-      <input
-        ref={inputRef}
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        onFocus={() => setEditing(true)}
-        onBlur={() => {
-          setEditing(false);
-          save();
-        }}
-        onKeyDown={onKeyDown}
+      {/* Инпут + время: в компактной сетке — колонкой (текст на всю ширину,
+          время мелкой строкой под ним, только если задано); в обычном виде —
+          в ряд, как раньше. */}
+      <div
         style={{
           flex: 1,
-          fontSize: "inherit",
-          border: "none",
-          background: "transparent",
-          outline: "none",
-          padding: "4px 0",
           minWidth: 0,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          color: task.isDone ? COLORS.muted : COLORS.text,
-          textDecoration: task.isDone ? "line-through" : "none",
+          display: "flex",
+          flexDirection: compact ? "column" : "row",
+          alignItems: compact ? "flex-start" : "center",
         }}
-        data-task-id={task.id}
-        title={task.title || undefined}
-      />
-      {/* Время — бейдж всегда виден, пикер по клику (в компактной сетке —
-          в компактном виде; скрывается настройкой «Время задач»). */}
-      {effectiveShowTime && <TimePicker value={task.timeMinutes ?? null} onChange={setTime} compact={compact} />}
+      >
+        <input
+          ref={inputRef}
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onFocus={() => setEditing(true)}
+          onBlur={() => {
+            setEditing(false);
+            save();
+          }}
+          onKeyDown={onKeyDown}
+          style={{
+            flex: 1,
+            width: "100%",
+            fontSize: "inherit",
+            border: "none",
+            background: "transparent",
+            outline: "none",
+            padding: "4px 0",
+            minWidth: 0,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            color: task.isDone ? COLORS.muted : COLORS.text,
+            textDecoration: task.isDone ? "line-through" : "none",
+          }}
+          data-task-id={task.id}
+          title={title || undefined}
+        />
+        {effectiveShowTime && (!compact || task.timeMinutes != null) && (
+          <TimePicker value={task.timeMinutes ?? null} onChange={setTime} compact={compact} />
+        )}
+      </div>
       {/* Заметка — кнопка рядом со временем, скрывается настройкой и в
           компактной сетке недели (не влезает). Подсвечена, если текст
           непустой. */}
