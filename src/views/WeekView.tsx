@@ -53,6 +53,19 @@ export function WeekView({ tasks, onChange }: Props) {
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
   }, []);
+  // Окно без достаточной ширины для календаря рядом с сеткой: календарь
+  // автоскрывается (кнопка в тулбаре остаётся). Порог 1200px — при нём сетка
+  // (7 колонок по мин. 140px ≈ 1052px + зоны сдвига) влезает без скролла;
+  // с календарём (300px) на 1200 колонка «сегодня» уходила бы под панель.
+  const [calNarrow, setCalNarrow] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(max-width: 1200px)").matches,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 1200px)");
+    const handler = (e: MediaQueryListEvent) => setCalNarrow(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
   // Вертикаль, если пользователь выбрал его ИЛИ окно узкое.
   const effectiveVertical = vertical || narrow;
 
@@ -125,7 +138,7 @@ export function WeekView({ tasks, onChange }: Props) {
         </div>
         {/* Календарь скрыт в узком окне — он крадёт дефицитную ширину.
             Также скрывается настройками видимости (showCal). */}
-        {showCal && !narrow && (
+        {showCal && !narrow && !calNarrow && (
           <RightCalendar
             width={calWidth}
             onResize={setCalWidth}

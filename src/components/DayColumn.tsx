@@ -147,6 +147,7 @@ export function DayColumn({
             onChange={onChange}
             onCreateNext={createNext}
             showTime={false}
+            compact
           />
         ))}
       </div>

@@ -16,6 +16,9 @@ interface Props {
   onCreateNext?: (afterTaskId: string) => void;
   /** Показывать ли пикер времени. По умолчанию true; в сетке недели — false. */
   showTime?: boolean;
+  /** Компактный режим для узких колонок сетки недели: меньше накладные
+   *  отступы ручки/полоски/чекбокса, чтобы влезало поле задачи (≥40px). */
+  compact?: boolean;
 }
 
 /**
@@ -24,7 +27,7 @@ interface Props {
  * Перетаскивается через @dnd-kit (useDraggable) — drag за всю строку, активация
  * после сдвига мыши на 8px (обычный клик = ввод текста).
  */
-export function TaskCard({ task, onChange, onCreateNext, showTime = true }: Props) {
+export function TaskCard({ task, onChange, onCreateNext, showTime = true, compact = false }: Props) {
   const [title, setTitle] = useState(task.title);
   const [editing, editingSetter] = useState(false);
   const [colorMenu, setColorMenu] = useState(false);
@@ -186,7 +189,7 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true }: Prop
         {...listeners}
         style={{
           flexShrink: 0,
-          width: 20,
+          width: compact ? 16 : 20,
           marginRight: "var(--sp-2)",
           textAlign: "center",
           color: COLORS.secondary,
@@ -204,7 +207,7 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true }: Prop
           width: "calc(var(--sp-2) - 1px)",
           alignSelf: "stretch",
           borderRadius: "var(--radius-xs)",
-          marginRight: 6,
+          marginRight: compact ? 4 : 6,
           background: task.colorSetId ? setHex : "transparent",
         }}
       />
@@ -212,7 +215,7 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true }: Prop
         type="checkbox"
         checked={task.isDone}
         onChange={toggleDone}
-        style={{ marginRight: 6, flexShrink: 0 }}
+        style={{ marginRight: compact ? 4 : 6, flexShrink: 0 }}
       />
       <input
         ref={inputRef}
