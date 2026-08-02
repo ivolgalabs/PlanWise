@@ -34,13 +34,13 @@ export const browserApi = {
     // а Rust всегда отдаёт "" — приводим к единому виду, чтобы TaskCard не падал.
     return sortTasks(
       load<Task>(K.tasks)
-        .filter((t) => t.date >= startDay && t.date <= endDay)
+        .filter((t) => !t.someday && t.date >= startDay && t.date <= endDay)
         .map((t) => ({ ...t, notes: t.notes ?? "" })),
     );
   },
   async upsertTask(task: Task): Promise<Task> {
     const id = task.id || crypto.randomUUID();
-    const rec: Task = { ...task, id, notes: task.notes ?? "" };
+    const rec: Task = { ...task, id, notes: task.notes ?? "", someday: task.someday ?? false };
     const all = load<Task>(K.tasks).filter((t) => t.id !== id);
     all.push(rec);
     save(K.tasks, all);
@@ -51,7 +51,13 @@ export const browserApi = {
     save(K.subs, load<Subtask>(K.subs).filter((s) => s.taskId !== id));
   },
   async moveTask(id: string, newDay: number): Promise<void> {
-    save(K.tasks, load<Task>(K.tasks).map((t) => (t.id === id ? { ...t, date: newDay } : t)));
+    save(K.tasks, load<Task>(K.tasks).map((t) => (t.id === id ? { ...t, date: newDay, someday: false, notes: t.notes ?? "" } : t)));
+  },
+  async getSomedayTasks(): Promise<Task[]> {
+    return sortTasks(load<Task>(K.tasks).filter((t) => t.someday));
+  },
+  async setSomeday(id: string): Promise<void> {
+    save(K.tasks, load<Task>(K.tasks).map((t) => (t.id === id ? { ...t, someday: true, date: 0, notes: t.notes ?? "" } : t)));
   },
   async getColorSets(): Promise<ColorSet[]> {
     // Первый запуск (или после очистки storage): создаём дефолтные категории.
@@ -74,7 +80,7 @@ export const browserApi = {
   async rolloverOverdue(todayDay: number): Promise<number> {
     let n = 0;
     save(K.tasks, load<Task>(K.tasks).map((t) => {
-      if (t.date < todayDay && !t.isDone) { n++; return { ...t, date: todayDay }; }
+      if (t.date < todayDay && !t.isDone && !t.someday) { n++; return { ...t, date: todayDay }; }
       return t;
     }));
     return n;

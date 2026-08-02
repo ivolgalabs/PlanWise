@@ -13,6 +13,7 @@ export interface Task {
   deviceId: string;
   timeMinutes?: number | null; // 0-1439, null = «в течение дня»
   notes: string; // заметка, '' = нет
+  someday: boolean; // «Когда-нибудь»: задача без привязки ко дню
 }
 
 export interface ColorSet {
@@ -62,6 +63,7 @@ export const api = {
       sortOrder: task.sortOrder ?? Date.now(), createdAt: task.createdAt ?? 0,
       updatedAt: 0, deviceId: task.deviceId ?? "", timeMinutes: task.timeMinutes ?? null,
       notes: task.notes ?? "",
+      someday: task.someday ?? false,
     };
     return isTauri() ? invoke<Task>("upsert_task", { task: t }) : browserApi.upsertTask(t);
   },
@@ -70,6 +72,10 @@ export const api = {
     const nd = toEpochDay(newDate);
     return isTauri() ? invoke<void>("move_task", { id, newDate: nd }) : browserApi.moveTask(id, nd);
   },
+  /** Задачи «Когда-нибудь» (без даты). */
+  getSomedayTasks: () => (isTauri() ? invoke<Task[]>("get_someday_tasks") : browserApi.getSomedayTasks()),
+  /** Переместить задачу в «Когда-нибудь» (дата сбрасывается). */
+  setSomeday: (id: string) => (isTauri() ? invoke<void>("set_someday", { id }) : browserApi.setSomeday(id)),
   getColorSets: () => (isTauri() ? invoke<ColorSet[]>("get_color_sets") : browserApi.getColorSets()),
   /** Создать/обновить категорию. Пустой id — новая категория (id сгенерит Rust). */
   upsertColorSet: (set: Partial<ColorSet> & { name: string; color: number }) => {

@@ -119,7 +119,12 @@ function App() {
   // правый мини-календарь можно листать на любой месяц, поэтому ограничивать
   // выборку видимым окном нельзя — иначе на будущих неделях не будет задач.
   const reload = useCallback(async () => {
-    setTasks(await api.getTasks(new Date(0), new Date(9999, 0, 1)));
+    // Обычные задачи (широкий диапазон для календаря) + «Когда-нибудь».
+    const [regular, someday] = await Promise.all([
+      api.getTasks(new Date(0), new Date(9999, 0, 1)),
+      api.getSomedayTasks(),
+    ]);
+    setTasks([...regular, ...someday]);
   }, [setTasks]);
 
   useEffect(() => {
