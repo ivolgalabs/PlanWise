@@ -36,6 +36,12 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
   const [newCatName, setNewCatName] = useState("");
   const [newCatColor, setNewCatColor] = useState("#7eb8c4");
   const inputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // Авто-высота textarea компактной сетки: растёт по контенту, максимум ~4 строки.
+  const growCompactTitle = (el: HTMLTextAreaElement) => {
+    el.style.height = "auto";
+    el.style.height = Math.min(el.scrollHeight, 96) + "px";
+  };
   const newCatRef = useRef<HTMLInputElement>(null);
   // Защита от двойного save: Enter (onKeyDown) и следующий за ним blur
   // (onBlur) вызывают save дважды подряд — пропускаем повторный вызов.
@@ -70,6 +76,11 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
   useEffect(() => {
     if (!notesOpen) setNotesValue(task.notes);
   }, [task.notes, notesOpen]);
+
+  // При изменении текста/открытии — подгоняем высоту textarea компактной сетки.
+  useEffect(() => {
+    if (compact && textareaRef.current) growCompactTitle(textareaRef.current);
+  }, [title, compact]);
 
   // При открытии панели растягиваем textarea под содержимое заметки.
   useEffect(() => {
@@ -143,8 +154,8 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
 
   const setEditing = (v: boolean) => editingSetter(v);
 
-  const onKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
+  const onKeyDown = async (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       const saved = await save();
       setEditing(false);
@@ -259,33 +270,68 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
           alignItems: compact ? "flex-start" : "center",
         }}
       >
-        <input
-          ref={inputRef}
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          onFocus={() => setEditing(true)}
-          onBlur={() => {
-            setEditing(false);
-            save();
-          }}
-          onKeyDown={onKeyDown}
-          style={{
-            flex: 1,
-            width: "100%",
-            fontSize: "inherit",
-            border: "none",
-            background: "transparent",
-            outline: "none",
-            padding: "4px 0",
-            minWidth: 0,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            color: task.isDone ? COLORS.muted : COLORS.text,
-            textDecoration: task.isDone ? "line-through" : "none",
-          }}
-          data-task-id={task.id}
-          title={title || undefined}
-        />
+        {compact ? (
+          <textarea
+            ref={textareaRef}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onFocus={() => setEditing(true)}
+            onBlur={() => {
+              setEditing(false);
+              save();
+            }}
+            onKeyDown={onKeyDown}
+            onInput={(e) => growCompactTitle(e.currentTarget)}
+            rows={1}
+            data-task-id={task.id}
+            title={title || undefined}
+            style={{
+              // flex-basis 0% заставил бы flex-алгоритм игнорировать высоту,
+              // заданную growCompactTitle, — строка не росла бы. Нужен auto.
+              flex: "1 1 auto",
+              width: "100%",
+              fontSize: "inherit",
+              border: "none",
+              background: "transparent",
+              outline: "none",
+              padding: "4px 0",
+              minWidth: 0,
+              resize: "none",
+              overflow: "hidden",
+              lineHeight: 1.4,
+              color: task.isDone ? COLORS.muted : COLORS.text,
+              textDecoration: task.isDone ? "line-through" : "none",
+            }}
+          />
+        ) : (
+          <input
+            ref={inputRef}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onFocus={() => setEditing(true)}
+            onBlur={() => {
+              setEditing(false);
+              save();
+            }}
+            onKeyDown={onKeyDown}
+            style={{
+              flex: 1,
+              width: "100%",
+              fontSize: "inherit",
+              border: "none",
+              background: "transparent",
+              outline: "none",
+              padding: "4px 0",
+              minWidth: 0,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              color: task.isDone ? COLORS.muted : COLORS.text,
+              textDecoration: task.isDone ? "line-through" : "none",
+            }}
+            data-task-id={task.id}
+            title={title || undefined}
+          />
+        )}
         {effectiveShowTime && (!compact || task.timeMinutes != null) && (
           <TimePicker value={task.timeMinutes ?? null} onChange={setTime} compact={compact} />
         )}

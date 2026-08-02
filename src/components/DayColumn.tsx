@@ -79,11 +79,14 @@ export function DayColumn({
     onChange();
     // Фокус новой строки после ре-рендера — ищем ТОЛЬКО внутри своей колонки
     // (data-day-key), чтобы не сфокусировать пустую строку соседнего дня.
+    // В компактной сетке поле задачи — textarea, поэтому ищем оба варианта.
     requestAnimationFrame(() => {
       const container = document.querySelector(`[data-day-key="${dayKey}"]`);
       if (!container) return;
       const empty = Array.from(
-        container.querySelectorAll<HTMLInputElement>("input[data-task-id]"),
+        container.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
+          "input[data-task-id], textarea[data-task-id]",
+        ),
       ).find((i) => i.value === "");
       empty?.focus();
     });
