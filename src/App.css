@@ -170,7 +170,7 @@ input[type="checkbox"] {
 .chip-btn {
   border: none;
   background: var(--bg-tertiary);
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-md);
   width: calc(var(--fs-md) + 4px);
   height: calc(var(--fs-md) + 4px);
   font-size: var(--fs-2xs);
@@ -192,7 +192,7 @@ input[type="checkbox"] {
   gap: var(--sp-1);
   font-size: var(--fs-2xs);
   padding: 2px 8px;
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--text-primary);
   cursor: pointer;
@@ -289,7 +289,7 @@ input[type="checkbox"] {
   height: 22px;
   padding: 0;
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-md);
   background: transparent;
   cursor: pointer;
 }

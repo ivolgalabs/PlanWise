@@ -88,7 +88,7 @@ function badgeStyle(hasTime: boolean): React.CSSProperties {
     color: hasTime ? COLORS.accent : COLORS.muted,
     background: hasTime ? accentTint(0.1) : "transparent",
     padding: "1px 6px",
-    borderRadius: "var(--radius-full)",
+    borderRadius: "var(--radius-md)",
   };
 }
 const menuStyle: React.CSSProperties = {
