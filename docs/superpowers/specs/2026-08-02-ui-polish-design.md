@@ -174,7 +174,47 @@
 - TopBar: кнопка-заголовок даты остаётся кликабельной даже при скрытой кнопке 📅
   (это дубль функции DatePicker — оставляем как основной вход).
 
-## 9. Проверка (после каждого шага)
+## 9. Браузерный фоллбек API (тестовая среда)
+
+Проблема: приложение работает только под Tauri (фронт зовёт Rust через
+`invoke`). В браузере (vite dev) без рантайма `window.__TAURI_INTERNALS__`
+все команды падают — «добавление задач не работает» (ожидаемо, но мешает
+тестировать UI без сборки Rust).
+
+Фикс: `api.ts` — детект доступности Tauri:
+- если `window.__TAURI_INTERNALS__` есть → реальный invoke (как сейчас);
+- иначе → модуль `api-browser-fallback.ts`: полноценная реализация тех же
+  команд на localStorage (tasks/colorSets/subtasks, те же сигнатуры, id через
+  crypto.randomUUID, сортировка как в Rust: время ASC → sortOrder ASC).
+- Уровень: dev-удобство; в проде (Tauri) код фоллбека не исполняется.
+
+Проверка: добавить/удалить/перенести задачу, подзадачи, категории, поиск —
+всё работает в обычном браузере на localhost:1430.
+
+## 10. Экспорт/импорт данных (бэкап)
+
+### Rust (`src-tauri`)
+- Новая зависимость: `tauri-plugin-dialog = "2"` (+ регистрация в `lib.rs`).
+- Команда `export_to(path: String) -> Result<(), String>`: читает ВСЕ
+  color_sets, tasks, subtasks, сериализует в JSON:
+  `{ "version": 1, "exportedAt": <ms>, "colorSets": [...], "tasks": [...], "subtasks": [...] }`
+  и пишет файл по пути (перезаписывает).
+- Команда `import_from(path: String) -> Result<usize, String>`: читает JSON,
+  валидирует (`version`, массивы; невалидные записи пропускаются), в
+  транзакции ЗАМЕНЯЕТ все таблицы импортированными данными, возвращает число
+  импортированных задач.
+
+### Фронт (`SettingsPanel`)
+- Новая секция «Данные» (в конце списка):
+  - «Экспорт…» — `dialog.save` (defaultName `daily-planner-backup-YYYY-MM-DD.json`)
+    → путь в `export_to`.
+  - «Импорт…» — `dialog.open` (json) → путь в `import_from` → перезагрузка
+    задач/категорий; перед импортом confirm-диалог: «Данные будут заменены
+    данными из файла. Продолжить?».
+  - Ошибки показываются текстом в секции (не alert).
+- npm-зависимость: `@tauri-apps/plugin-dialog`.
+
+## 11. Проверка (после каждого шага)
 
 - В браузере (vite + мок-API через `window.__TAURI_INTERNALS__`):
   аудит перекрытий (скрипт `__audit`), все виды × ширина окна (500/700/900/1200/1400)
@@ -185,15 +225,18 @@
 
 ## Файлы
 
-- Новые: `src/components/Icon.tsx`
+- Новые: `src/components/Icon.tsx`, `src/api-browser-fallback.ts`
 - Изменяемые: `store.ts`, `App.tsx`, `App.css`, `TopBar.tsx`, `TaskCard.tsx`,
   `SubtaskList.tsx`, `TimePicker.tsx`, `SearchBar.tsx`, `DatePickerModal.tsx`,
   `ViewSwitcher.tsx`, `DayView.tsx`, `WeekView.tsx`, `WeekViewVertical.tsx`,
   `DayColumn.tsx`, `MonthView.tsx`, `MiniCalendar.tsx`, `SearchResults.tsx`,
-  `SettingsPanel.tsx`, `SettingsPanel.css`
-- Rust не меняется (кроме отсутствия необходимости).
+  `SettingsPanel.tsx`, `SettingsPanel.css`, `api.ts`, `src-tauri/Cargo.toml`,
+  `src-tauri/src/lib.rs`, `src-tauri/src/commands.rs`, `package.json`
+- Rust-команды: `export_to`, `import_from` (новые), регистрация plugin-dialog.
 
 ## Вне объёма
 
 - Перенос всех inline-styles в CSS-классы (подход C отклонён).
-- @dnd-kit замена, заметки/вложения/повторения/синхронизация (фазы 2+).
+- Заметки/вложения/повторения/напоминания (Фаза 2), синхронизация (Фаза 3),
+  коллаборация (Фаза 4), мобильные сборки/виджеты/горячие клавиши (Фаза 5),
+  кастомная иконка приложения.
