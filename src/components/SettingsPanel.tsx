@@ -387,6 +387,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged }: Props)
               ["miniCalendar", "Мини-календарь справа"],
               ["taskTime", "Время задач"],
               ["subtasks", "Подзадачи"],
+              ["notes", "Заметки"],
               ["taskActions", "Кнопки «цвет» и «удалить» в задачах"],
               ["rolloverBanner", "Баннер «Перенесено задач»"],
             ] as [keyof VisibilityState, string][]).map(([k, label]) => (

@@ -8,14 +8,14 @@ export type ThemeMode = "light" | "dark" | "system";
 /** Флаги видимости элементов интерфейса (настройки → «Интерфейс»). */
 export interface VisibilityState {
   navArrows: boolean; search: boolean; datePicker: boolean;
-  miniCalendar: boolean; taskTime: boolean; subtasks: boolean;
+  miniCalendar: boolean; taskTime: boolean; subtasks: boolean; notes: boolean;
   taskActions: boolean; rolloverBanner: boolean;
 }
 
 /** Видимость по умолчанию — все элементы показаны. */
 const DEFAULT_VISIBILITY: VisibilityState = {
   navArrows: true, search: true, datePicker: true, miniCalendar: true,
-  taskTime: true, subtasks: true, taskActions: true, rolloverBanner: true,
+  taskTime: true, subtasks: true, notes: true, taskActions: true, rolloverBanner: true,
 };
 
 interface PlannerState {
