@@ -8,6 +8,15 @@ import type { Task, ColorSet, Subtask } from "./api";
 
 const K = { tasks: "fb:tasks", sets: "fb:sets", subs: "fb:subtasks" };
 
+// Дефолтные категории — как сид V1 в SQLite (ARGB-int = 0xFFRRGGBB).
+// Пишутся при первом обращении, если ключа ещё нет в localStorage.
+const DEFAULT_SETS: ColorSet[] = [
+  { id: "cs-none", name: "Без категории", color: 4293979362, sortOrder: 0 },
+  { id: "cs-work", name: "Работа", color: 4291405948, sortOrder: 1 },
+  { id: "cs-personal", name: "Личное", color: 4286494916, sortOrder: 2 },
+  { id: "cs-sport", name: "Спорт", color: 4293437564, sortOrder: 3 },
+];
+
 const load = <T,>(k: string): T[] => {
   try { return JSON.parse(localStorage.getItem(k) ?? "[]"); } catch { return []; }
 };
@@ -45,6 +54,10 @@ export const browserApi = {
     save(K.tasks, load<Task>(K.tasks).map((t) => (t.id === id ? { ...t, date: newDay } : t)));
   },
   async getColorSets(): Promise<ColorSet[]> {
+    // Первый запуск (или после очистки storage): создаём дефолтные категории.
+    if (localStorage.getItem(K.sets) === null) {
+      save(K.sets, DEFAULT_SETS);
+    }
     return load<ColorSet>(K.sets).sort((a, b) => a.sortOrder - b.sortOrder);
   },
   async upsertColorSet(set: ColorSet): Promise<ColorSet> {
