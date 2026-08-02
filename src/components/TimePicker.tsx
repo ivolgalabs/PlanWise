@@ -8,10 +8,12 @@ interface Props {
   value: number | null;
   /** onChange(minutes | null). null = «в течение дня». */
   onChange: (m: number | null) => void;
+  /** Компактный режим (сетка недели): без времени — только иконка часов. */
+  compact?: boolean;
 }
 
 /** Компактный time-picker: «в течение дня» / ввод ЧЧ:ММ / быстрые пресеты. */
-export function TimePicker({ value, onChange }: Props) {
+export function TimePicker({ value, onChange, compact = false }: Props) {
   const [custom, setCustom] = useState("");
   const [editing, setEditing] = useState(false);
 
@@ -37,7 +39,7 @@ export function TimePicker({ value, onChange }: Props) {
         }}
         title="Изменить время"
       >
-        <Icon name="clock" size={13} /> {value !== null ? formatMinutes(value) : "в течение дня"}
+        <Icon name="clock" size={13} /> {value !== null ? formatMinutes(value) : compact ? "" : "в течение дня"}
       </button>
 
       {editing && (

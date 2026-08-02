@@ -274,7 +274,7 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
       />
       {/* Время — бейдж всегда виден, пикер по клику (скрыт в сетке недели
           и настройкой «Время задач»). */}
-      {effectiveShowTime && <TimePicker value={task.timeMinutes ?? null} onChange={setTime} />}
+      {effectiveShowTime && <TimePicker value={task.timeMinutes ?? null} onChange={setTime} compact={compact} />}
       {/* Заметка — кнопка рядом со временем, скрывается настройкой и в
           компактной сетке недели. Подсвечена, если текст непустой. */}
       {showTime && visibility.notes && (
@@ -293,7 +293,7 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
       )}
       {/* Кнопки цвета/удаления — приглушены, ярче при hover; скрываются
           настройкой «Кнопки „цвет“ и „удалить“ в задачах». */}
-      {visibility.taskActions && (
+      {visibility.taskActions && !compact && (
         <div className="task-actions" style={{ display: "flex", gap: "var(--sp-1)" }}>
           <button
             onClick={() => setColorMenu((v) => !v)}
@@ -311,7 +311,7 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
       )}
       {/* Меню цвета живёт внутри блока кнопок действий — если кнопки
           скрыты настройкой, меню тоже не показываем. */}
-      {visibility.taskActions && colorMenu && (
+      {visibility.taskActions && !compact && colorMenu && (
         <div className="color-menu">
           <button
             className="color-option"

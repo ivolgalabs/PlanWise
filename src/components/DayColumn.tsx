@@ -161,7 +161,6 @@ export function DayColumn({
             task={t}
             onChange={onChange}
             onCreateNext={createNext}
-            showTime={false}
             compact
           />
         ))}
