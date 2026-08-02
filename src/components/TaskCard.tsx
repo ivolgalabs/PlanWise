@@ -33,6 +33,9 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true }: Prop
   const [newCatColor, setNewCatColor] = useState("#7eb8c4");
   const inputRef = useRef<HTMLInputElement>(null);
   const newCatRef = useRef<HTMLInputElement>(null);
+  // Защита от двойного save: Enter (onKeyDown) и следующий за ним blur
+  // (onBlur) вызывают save дважды подряд — пропускаем повторный вызов.
+  const savedRef = useRef<number>(0);
   const { colorSets, setColorSets, visibility } = useStore();
 
   // Перетаскивание задачи через dnd-kit. data.task читается в onDragEnd.
@@ -58,6 +61,10 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true }: Prop
 
   const save = async (): Promise<Task> => {
     const t = title.trim();
+    // Enter+blur дублируют вызов в течение <300мс — пропускаем повтор.
+    const now = Date.now();
+    if (now - savedRef.current < 300) return task;
+    savedRef.current = now;
     // Авто-удаление пустой задачи, у которой нет подзадач — чтобы пустые
     // не копились (создаются через Enter, но потом забыты).
     if (!t) {
@@ -254,7 +261,9 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true }: Prop
           </button>
         </div>
       )}
-      {colorMenu && (
+      {/* Меню цвета живёт внутри блока кнопок действий — если кнопки
+          скрыты настройкой, меню тоже не показываем. */}
+      {visibility.taskActions && colorMenu && (
         <div className="color-menu">
           <button
             className="color-option"

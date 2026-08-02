@@ -53,10 +53,13 @@ export function WeekViewVertical({ tasks, onChange }: Props) {
     await api.upsertTask({ title: "", date: epochDay(day), sortOrder: sort });
     onChange();
     requestAnimationFrame(() => {
-      const inputs = document.querySelectorAll<HTMLInputElement>(
-        "input[data-task-id]",
-      );
-      const empty = Array.from(inputs).find((i) => i.value === "");
+      // Ищем пустую строку ТОЛЬКО в контейнере своего дня — чтобы фокус
+      // не уходил в соседний день с такой же пустой строкой.
+      const container = document.querySelector(`[data-day-key="${dayKey(day)}"]`);
+      if (!container) return;
+      const empty = Array.from(
+        container.querySelectorAll<HTMLInputElement>("input[data-task-id]"),
+      ).find((i) => i.value === "");
       empty?.focus();
     });
   };
@@ -76,6 +79,7 @@ export function WeekViewVertical({ tasks, onChange }: Props) {
           <DayRow
             key={d.toISOString()}
             day={d}
+            dayKey={dayKey(d)}
             dayTasks={tasksForDay(d)}
             onChange={onChange}
             createNext={createNext}
@@ -95,6 +99,7 @@ export function WeekViewVertical({ tasks, onChange }: Props) {
 /** Один день-строка: droppable-зона + задачи + inline-поле ввода. */
 function DayRow({
   day,
+  dayKey,
   dayTasks,
   onChange,
   createNext,
@@ -103,6 +108,7 @@ function DayRow({
   addTask,
 }: {
   day: Date;
+  dayKey: string;
   dayTasks: Task[];
   onChange: () => void;
   createNext: (afterId: string, day: Date) => void;
@@ -144,6 +150,7 @@ function DayRow({
   return (
     <div
       ref={setNodeRef}
+      data-day-key={dayKey}
       style={{
         marginBottom: "var(--sp-4)",
         opacity: dim,

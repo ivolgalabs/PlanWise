@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "./api";
 import { useStore } from "./store";
 import { COLORS, applyTheme, watchSystemTheme, accentTint } from "./theme";
@@ -54,6 +54,10 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [rolloverCount, setRolloverCount] = useState(0);
+  // Флаг «rollover уже выполнен за маунт»: в dev React.StrictMode монтирует
+  // компонент дважды и эффект вызывается два раза — второй вызов переносит
+  // 0 задач и затирает счётчик из первого (баннер не появляется).
+  const rolloverRan = useRef(false);
   // Поиск: полоса поиска открыта, текст, фильтр по цвету-сету,
   // период, статус и сортировка результатов.
   const [searchOpen, setSearchOpen] = useState(false);
@@ -84,8 +88,10 @@ function App() {
   }, [fontScale]);
 
   // Авто-перенос невыполненных задач (если включён в настройках).
+  // Выполняется один раз за маунт — см. rolloverRan выше.
   useEffect(() => {
-    if (!rolloverEnabled) return;
+    if (!rolloverEnabled || rolloverRan.current) return;
+    rolloverRan.current = true;
     (async () => {
       try {
         setRolloverCount(await api.rolloverOverdue(new Date()));
@@ -95,9 +101,17 @@ function App() {
     })();
   }, [rolloverEnabled]);
 
-  // Если кнопка поиска скрыта настройками — закрываем открытый поиск.
+  // Если кнопка поиска скрыта настройками — закрываем открытый поиск
+  // и сбрасываем всё его состояние (запрос, фильтры, сортировку).
   useEffect(() => {
-    if (!visibility.search) setSearchOpen(false);
+    if (!visibility.search) {
+      setSearchOpen(false);
+      setSearchQuery("");
+      setSearchColor(null);
+      setSearchPeriod("all");
+      setSearchStatus("all");
+      setSearchSort("dateAsc");
+    }
   }, [visibility.search]);
 
   // Загрузка задач. Грузим ВСЕ задачи одним запросом (широкий диапазон дат):
