@@ -25,7 +25,7 @@ export const browserApi = {
   },
   async upsertTask(task: Task): Promise<Task> {
     const id = task.id || crypto.randomUUID();
-    const rec: Task = { ...task, id };
+    const rec: Task = { ...task, id, notes: task.notes ?? "" };
     const all = load<Task>(K.tasks).filter((t) => t.id !== id);
     all.push(rec);
     save(K.tasks, all);

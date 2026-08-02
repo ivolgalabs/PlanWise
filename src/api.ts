@@ -12,6 +12,7 @@ export interface Task {
   updatedAt: number;
   deviceId: string;
   timeMinutes?: number | null; // 0-1439, null = «в течение дня»
+  notes: string; // заметка, '' = нет
 }
 
 export interface ColorSet {
@@ -60,6 +61,7 @@ export const api = {
       isDone: task.isDone ?? false, colorSetId: task.colorSetId ?? null,
       sortOrder: task.sortOrder ?? Date.now(), createdAt: task.createdAt ?? 0,
       updatedAt: 0, deviceId: task.deviceId ?? "", timeMinutes: task.timeMinutes ?? null,
+      notes: task.notes ?? "",
     };
     return isTauri() ? invoke<Task>("upsert_task", { task: t }) : browserApi.upsertTask(t);
   },

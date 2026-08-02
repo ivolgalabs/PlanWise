@@ -7,7 +7,7 @@ export type IconName =
   | "search" | "calendar" | "gear" | "chevronL" | "chevronR" | "close"
   | "plus" | "drag" | "dots" | "clock" | "palette" | "grid"
   | "list" | "calendarHide" | "sun" | "moon" | "monitor" | "trash"
-  | "save";
+  | "save" | "note";
 
 const PATHS: Record<IconName, ReactNode> = {
   search: <><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></>,
@@ -29,6 +29,7 @@ const PATHS: Record<IconName, ReactNode> = {
   monitor: <><rect x="2" y="4" width="20" height="13" rx="2" /><path d="M8 21h8M12 17v4" /></>,
   trash: <><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" /><path d="M10 11v6M14 11v6" /></>,
   save: <><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><path d="M17 21v-8H7v8M7 3v5h8" /></>,
+  note: <><path d="M7 3h8l4 4v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" /><path d="M15 3v4h4" /><path d="M8 13h8M8 17h5" /></>,
 };
 
 export function Icon({ name, size = 16, title }: IconProps) {
