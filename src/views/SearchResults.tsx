@@ -169,19 +169,26 @@ export function SearchResults({ tasks, query, color, period, status, sort, onJum
             >
               {t.title || "(без названия)"}
             </span>
-            <button
-              className="icon-btn"
-              onClick={() => onJumpToDay(d)}
-              title="Перейти к этому дню"
-              style={{ fontSize: "var(--fs-2xs)", flexShrink: 0 }}
-            >
-              {d.toLocaleDateString("ru", {
-                day: "numeric",
-                month: "short",
-                weekday: "short",
-              })}
-              {isToday(d) ? " · сегодня" : ""} →
-            </button>
+            {t.someday ? (
+              // «Когда-нибудь» — нет даты и перехода к дню.
+              <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted }}>
+                Когда-нибудь
+              </span>
+            ) : (
+              <button
+                className="icon-btn"
+                onClick={() => onJumpToDay(d)}
+                title="Перейти к этому дню"
+                style={{ fontSize: "var(--fs-2xs)", flexShrink: 0 }}
+              >
+                {d.toLocaleDateString("ru", {
+                  day: "numeric",
+                  month: "short",
+                  weekday: "short",
+                })}
+                {isToday(d) ? " · сегодня" : ""} →
+              </button>
+            )}
           </div>
         );
       })}

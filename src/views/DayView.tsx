@@ -26,14 +26,27 @@ export function DayView({ day, tasks, onChange }: Props) {
   const newInputRef = useRef<HTMLInputElement>(null);
   const { setSelectedDate, visibility } = useStore();
 
-  // В узком окне прячем правую панель календаря — она крадёт ширину у задач.
-  // matchMedia реагирует на ресайз окна (как narrow в WeekView).
+  // В узком окне прячем колонку «Когда-нибудь» — она крадёт ширину у задач.
+  // Порог 820px как narrow в WeekView; matchMedia реагирует на ресайз окна.
   const [narrow, setNarrow] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia("(max-width: 820px)").matches,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 820px)");
+    const handler = (e: MediaQueryListEvent) => setNarrow(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+  // В узком окне прячем правую панель календаря — она крадёт ширину у задач
+  // (порог 700px, отдельный от someday-колонки).
+  const [calNarrow, setCalNarrow] = useState(
     () => window.matchMedia("(max-width: 700px)").matches,
   );
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 700px)");
-    const handler = (e: MediaQueryListEvent) => setNarrow(e.matches);
+    const handler = (e: MediaQueryListEvent) => setCalNarrow(e.matches);
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
   }, []);
@@ -113,13 +126,14 @@ export function DayView({ day, tasks, onChange }: Props) {
         {/* Боковая зона «завтра» — перенос задачи/подзадачи на завтра;
             в узком окне (tiny) скрыта, чтобы не красть ширину у задач */}
         {!tiny && <SideDayZone day={nextDay} label="завтра ▶" />}
-        {/* Колонка «Когда-нибудь» — задачи без даты; скрывается настройкой. */}
-        {visibility.someday && (
+        {/* Колонка «Когда-нибудь» — задачи без даты; скрывается настройкой
+            и в узком окне (narrow). */}
+        {visibility.someday && !narrow && (
           <SomedayColumn tasks={tasks.filter((t) => t.someday)} onChange={onChange} />
         )}
         {/* Правая панель — мини-календарь (также droppable через дни);
-            скрывается настройками видимости и в узком окне (narrow). */}
-        {visibility.miniCalendar && !narrow && (
+            скрывается настройками видимости и в узком окне (calNarrow). */}
+        {visibility.miniCalendar && !calNarrow && (
           <div
             style={{
               width: 280,

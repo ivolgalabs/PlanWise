@@ -155,7 +155,11 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
   const setEditing = (v: boolean) => editingSetter(v);
 
   const onKeyDown = async (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (
+      e.key === "Enter" &&
+      !e.nativeEvent.isComposing && // игнорируем Enter во время IME-композиции
+      (e.currentTarget.tagName !== "TEXTAREA" || !e.shiftKey)
+    ) {
       e.preventDefault();
       const saved = await save();
       setEditing(false);
