@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { browserApi } from "./api-browser-fallback";
 
 export interface Task {
   id: string;
@@ -41,46 +42,49 @@ export const fromEpochDay = (n: number): Date => {
   return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
 };
 
+/** Доступен ли Tauri-рантайм (иначе используем браузерный фоллбек). */
+export const isTauri = (): boolean =>
+  typeof window !== "undefined" &&
+  typeof (window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ !== "undefined";
+
 export const api = {
-  getTasks: (start: Date, end: Date) =>
-    invoke<Task[]>("get_tasks", {
-      startDay: toEpochDay(start),
-      endDay: toEpochDay(end),
-    }),
-  upsertTask: (task: Partial<Task> & { title: string; date: number }) =>
-    invoke<Task>("upsert_task", {
-      task: {
-        id: task.id ?? "",
-        title: task.title,
-        date: task.date,
-        isDone: task.isDone ?? false,
-        colorSetId: task.colorSetId ?? null,
-        sortOrder: task.sortOrder ?? Date.now(),
-        createdAt: task.createdAt ?? 0,
-        updatedAt: 0,
-        deviceId: task.deviceId ?? "",
-        timeMinutes: task.timeMinutes ?? null,
-      },
-    }),
-  deleteTask: (id: string) => invoke<void>("delete_task", { id }),
-  moveTask: (id: string, newDate: Date) =>
-    invoke<void>("move_task", { id, newDate: toEpochDay(newDate) }),
-  getColorSets: () => invoke<ColorSet[]>("get_color_sets"),
+  getTasks: (start: Date, end: Date) => {
+    const startDay = toEpochDay(start), endDay = toEpochDay(end);
+    return isTauri()
+      ? invoke<Task[]>("get_tasks", { startDay, endDay })
+      : browserApi.getTasks(startDay, endDay);
+  },
+  upsertTask: (task: Partial<Task> & { title: string; date: number }) => {
+    const t = {
+      id: task.id ?? "", title: task.title, date: task.date,
+      isDone: task.isDone ?? false, colorSetId: task.colorSetId ?? null,
+      sortOrder: task.sortOrder ?? Date.now(), createdAt: task.createdAt ?? 0,
+      updatedAt: 0, deviceId: task.deviceId ?? "", timeMinutes: task.timeMinutes ?? null,
+    };
+    return isTauri() ? invoke<Task>("upsert_task", { task: t }) : browserApi.upsertTask(t);
+  },
+  deleteTask: (id: string) => (isTauri() ? invoke<void>("delete_task", { id }) : browserApi.deleteTask(id)),
+  moveTask: (id: string, newDate: Date) => {
+    const nd = toEpochDay(newDate);
+    return isTauri() ? invoke<void>("move_task", { id, newDate: nd }) : browserApi.moveTask(id, nd);
+  },
+  getColorSets: () => (isTauri() ? invoke<ColorSet[]>("get_color_sets") : browserApi.getColorSets()),
+  /** Создать/обновить категорию. Пустой id — новая категория (id сгенерит Rust). */
+  upsertColorSet: (set: Partial<ColorSet> & { name: string; color: number }) => {
+    const s = { id: set.id ?? "", name: set.name, color: set.color, sortOrder: set.sortOrder ?? Date.now() };
+    return isTauri() ? invoke<ColorSet>("upsert_color_set", { set: s }) : browserApi.upsertColorSet(s);
+  },
+  /** Удалить категорию; задачи с ней становятся без категории. */
+  deleteColorSet: (id: string) => (isTauri() ? invoke<void>("delete_color_set", { id }) : browserApi.deleteColorSet(id)),
   /** Перенести невыполненные прошлые задачи на сегодня. Возвращает кол-во. */
-  rolloverOverdue: (today: Date) =>
-    invoke<number>("rollover_overdue", { todayEpochDay: toEpochDay(today) }),
-  getSubtasks: (taskId: string) =>
-    invoke<Subtask[]>("get_subtasks", { taskId }),
-  upsertSubtask: (sub: Partial<Subtask> & { taskId: string; title: string }) =>
-    invoke<Subtask>("upsert_subtask", {
-      sub: {
-        id: sub.id ?? "",
-        taskId: sub.taskId,
-        title: sub.title,
-        isDone: sub.isDone ?? false,
-        sortOrder: sub.sortOrder ?? Date.now(),
-        createdAt: sub.createdAt ?? 0,
-      },
-    }),
-  deleteSubtask: (id: string) => invoke<void>("delete_subtask", { id }),
+  rolloverOverdue: (today: Date) => {
+    const td = toEpochDay(today);
+    return isTauri() ? invoke<number>("rollover_overdue", { todayEpochDay: td }) : browserApi.rolloverOverdue(td);
+  },
+  getSubtasks: (taskId: string) => (isTauri() ? invoke<Subtask[]>("get_subtasks", { taskId }) : browserApi.getSubtasks(taskId)),
+  upsertSubtask: (sub: Partial<Subtask> & { taskId: string; title: string }) => {
+    const s = { id: sub.id ?? "", taskId: sub.taskId, title: sub.title, isDone: sub.isDone ?? false, sortOrder: sub.sortOrder ?? Date.now(), createdAt: sub.createdAt ?? 0 };
+    return isTauri() ? invoke<Subtask>("upsert_subtask", { sub: s }) : browserApi.upsertSubtask(s);
+  },
+  deleteSubtask: (id: string) => (isTauri() ? invoke<void>("delete_subtask", { id }) : browserApi.deleteSubtask(id)),
 };
