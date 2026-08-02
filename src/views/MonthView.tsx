@@ -7,6 +7,7 @@ import { COLORS, accentTint, setHex, argbToHex } from "../theme";
 import { useStore } from "../store";
 import { TaskDndContext, dayId } from "../drag";
 import { TimePicker } from "../components/TimePicker";
+import { Icon } from "../components/Icon";
 
 interface Props {
   tasks: Task[];
@@ -182,9 +183,12 @@ export function MonthView({ tasks, onSelectDay, onChange }: Props) {
                     background: "transparent",
                     border: `1px solid ${addColor === null ? COLORS.accent : COLORS.cardBorder}`,
                     opacity: addColor === null ? 1 : 0.5,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
                   }}
                 >
-                  ✕
+                  <Icon name="close" size={12} />
                 </button>
                 {sets.map((c) => (
                   <button

@@ -3,6 +3,7 @@ import { useStore } from "../store";
 import { THEME_FAMILIES, argbToHex, hexToArgb } from "../theme";
 import type { ThemeMode } from "../store";
 import { api } from "../api";
+import { Icon, type IconName } from "./Icon";
 import "./SettingsPanel.css";
 
 interface Props {
@@ -84,10 +85,10 @@ export function SettingsPanel({ onClose, onSetsChanged }: Props) {
     setDrafts((ds) => ds.filter((x) => x.id !== d.id));
   };
 
-  const modes: { mode: ThemeMode; label: string }[] = [
-    { mode: "light", label: "☀️ Светлая" },
-    { mode: "dark", label: "🌙 Тёмная" },
-    { mode: "system", label: "🖥️ Системная" },
+  const modes: { mode: ThemeMode; icon: IconName; label: string }[] = [
+    { mode: "light", icon: "sun", label: "Светлая" },
+    { mode: "dark", icon: "moon", label: "Тёмная" },
+    { mode: "system", icon: "monitor", label: "Системная" },
   ];
 
   return (
@@ -95,8 +96,15 @@ export function SettingsPanel({ onClose, onSetsChanged }: Props) {
       <div className="settings-window" onClick={(e) => e.stopPropagation()}>
         {/* Шапка */}
         <div className="settings-header">
-          <h2 className="settings-title">⚙️ Настройки</h2>
-          <button className="icon-btn" onClick={onClose}>✕</button>
+          <h2
+            className="settings-title"
+            style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)" }}
+          >
+            <Icon name="gear" size={18} /> Настройки
+          </h2>
+          <button className="icon-btn" onClick={onClose}>
+            <Icon name="close" size={16} />
+          </button>
         </div>
 
         <div className="settings-body">
@@ -184,8 +192,14 @@ export function SettingsPanel({ onClose, onSetsChanged }: Props) {
                   key={m.mode}
                   onClick={() => setThemeMode(m.mode)}
                   className={`mode-btn ${themeMode === m.mode ? "active" : ""}`}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 6,
+                  }}
                 >
-                  {m.label}
+                  <Icon name={m.icon} size={14} /> {m.label}
                 </button>
               ))}
             </div>
@@ -308,7 +322,13 @@ export function SettingsPanel({ onClose, onSetsChanged }: Props) {
                 <h3 className="section-title">🎨 Категории</h3>
                 <p className="section-hint">Свои названия и цвета для задач; применяются в меню цвета, календаре и поиске</p>
               </div>
-              <button className="preset-btn" onClick={addDraft}>+ Добавить</button>
+              <button
+                className="preset-btn"
+                onClick={addDraft}
+                style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+              >
+                <Icon name="plus" size={14} /> Добавить
+              </button>
             </div>
             <div className="set-list">
               {drafts.map((d) => (
@@ -330,11 +350,21 @@ export function SettingsPanel({ onClose, onSetsChanged }: Props) {
                       if (e.key === "Enter") saveDraft(d);
                     }}
                   />
-                  <button className="preset-btn" onClick={() => saveDraft(d)} title="Сохранить">
-                    💾
+                  <button
+                    className="preset-btn"
+                    onClick={() => saveDraft(d)}
+                    title="Сохранить"
+                    style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                  >
+                    <Icon name="save" size={14} />
                   </button>
-                  <button className="preset-btn danger" onClick={() => removeDraft(d)} title="Удалить категорию">
-                    ✕
+                  <button
+                    className="preset-btn danger"
+                    onClick={() => removeDraft(d)}
+                    title="Удалить категорию"
+                    style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                  >
+                    <Icon name="close" size={14} />
                   </button>
                 </div>
               ))}

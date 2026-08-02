@@ -6,6 +6,7 @@ import { DayColumn } from "../components/DayColumn";
 import { MiniCalendar } from "../components/MiniCalendar";
 import { WeekShiftZone } from "../components/WeekShiftZone";
 import { WeekViewVertical } from "./WeekViewVertical";
+import { Icon } from "../components/Icon";
 import { COLORS } from "../theme";
 import { useStore } from "../store";
 import { TaskDndContext } from "../drag";
@@ -166,18 +167,27 @@ function Toolbar({
           onClick={onToggleOrientation}
           className="icon-btn"
           title={vertical ? "Сетка (горизонтально)" : "Список (вертикально)"}
-          style={{ fontSize: "var(--fs-xs)" }}
+          style={{
+            fontSize: "var(--fs-xs)",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+          }}
         >
-          {vertical ? "▥ сеткой" : "▤ списком"}
+          {vertical ? (
+            <><Icon name="grid" size={14} /> сеткой</>
+          ) : (
+            <><Icon name="list" size={14} /> списком</>
+          )}
         </button>
       )}
       <button
         onClick={onToggleCalendar}
         className="icon-btn"
         title={showCalendar ? "Скрыть календарь" : "Показать календарь"}
-        style={{ fontSize: "var(--fs-xs)" }}
+        style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
       >
-        {showCalendar ? "▤⊨" : "▤"}
+        {showCalendar ? <Icon name="calendarHide" size={14} /> : <Icon name="calendar" size={14} />}
       </button>
     </div>
   );

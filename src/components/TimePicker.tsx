@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { COLORS, accentTint } from "../theme";
 import { formatMinutes, parseTimeToMinutes } from "../date";
+import { Icon } from "./Icon";
 
 interface Props {
   /** Текущее время в минутах, или null = «в течение дня». */
@@ -32,10 +33,11 @@ export function TimePicker({ value, onChange }: Props) {
           border: "none",
           display: "inline-flex",
           alignItems: "center",
+          gap: 6,
         }}
         title="Изменить время"
       >
-        ⏰ {value !== null ? formatMinutes(value) : "в течение дня"}
+        <Icon name="clock" size={13} /> {value !== null ? formatMinutes(value) : "в течение дня"}
       </button>
 
       {editing && (

@@ -3,6 +3,7 @@ import { useDraggable } from "@dnd-kit/core";
 import type { Subtask } from "../api";
 import { api } from "../api";
 import { COLORS } from "../theme";
+import { Icon } from "./Icon";
 import { subtaskDragId } from "../drag";
 
 interface Props {
@@ -132,13 +133,12 @@ function SubtaskRow({
           textAlign: "center",
           color: COLORS.muted,
           opacity: 0.5,
-          fontSize: 12,
           cursor: "grab",
           userSelect: "none",
           touchAction: "none",
         }}
       >
-        ⋮
+        <Icon name="dots" size={14} />
       </span>
       <input
         type="checkbox"
@@ -160,7 +160,7 @@ function SubtaskRow({
         {subtask.title}
       </span>
       <button onClick={onDelete} className="chip-btn" title="Удалить">
-        ✕
+        <Icon name="close" size={12} />
       </button>
     </div>
   );

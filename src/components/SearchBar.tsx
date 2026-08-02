@@ -1,5 +1,6 @@
 import { COLORS, argbToHex } from "../theme";
 import { useStore } from "../store";
+import { Icon } from "./Icon";
 
 interface Props {
   query: string;
@@ -75,7 +76,7 @@ export function SearchBar({ query, onQuery, color, onColor, onClose }: Props) {
         title="Закрыть поиск"
         style={{ fontSize: "var(--fs-xs)" }}
       >
-        ✕
+        <Icon name="close" size={14} />
       </button>
     </div>
   );

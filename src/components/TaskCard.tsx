@@ -6,6 +6,7 @@ import { COLORS, accentTint, argbToHex, hexToArgb } from "../theme";
 import { useStore } from "../store";
 import { TimePicker } from "./TimePicker";
 import { SubtaskList } from "./SubtaskList";
+import { Icon } from "./Icon";
 import { taskIdZone } from "../drag";
 
 interface Props {
@@ -179,16 +180,12 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true }: Prop
           textAlign: "center",
           color: COLORS.secondary,
           opacity: 0.75,
-          fontSize: 18,
-          fontWeight: 700,
-          lineHeight: 1,
-          letterSpacing: -3,
           cursor: "grab",
           userSelect: "none",
           touchAction: "none",
         }}
       >
-        ⠿
+        <Icon name="drag" size={16} />
       </span>
       {/* Цветная полоска слева (маркер сета) */}
       <div
@@ -235,7 +232,7 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true }: Prop
       {/* Время — бейдж всегда виден, пикер по клику (скрыт в сетке недели). */}
       {showTime && <TimePicker value={task.timeMinutes ?? null} onChange={setTime} />}
       {/* Кнопки цвета/удаления — всегда видны (приглушены, ярче при hover) */}
-      <div className="task-actions" style={{ display: "flex", gap: 2 }}>
+      <div className="task-actions" style={{ display: "flex", gap: "var(--sp-1)" }}>
         <button
           onClick={() => setColorMenu((v) => !v)}
           className="chip-btn"
@@ -246,7 +243,7 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true }: Prop
           }}
         />
         <button onClick={del} className="chip-btn" title="Удалить">
-          ✕
+          <Icon name="close" size={14} />
         </button>
       </div>
       {colorMenu && (
