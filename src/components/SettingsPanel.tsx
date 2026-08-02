@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useStore } from "../store";
 import { THEME_FAMILIES, argbToHex, hexToArgb } from "../theme";
-import type { ThemeMode } from "../store";
+import type { ThemeMode, VisibilityState } from "../store";
 import { api } from "../api";
 import { Icon, type IconName } from "./Icon";
 import "./SettingsPanel.css";
@@ -37,6 +37,7 @@ export function SettingsPanel({ onClose, onSetsChanged }: Props) {
     fontScale,
     rolloverEnabled,
     colorSets,
+    visibility,
     toggleMondayFirst,
     setThemeMode,
     setPreferredLightTheme,
@@ -45,6 +46,7 @@ export function SettingsPanel({ onClose, onSetsChanged }: Props) {
     setUiScale,
     setFontScale,
     setRolloverEnabled,
+    setVisibility,
   } = useStore();
 
   // Черновики категорий для редактирования (служебный cs-none скрыт).
@@ -313,6 +315,27 @@ export function SettingsPanel({ onClose, onSetsChanged }: Props) {
               />
               <span>Авто-перенос невыполненных задач на сегодня</span>
             </label>
+          </section>
+
+          {/* ── Интерфейс ── */}
+          <section className="settings-section">
+            <h3 className="section-title">Интерфейс</h3>
+            <p className="section-hint">Скрытые элементы можно вернуть здесь же</p>
+            {([
+              ["navArrows", "Стрелки навигации ‹ ›"],
+              ["search", "Кнопка поиска"],
+              ["datePicker", "Кнопка даты (заголовок-дата остаётся)"],
+              ["miniCalendar", "Мини-календарь справа"],
+              ["taskTime", "Время задач"],
+              ["subtasks", "Подзадачи"],
+              ["taskActions", "Кнопки «цвет» и «удалить» в задачах"],
+              ["rolloverBanner", "Баннер «Перенесено задач»"],
+            ] as [keyof VisibilityState, string][]).map(([k, label]) => (
+              <label key={k} className="oled-toggle">
+                <input type="checkbox" checked={visibility[k]} onChange={(e) => setVisibility(k, e.target.checked)} />
+                <span>{label}</span>
+              </label>
+            ))}
           </section>
 
           {/* ── Категории (цвет-сеты) ── */}

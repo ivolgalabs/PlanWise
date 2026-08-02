@@ -23,7 +23,7 @@ interface Props {
 export function DayView({ day, tasks, onChange }: Props) {
   const [newTitle, setNewTitle] = useState("");
   const newInputRef = useRef<HTMLInputElement>(null);
-  const { setSelectedDate } = useStore();
+  const { setSelectedDate, visibility } = useStore();
 
   const dayTasks = tasks
     .filter((t) => {
@@ -88,18 +88,21 @@ export function DayView({ day, tasks, onChange }: Props) {
         />
         {/* Боковая зона «завтра» — перенос задачи/подзадачи на завтра */}
         <SideDayZone day={nextDay} label="завтра ▶" />
-        {/* Правая панель — мини-календарь (также droppable через дни) */}
-        <div
-          style={{
-            width: 280,
-            flexShrink: 0,
-            padding: "var(--sp-6) var(--sp-4)",
-            borderLeft: `1px solid ${COLORS.cardBorder}`,
-            overflowY: "auto",
-          }}
-        >
-          <MiniCalendar tasks={tasks} large onSelect={(d) => setSelectedDate(d)} />
-        </div>
+        {/* Правая панель — мини-календарь (также droppable через дни);
+            скрывается настройками видимости. */}
+        {visibility.miniCalendar && (
+          <div
+            style={{
+              width: 280,
+              flexShrink: 0,
+              padding: "var(--sp-6) var(--sp-4)",
+              borderLeft: `1px solid ${COLORS.cardBorder}`,
+              overflowY: "auto",
+            }}
+          >
+            <MiniCalendar tasks={tasks} large onSelect={(d) => setSelectedDate(d)} />
+          </div>
+        )}
       </div>
     </TaskDndContext>
   );

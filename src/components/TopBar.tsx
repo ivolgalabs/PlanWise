@@ -1,4 +1,4 @@
-import type { ViewKind } from "../store";
+import type { ViewKind, VisibilityState } from "../store";
 import { ViewSwitcher } from "./ViewSwitcher";
 import { Icon } from "./Icon";
 import { COLORS } from "../theme";
@@ -16,6 +16,8 @@ interface Props {
   /** Поиск: открыт ли, переключение. */
   searchActive: boolean;
   onToggleSearch: () => void;
+  /** Флаги видимости кнопок (настройки → «Интерфейс»). */
+  visibility: VisibilityState;
 }
 
 /** Шапка: навигация (стрелки), заголовок периода, switcher, кнопки настроек/даты. */
@@ -30,6 +32,7 @@ export function TopBar({
   onOpenDatePicker,
   searchActive,
   onToggleSearch,
+  visibility,
 }: Props) {
   let label: string;
   if (view === "day") {
@@ -56,9 +59,13 @@ export function TopBar({
         gap: 8,
       }}
     >
-      <button className="icon-btn" onClick={onPrev} title="Назад">
-        <Icon name="chevronL" size={18} />
-      </button>
+      {/* Стрелки/кнопка 📅 скрываются по настройкам видимости; заголовок-дата
+          и кнопка настроек (gear) остаются всегда. */}
+      {visibility.navArrows && (
+        <button className="icon-btn" onClick={onPrev} title="Назад">
+          <Icon name="chevronL" size={18} />
+        </button>
+      )}
       <button
         onClick={onOpenDatePicker}
         style={{
@@ -74,22 +81,28 @@ export function TopBar({
       >
         {label}
       </button>
-      <button className="icon-btn" onClick={onNext} title="Вперёд">
-        <Icon name="chevronR" size={18} />
-      </button>
+      {visibility.navArrows && (
+        <button className="icon-btn" onClick={onNext} title="Вперёд">
+          <Icon name="chevronR" size={18} />
+        </button>
+      )}
       <div style={{ flex: 1 }} />
       <ViewSwitcher view={view} onChange={onViewChanged} />
-      <button
-        className="icon-btn"
-        onClick={onToggleSearch}
-        title={searchActive ? "Закрыть поиск" : "Поиск задач"}
-        style={searchActive ? { background: COLORS.hover } : undefined}
-      >
-        <Icon name="search" />
-      </button>
-      <button className="icon-btn" onClick={onOpenDatePicker} title="Дата">
-        <Icon name="calendar" />
-      </button>
+      {visibility.search && (
+        <button
+          className="icon-btn"
+          onClick={onToggleSearch}
+          title={searchActive ? "Закрыть поиск" : "Поиск задач"}
+          style={searchActive ? { background: COLORS.hover } : undefined}
+        >
+          <Icon name="search" />
+        </button>
+      )}
+      {visibility.datePicker && (
+        <button className="icon-btn" onClick={onOpenDatePicker} title="Дата">
+          <Icon name="calendar" />
+        </button>
+      )}
       <button className="icon-btn" onClick={onOpenSettings} title="Настройки">
         <Icon name="gear" />
       </button>

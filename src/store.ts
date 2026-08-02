@@ -5,6 +5,19 @@ import type { Task, ColorSet } from "./api";
 export type ViewKind = "day" | "week" | "month";
 export type ThemeMode = "light" | "dark" | "system";
 
+/** Флаги видимости элементов интерфейса (настройки → «Интерфейс»). */
+export interface VisibilityState {
+  navArrows: boolean; search: boolean; datePicker: boolean;
+  miniCalendar: boolean; taskTime: boolean; subtasks: boolean;
+  taskActions: boolean; rolloverBanner: boolean;
+}
+
+/** Видимость по умолчанию — все элементы показаны. */
+const DEFAULT_VISIBILITY: VisibilityState = {
+  navArrows: true, search: true, datePicker: true, miniCalendar: true,
+  taskTime: true, subtasks: true, taskActions: true, rolloverBanner: true,
+};
+
 interface PlannerState {
   selectedDate: Date;
   view: ViewKind;
@@ -26,6 +39,8 @@ interface PlannerState {
   rolloverEnabled: boolean;
   /** Категории (цвет-сеты) из БД — грузятся при старте. */
   colorSets: ColorSet[];
+  /** Видимость элементов интерфейса — можно прятать в настройках. */
+  visibility: VisibilityState;
   setSelectedDate: (d: Date) => void;
   setView: (v: ViewKind) => void;
   setTasks: (t: Task[]) => void;
@@ -38,6 +53,7 @@ interface PlannerState {
   setUiScale: (s: number) => void;
   setFontScale: (s: number) => void;
   setRolloverEnabled: (v: boolean) => void;
+  setVisibility: (k: keyof VisibilityState, v: boolean) => void;
 }
 
 export const useStore = create<PlannerState>()(
@@ -57,6 +73,7 @@ export const useStore = create<PlannerState>()(
       fontScale: 1.0,
       rolloverEnabled: true,
       colorSets: [],
+      visibility: DEFAULT_VISIBILITY,
       setSelectedDate: (d) => set({ selectedDate: d }),
       setView: (v) => set({ view: v }),
       setTasks: (t) => set({ tasks: t }),
@@ -69,6 +86,8 @@ export const useStore = create<PlannerState>()(
       setUiScale: (s) => set({ uiScale: s }),
       setFontScale: (s) => set({ fontScale: s }),
       setRolloverEnabled: (v) => set({ rolloverEnabled: v }),
+      setVisibility: (k, v) =>
+        set((s) => ({ visibility: { ...s.visibility, [k]: v } })),
     }),
     {
       name: "todo-settings",
@@ -83,6 +102,7 @@ export const useStore = create<PlannerState>()(
         uiScale: s.uiScale,
         fontScale: s.fontScale,
         rolloverEnabled: s.rolloverEnabled,
+        visibility: s.visibility,
       }),
     },
   ),

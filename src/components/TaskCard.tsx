@@ -33,7 +33,7 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true }: Prop
   const [newCatColor, setNewCatColor] = useState("#7eb8c4");
   const inputRef = useRef<HTMLInputElement>(null);
   const newCatRef = useRef<HTMLInputElement>(null);
-  const { colorSets, setColorSets } = useStore();
+  const { colorSets, setColorSets, visibility } = useStore();
 
   // Перетаскивание задачи через dnd-kit. data.task читается в onDragEnd.
   const {
@@ -140,6 +140,10 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true }: Prop
   const taskSet = colorSets.find((s) => s.id === task.colorSetId);
   const setHex = taskSet ? argbToHex(taskSet.color) : undefined;
 
+  // Время показываем, только если его запросил родитель И настройка
+  // «Время задач» включена.
+  const effectiveShowTime = showTime && visibility.taskTime;
+
   const setTime = async (m: number | null) => {
     await api.upsertTask({ ...task, timeMinutes: m });
     onChange();
@@ -229,23 +233,27 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true }: Prop
         data-task-id={task.id}
         title={task.title || undefined}
       />
-      {/* Время — бейдж всегда виден, пикер по клику (скрыт в сетке недели). */}
-      {showTime && <TimePicker value={task.timeMinutes ?? null} onChange={setTime} />}
-      {/* Кнопки цвета/удаления — всегда видны (приглушены, ярче при hover) */}
-      <div className="task-actions" style={{ display: "flex", gap: "var(--sp-1)" }}>
-        <button
-          onClick={() => setColorMenu((v) => !v)}
-          className="chip-btn"
-          title="Цвет"
-          style={{
-            background: task.colorSetId ? setHex : "transparent",
-            border: task.colorSetId ? "none" : "1px solid " + COLORS.cardBorder,
-          }}
-        />
-        <button onClick={del} className="chip-btn" title="Удалить">
-          <Icon name="close" size={14} />
-        </button>
-      </div>
+      {/* Время — бейдж всегда виден, пикер по клику (скрыт в сетке недели
+          и настройкой «Время задач»). */}
+      {effectiveShowTime && <TimePicker value={task.timeMinutes ?? null} onChange={setTime} />}
+      {/* Кнопки цвета/удаления — приглушены, ярче при hover; скрываются
+          настройкой «Кнопки „цвет“ и „удалить“ в задачах». */}
+      {visibility.taskActions && (
+        <div className="task-actions" style={{ display: "flex", gap: "var(--sp-1)" }}>
+          <button
+            onClick={() => setColorMenu((v) => !v)}
+            className="chip-btn"
+            title="Цвет"
+            style={{
+              background: task.colorSetId ? setHex : "transparent",
+              border: task.colorSetId ? "none" : "1px solid " + COLORS.cardBorder,
+            }}
+          />
+          <button onClick={del} className="chip-btn" title="Удалить">
+            <Icon name="close" size={14} />
+          </button>
+        </div>
+      )}
       {colorMenu && (
         <div className="color-menu">
           <button
@@ -318,7 +326,8 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true }: Prop
         </div>
       )}
     </div>
-    <SubtaskList taskId={task.id} />
+    {/* Подзадачи скрываются настройкой «Подзадачи». */}
+    {visibility.subtasks && <SubtaskList taskId={task.id} />}
     </div>
   );
 }

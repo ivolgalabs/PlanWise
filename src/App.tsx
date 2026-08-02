@@ -43,6 +43,7 @@ function App() {
     uiScale,
     fontScale,
     rolloverEnabled,
+    visibility,
     setSelectedDate,
     setView,
     setTasks,
@@ -88,6 +89,11 @@ function App() {
       }
     })();
   }, [rolloverEnabled]);
+
+  // Если кнопка поиска скрыта настройками — закрываем открытый поиск.
+  useEffect(() => {
+    if (!visibility.search) setSearchOpen(false);
+  }, [visibility.search]);
 
   // Загрузка задач. Грузим ВСЕ задачи одним запросом (широкий диапазон дат):
   // правый мини-календарь можно листать на любой месяц, поэтому ограничивать
@@ -155,6 +161,7 @@ function App() {
           setSearchQuery("");
           setSearchColor(null);
         }}
+        visibility={visibility}
       />
       {searchOpen && (
         <SearchBar
@@ -169,7 +176,8 @@ function App() {
           }}
         />
       )}
-      {rolloverCount > 0 && (
+      {/* Баннер переноса скрывается настройками видимости. */}
+      {visibility.rolloverBanner && rolloverCount > 0 && (
         <div
           style={{
             background: accentTint(0.15),

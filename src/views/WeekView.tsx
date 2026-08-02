@@ -33,11 +33,14 @@ function loadCalWidth(): number {
  * Drag задач между днями — через @dnd-kit (TaskDndContext оборачивает всё).
  */
 export function WeekView({ tasks, onChange }: Props) {
-  const { selectedDate, mondayFirst, setSelectedDate } = useStore();
+  const { selectedDate, mondayFirst, setSelectedDate, visibility } = useStore();
   const [vertical, setVertical] = useState(true);
   const [showCalendar, setShowCalendar] = useState(true);
   const [calWidth, setCalWidth] = useState<number>(loadCalWidth);
   const days = weekDays(selectedDate, mondayFirst);
+  // Эффективная видимость календаря: локальный переключатель И настройка
+  // «Мини-календарь справа» (если настройка выключена — панель скрыта).
+  const showCal = showCalendar && visibility.miniCalendar;
 
   // В узком окне принудительно вертикальный список — сетка из 7 узких колонок
   // нечитаема. matchMedia реагирует на ресайз окна.
@@ -64,8 +67,9 @@ export function WeekView({ tasks, onChange }: Props) {
             vertical={effectiveVertical}
             canToggle={!narrow}
             onToggleOrientation={() => setVertical((v) => !v)}
-            showCalendar={showCalendar}
+            showCalendar={showCal}
             onToggleCalendar={() => setShowCalendar((v) => !v)}
+            calendarVisible={visibility.miniCalendar}
           />
           <div style={{ flex: 1, minHeight: 0 }}>
             {effectiveVertical ? (
@@ -124,8 +128,9 @@ export function WeekView({ tasks, onChange }: Props) {
             )}
           </div>
         </div>
-        {/* Календарь скрыт в узком окне — он крадёт дефицитную ширину. */}
-        {showCalendar && !narrow && (
+        {/* Календарь скрыт в узком окне — он крадёт дефицитную ширину.
+            Также скрывается настройками видимости (showCal). */}
+        {showCal && !narrow && (
           <RightCalendar
             width={calWidth}
             onResize={setCalWidth}
@@ -145,6 +150,7 @@ function Toolbar({
   onToggleOrientation,
   showCalendar,
   onToggleCalendar,
+  calendarVisible,
 }: {
   vertical: boolean;
   /** false в узком окне — кнопку ориентации прячем (сетка всё равно нечитаема). */
@@ -152,6 +158,8 @@ function Toolbar({
   onToggleOrientation: () => void;
   showCalendar: boolean;
   onToggleCalendar: () => void;
+  /** Настройка видимости «Мини-календарь справа» — false прячет кнопку. */
+  calendarVisible: boolean;
 }) {
   return (
     <div
@@ -181,14 +189,16 @@ function Toolbar({
           )}
         </button>
       )}
-      <button
-        onClick={onToggleCalendar}
-        className="icon-btn"
-        title={showCalendar ? "Скрыть календарь" : "Показать календарь"}
-        style={{ display: "inline-flex", alignItems: "center", gap: "var(--sp-3)" }}
-      >
-        {showCalendar ? <Icon name="calendarHide" size={14} /> : <Icon name="calendar" size={14} />}
-      </button>
+      {calendarVisible && (
+        <button
+          onClick={onToggleCalendar}
+          className="icon-btn"
+          title={showCalendar ? "Скрыть календарь" : "Показать календарь"}
+          style={{ display: "inline-flex", alignItems: "center", gap: "var(--sp-3)" }}
+        >
+          {showCalendar ? <Icon name="calendarHide" size={14} /> : <Icon name="calendar" size={14} />}
+        </button>
+      )}
     </div>
   );
 }
