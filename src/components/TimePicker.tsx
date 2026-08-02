@@ -33,7 +33,7 @@ export function TimePicker({ value, onChange }: Props) {
           border: "none",
           display: "inline-flex",
           alignItems: "center",
-          gap: 6,
+          gap: "var(--sp-3)",
         }}
         title="Изменить время"
       >

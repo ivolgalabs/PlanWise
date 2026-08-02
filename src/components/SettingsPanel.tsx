@@ -196,7 +196,7 @@ export function SettingsPanel({ onClose, onSetsChanged }: Props) {
                     display: "inline-flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    gap: 6,
+                    gap: "var(--sp-3)",
                   }}
                 >
                   <Icon name={m.icon} size={14} /> {m.label}
@@ -325,7 +325,7 @@ export function SettingsPanel({ onClose, onSetsChanged }: Props) {
               <button
                 className="preset-btn"
                 onClick={addDraft}
-                style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+                style={{ display: "inline-flex", alignItems: "center", gap: "var(--sp-3)" }}
               >
                 <Icon name="plus" size={14} /> Добавить
               </button>

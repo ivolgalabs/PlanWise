@@ -171,7 +171,7 @@ function Toolbar({
             fontSize: "var(--fs-xs)",
             display: "inline-flex",
             alignItems: "center",
-            gap: 6,
+            gap: "var(--sp-3)",
           }}
         >
           {vertical ? (
@@ -185,7 +185,7 @@ function Toolbar({
         onClick={onToggleCalendar}
         className="icon-btn"
         title={showCalendar ? "Скрыть календарь" : "Показать календарь"}
-        style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+        style={{ display: "inline-flex", alignItems: "center", gap: "var(--sp-3)" }}
       >
         {showCalendar ? <Icon name="calendarHide" size={14} /> : <Icon name="calendar" size={14} />}
       </button>
