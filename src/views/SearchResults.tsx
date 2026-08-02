@@ -9,7 +9,7 @@ export type PeriodFilter = "all" | "today" | "overdue" | "7days" | "month";
 /** Фильтр по статусу выполнения. */
 export type StatusFilter = "all" | "active" | "done";
 /** Ключ сортировки результатов поиска. */
-export type SortKey = "dateAsc" | "dateDesc" | "alpha" | "time" | "category";
+export type SortKey = "dateAsc" | "dateDesc" | "alpha" | "alphaDesc" | "time" | "timeDesc" | "category";
 
 interface Props {
   tasks: Task[];
@@ -67,7 +67,13 @@ export function SearchResults({ tasks, query, color, period, status, sort, onJum
       switch (sort) {
         case "dateDesc": return bd - ad || at - bt;
         case "alpha": return a.title.localeCompare(b.title, "ru", { sensitivity: "base" });
+        case "alphaDesc": return b.title.localeCompare(a.title, "ru", { sensitivity: "base" });
         case "time": return at - bt || ad - bd;
+        case "timeDesc": {
+          // От поздних к ранним; задачи без времени (-1) — в конце, при равенстве — по дате убыв.
+          const at2 = a.timeMinutes ?? -1, bt2 = b.timeMinutes ?? -1;
+          return bt2 - at2 || bd - ad;
+        }
         case "category": {
           const an = colorName(a.colorSetId), bn = colorName(b.colorSetId);
           return an.localeCompare(bn, "ru") || ad - bd;

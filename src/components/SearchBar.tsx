@@ -143,7 +143,7 @@ export function SearchBar({ query, onQuery, color, onColor, period, status, sort
           open={openKey === "period"} onToggle={() => toggle("period")} onChange={onPeriod} />
         <FilterSelect label="Статус" value={status} options={[["all", "Все"], ["active", "Активные"], ["done", "Выполн."]] as const}
           open={openKey === "status"} onToggle={() => toggle("status")} onChange={onStatus} />
-        <FilterSelect label="Сортировка" value={sort} options={[["dateAsc", "По дате ↑"], ["dateDesc", "По дате ↓"], ["alpha", "А-Я"], ["time", "По времени"], ["category", "Категория"]] as const}
+        <FilterSelect label="Сортировка" value={sort} options={[["dateAsc", "По дате ↑"], ["dateDesc", "По дате ↓"], ["alpha", "А-Я"], ["alphaDesc", "Я-А"], ["time", "По времени ↑"], ["timeDesc", "По времени ↓"], ["category", "Категория"]] as const}
           open={openKey === "sort"} onToggle={() => toggle("sort")} onChange={onSort} />
       </div>
     </div>
