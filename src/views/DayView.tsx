@@ -60,6 +60,7 @@ export function DayView({ day, tasks, onChange, showPanel, onTogglePanel }: Prop
   const epochDay = Math.floor(
     Date.UTC(day.getFullYear(), day.getMonth(), day.getDate()) / 86_400_000,
   );
+  const dayKey = `${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`;
 
   const addTask = async () => {
     const t = newTitle.trim();
@@ -76,10 +77,13 @@ export function DayView({ day, tasks, onChange, showPanel, onTogglePanel }: Prop
     await api.upsertTask({ title: "", date: epochDay, sortOrder: sort });
     onChange();
     requestAnimationFrame(() => {
-      const inputs = document.querySelectorAll<HTMLTextAreaElement>(
-        "textarea[data-task-id]",
-      );
-      const empty = Array.from(inputs).find((i) => i.value === "");
+      // Ищем пустую строку ТОЛЬКО в контейнере своего дня (data-day-key) —
+      // как в DayColumn/WeekViewVertical, чтобы фокус не уходил в чужой список.
+      const container = document.querySelector(`[data-day-key="${dayKey}"]`);
+      if (!container) return;
+      const empty = Array.from(
+        container.querySelectorAll<HTMLTextAreaElement>("textarea[data-task-id]"),
+      ).find((i) => i.value === "");
       empty?.focus();
     });
   };
@@ -175,8 +179,10 @@ function DayTasksArea({
   // и SideDayZone (завтра). Здесь droppable с dayId(epochDay) дублировал бы
   // ячейку календаря того же дня → @dnd-kit перезаписывал ref, ломая drag.
   const today = isToday(day);
+  const dayKey = `${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`;
   return (
     <div
+      data-day-key={dayKey}
       style={{
         flex: 1,
         padding: "var(--sp-6) var(--sp-8)",

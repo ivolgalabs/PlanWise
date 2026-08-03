@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { useStore } from "../store";
@@ -62,6 +62,20 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged }: Props)
       .filter((s) => s.id !== "cs-none")
       .map((s) => ({ id: s.id, clientKey: crypto.randomUUID(), name: s.name, color: s.color })),
   );
+
+  // colorSets грузятся асинхронно — если панель открылась до загрузки,
+  // черновики остались пустыми. Дозаполняем их, когда данные пришли
+  // (пользователь при этом ещё ничего не создавал).
+  useEffect(() => {
+    if (drafts.length === 0 && colorSets.some((s) => s.id !== "cs-none")) {
+      setDrafts(
+        colorSets
+          .filter((s) => s.id !== "cs-none")
+          .map((s) => ({ id: s.id, clientKey: crypto.randomUUID(), name: s.name, color: s.color })),
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [colorSets]);
 
   const patchDraft = (clientKey: string, patch: Partial<SetDraft>) =>
     setDrafts((ds) => ds.map((d) => (d.clientKey === clientKey ? { ...d, ...patch } : d)));
@@ -167,7 +181,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged }: Props)
                   className="section-title"
                   style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)" }}
                 >
-                  <Icon name="search" size={14} /> Масштаб интерфейса
+                  <Icon name="zoom" size={14} /> Масштаб интерфейса
                 </h3>
                 <p className="section-hint">От 70% до 200% — применяется ко всем элементам</p>
               </div>
@@ -473,10 +487,10 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged }: Props)
             </div>
             <div style={{ display: "flex", gap: "var(--sp-2)" }}>
               <button className="preset-btn" onClick={onExport} title="Сохранить бэкап в файл">
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><Icon name="save" size={14} /> Экспорт…</span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><Icon name="download" size={14} /> Экспорт…</span>
               </button>
               <button className="preset-btn" onClick={onImport} title="Загрузить данные из файла">
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><Icon name="trash" size={14} /> Импорт…</span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><Icon name="upload" size={14} /> Импорт…</span>
               </button>
               {dataMsg && <span style={{ fontSize: "var(--fs-2xs)", color: dataError ? "var(--danger, #c0392b)" : COLORS.muted }}>{dataMsg}</span>}
             </div>

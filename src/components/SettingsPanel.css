@@ -209,10 +209,6 @@
   margin-top: var(--sp-3);
 }
 
-.family-block {
-  /* nothing special */
-}
-
 .family-head {
   display: flex;
   align-items: center;

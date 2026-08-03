@@ -120,6 +120,18 @@ function App() {
       searchStatus !== "all" ||
       searchSort !== "dateAsc");
 
+  /** Сбросить все фильтры поиска (запрос, цвет, период, статус, сортировку).
+   *  Сам поиск при этом остаётся открытым (закрытие — отдельным setSearchOpen). */
+  const resetSearch = () => {
+    setSearchQuery("");
+    setSearchColor(null);
+    setSearchPeriod("all");
+    setSearchStatus("all");
+    setSearchSort("dateAsc");
+    setSearchPeriodFrom(null);
+    setSearchPeriodTo(null);
+  };
+
   // Тема: применяем разрешённый id, при system — следим за ОС.
   useEffect(() => {
     const apply = () => applyTheme(resolveActiveTheme());
@@ -159,13 +171,7 @@ function App() {
   useEffect(() => {
     if (!visibility.search) {
       setSearchOpen(false);
-      setSearchQuery("");
-      setSearchColor(null);
-      setSearchPeriod("all");
-      setSearchStatus("all");
-      setSearchSort("dateAsc");
-      setSearchPeriodFrom(null);
-      setSearchPeriodTo(null);
+      resetSearch();
     }
   }, [visibility.search]);
 
@@ -240,13 +246,7 @@ function App() {
         searchActive={searchOpen}
         onToggleSearch={() => {
           setSearchOpen((v) => !v);
-          setSearchQuery("");
-          setSearchColor(null);
-          setSearchPeriod("all");
-          setSearchStatus("all");
-          setSearchSort("dateAsc");
-          setSearchPeriodFrom(null);
-          setSearchPeriodTo(null);
+          resetSearch();
         }}
         visibility={visibility}
       />
@@ -301,13 +301,7 @@ function App() {
                 onTo={setSearchPeriodTo}
                 onClose={() => {
                   setSearchOpen(false);
-                  setSearchQuery("");
-                  setSearchColor(null);
-                  setSearchPeriod("all");
-                  setSearchStatus("all");
-                  setSearchSort("dateAsc");
-                  setSearchPeriodFrom(null);
-                  setSearchPeriodTo(null);
+                  resetSearch();
                 }}
               />
             )}
@@ -330,13 +324,7 @@ function App() {
                   onChange={reload}
                   onResetFilters={() => {
                     // Сброс всех фильтров; поиск остаётся открытым.
-                    setSearchQuery("");
-                    setSearchColor(null);
-                    setSearchPeriod("all");
-                    setSearchStatus("all");
-                    setSearchSort("dateAsc");
-                    setSearchPeriodFrom(null);
-                    setSearchPeriodTo(null);
+                    resetSearch();
                   }}
                 />
               ) : (
@@ -401,7 +389,8 @@ function App() {
 }
 
 /** Правая панель на уровне App: в «Неделе» — с resize-handle и шириной из
- *  localStorage, в «Дне» — фиксированная 280. Поиск её не трогает. */
+ *  localStorage, в «Дне» — той же шириной без ручки (значение общее, панель
+ *  не «гуляет» между видами). Поиск её не трогает. */
 function AppRightPanel({
   view,
   tasks,

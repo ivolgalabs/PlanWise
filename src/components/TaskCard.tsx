@@ -219,8 +219,8 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
         position: "relative",
         display: "flex",
         alignItems: "center",
-        background: task.isDone ? "transparent" : "transparent",
-        borderRadius: 4,
+        background: "transparent",
+        borderRadius: "var(--radius-sm)",
         ...dragStyle,
       }}
       {...attributes}
@@ -355,7 +355,7 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
           >
             <span
               className="color-swatch"
-              style={{ background: COLORS.setNone }}
+              style={{ background: COLORS.tertiary }}
             />
             <span className="color-name">Без категории</span>
             {!task.colorSetId && <span className="color-check">✓</span>}

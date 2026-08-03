@@ -110,7 +110,6 @@ export const COLORS = {
   accent: "var(--accent)",
   hover: "var(--bg-hover)",
   tertiary: "var(--bg-tertiary)",
-  setNone: "var(--bg-tertiary)",
 } as const;
 
 /**

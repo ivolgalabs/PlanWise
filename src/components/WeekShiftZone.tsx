@@ -1,28 +1,19 @@
 import { useDroppable } from "@dnd-kit/core";
 import { COLORS, accentTint } from "../theme";
-import { weekShiftId } from "../drag";
-
-interface Props {
-  /** +1 — следующая неделя, -1 — прошлая. */
-  dir: 1 | -1;
-}
+import { weekShiftNextId } from "../drag";
 
 /**
- * Узкая боковая зона переноса задачи на соседнюю неделю (±7 дней от текущей
+ * Узкая боковая зона переноса задачи на следующую неделю (+7 дней от текущей
  * позиции задачи). Нужна, когда нужный день за пределами видимой недели —
  * например, сегодня воскресенье, а перенести надо на понедельник следующей.
+ * Перенос в прошлую неделю убран по желанию пользователя.
  */
-export function WeekShiftZone({ dir }: Props) {
-  const { setNodeRef, isOver } = useDroppable({ id: weekShiftId(dir) });
-  const next = dir === 1;
+export function WeekShiftZone() {
+  const { setNodeRef, isOver } = useDroppable({ id: weekShiftNextId });
   return (
     <div
       ref={setNodeRef}
-      title={
-        next
-          ? "Перенести на следующую неделю (+7 дней)"
-          : "Перенести на прошлую неделю (−7 дней)"
-      }
+      title="Перенести на следующую неделю (+7 дней)"
       style={{
         width: 30,
         flexShrink: 0,
@@ -39,7 +30,7 @@ export function WeekShiftZone({ dir }: Props) {
         userSelect: "none",
       }}
     >
-      {next ? "следующая неделя ▶" : "◀ прошлая неделя"}
+      следующая неделя ▶
     </div>
   );
 }

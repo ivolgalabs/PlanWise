@@ -7,7 +7,7 @@ export type IconName =
   | "search" | "calendar" | "gear" | "chevronL" | "chevronR" | "close"
   | "plus" | "drag" | "dots" | "clock" | "palette" | "grid"
   | "list" | "calendarHide" | "sun" | "moon" | "monitor" | "trash"
-  | "save" | "note";
+  | "save" | "note" | "zoom" | "upload" | "download" | "archive";
 
 const PATHS: Record<IconName, ReactNode> = {
   search: <><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></>,
@@ -30,6 +30,10 @@ const PATHS: Record<IconName, ReactNode> = {
   trash: <><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" /><path d="M10 11v6M14 11v6" /></>,
   save: <><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><path d="M17 21v-8H7v8M7 3v5h8" /></>,
   note: <><path d="M7 3h8l4 4v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" /><path d="M15 3v4h4" /><path d="M8 13h8M8 17h5" /></>,
+  zoom: <><circle cx="11" cy="11" r="8" /><path d="M21 21l-4.3-4.3" /><path d="M11 8v6M8 11h6" /></>,
+  upload: <><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="M17 8l-5-5-5 5" /><path d="M12 3v12" /></>,
+  download: <><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="M7 10l5 5 5-5" /><path d="M12 15V3" /></>,
+  archive: <><path d="M21 8v13H3V8" /><rect x="1" y="3" width="22" height="5" rx="1" /><path d="M10 12h4" /></>,
 };
 
 export function Icon({ name, size = 16, title }: IconProps) {

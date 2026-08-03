@@ -10,18 +10,11 @@
   --overlay: color-mix(in srgb, var(--text-primary) 25%, transparent);
 }
 
-/* Масштаб интерфейса в %. font-size на <html> задаёт 1rem, на который
- * завязаны ВСЕ --fs-* токены Universal UI. Множим базовый размер на
- * --ui-scale + clamp для адаптива к ширине окна.
- * ВАЖНО: класс scale-* должен идти ДО :root font-size, либо specificity
- * выше — поэтому font-size задаём прямо на html.scale-*. */
+/* Масштаб интерфейса: font-size на <html> задаёт 1rem, на который
+ * завязаны ВСЕ --fs-* токены Universal UI. База — clamp по ширине окна;
+ * множители применяются инлайн из App.tsx (document.zoom для всего UI
+ * и fontScale для шрифта). */
 html { font-size: clamp(13px, 1.05vw, 17px); }
-html.scale-80  { font-size: calc(clamp(13px, 1.05vw, 17px) * 0.8); }
-html.scale-90  { font-size: calc(clamp(13px, 1.05vw, 17px) * 0.9); }
-html.scale-100 { font-size: calc(clamp(13px, 1.05vw, 17px) * 1); }
-html.scale-110 { font-size: calc(clamp(13px, 1.05vw, 17px) * 1.1); }
-html.scale-125 { font-size: calc(clamp(13px, 1.05vw, 17px) * 1.25); }
-html.scale-150 { font-size: calc(clamp(13px, 1.05vw, 17px) * 1.5); }
 
 * {
   box-sizing: border-box;

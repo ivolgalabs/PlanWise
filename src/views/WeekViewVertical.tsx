@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import type { Task } from "../api";
 import { api, fromEpochDay } from "../api";
@@ -90,7 +90,7 @@ export function WeekViewVertical({ tasks, onChange }: Props) {
           />
         ))}
       </div>
-      <WeekShiftZone dir={1} />
+      <WeekShiftZone />
     </div>
   );
 }
@@ -123,7 +123,6 @@ function DayRow({
   );
   const { setNodeRef, isOver } = useDroppable({ id: dayId(ed) });
   const weekday = day.toLocaleDateString("ru", { weekday: "short" });
-  const inputRef = useRef<HTMLInputElement>(null);
 
   // Иерархия: past — бледный/компактный, today/tomorrow — крупные.
   const dim = weight === "past" ? 0.4 : weight === "future" ? 0.75 : 1;
@@ -199,7 +198,6 @@ function DayRow({
         ))}
         {/* Inline-поле ввода новой задачи */}
         <input
-          ref={inputRef}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           onKeyDown={(e) => {

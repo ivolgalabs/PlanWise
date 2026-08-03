@@ -75,7 +75,7 @@ export function RightPanel({ tasks, width, onSelect, onChange }: Props) {
               marginTop: "auto",
             }}
           >
-            <Icon name="note" size={14} />
+            <Icon name="archive" size={14} />
             Архив
             <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted, fontWeight: 400 }}>
               {archivedTasks.length}

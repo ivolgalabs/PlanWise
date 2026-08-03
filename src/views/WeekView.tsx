@@ -74,7 +74,7 @@ export function WeekView({ tasks, onChange, showPanel, onTogglePanel }: Props) {
                   </div>
                 ))}
               </div>
-              <WeekShiftZone dir={1} />
+              <WeekShiftZone />
             </div>
           )}
         </div>

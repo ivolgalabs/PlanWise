@@ -48,15 +48,6 @@ export const isPast = (d: Date): boolean => {
   return day.getTime() < today.getTime();
 };
 
-/** День в будущем (строго позже сегодня). */
-export const isFuture = (d: Date): boolean => {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const day = new Date(d);
-  day.setHours(0, 0, 0, 0);
-  return day.getTime() > today.getTime();
-};
-
 /**
  * Визуальный «вес» дня для иерархии отображения:
  *  - "today"    — сегодня (крупный, акцент)
