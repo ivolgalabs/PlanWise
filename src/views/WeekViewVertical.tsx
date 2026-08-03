@@ -79,7 +79,6 @@ export function WeekViewVertical({ tasks, onChange }: Props) {
             key={d.toISOString()}
             day={d}
             dayKey={dayKey(d)}
-            selected={isSameDay(d, selectedDate)}
             dayTasks={tasksForDay(d)}
             onChange={onChange}
             createNext={createNext}
@@ -100,7 +99,6 @@ export function WeekViewVertical({ tasks, onChange }: Props) {
 function DayRow({
   day,
   dayKey,
-  selected,
   dayTasks,
   onChange,
   createNext,
@@ -110,8 +108,6 @@ function DayRow({
 }: {
   day: Date;
   dayKey: string;
-  /** Выбранная дата — лёгкая подсветка фона, чтобы отличать от «сегодня» (●). */
-  selected: boolean;
   dayTasks: Task[];
   onChange: () => void;
   createNext: (afterId: string, day: Date) => void;
@@ -160,10 +156,8 @@ function DayRow({
         borderRadius: "var(--radius-md)",
         background: isOver
           ? accentTint(0.08)
-          : selected
-            ? accentTint(0.05)
-            : "transparent",
-        // Рамки нет; выбранный день выделяется акцент-фоном выше.
+          : "transparent",
+        // Рамки и подсветки выбранного дня нет — только «сегодня» ● в заголовке.
         border: "none",
       }}
     >

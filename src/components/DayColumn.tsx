@@ -2,11 +2,10 @@ import { useRef, useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import type { Task } from "../api";
 import { api } from "../api";
-import { isToday, isPast, isSameDay, dayWeight } from "../date";
+import { isToday, isPast, dayWeight } from "../date";
 import { TaskCard } from "./TaskCard";
 import { COLORS, accentTint } from "../theme";
 import { dayId } from "../drag";
-import { useStore } from "../store";
 
 interface Props {
   day: Date;
@@ -26,10 +25,7 @@ export function DayColumn({
 }: Props) {
   const [newTitle, setNewTitle] = useState("");
   const newInputRef = useRef<HTMLInputElement>(null);
-  const { selectedDate } = useStore();
   const today = isToday(day);
-  // Выбранная дата — акцентный фон колонки (отдельно от «сегодня» ●).
-  const selected = isSameDay(day, selectedDate);
   const past = isPast(day);
   const weight = dayWeight(day);
   const weekday = day.toLocaleDateString("ru", { weekday: "short" });
@@ -101,13 +97,11 @@ export function DayColumn({
         height: "100%",
         background: isOver
           ? accentTint(0.08)
-          : selected && !today
-            ? accentTint(0.06)
-            : past
-              ? COLORS.tertiary
-              : COLORS.card,
-        // Рамка только у «сегодня»; остальные колонки — фон без рамки
-        // (выбранный день выделяется акцент-фоном выше).
+          : past
+            ? COLORS.tertiary
+            : COLORS.card,
+        // Рамка и подсветка — только у «сегодня»; выбранный в «Дне» день
+        // не переносится в неделю (по желанию пользователя).
         border: today ? `2px solid ${COLORS.accent}` : "none",
         borderRadius: "var(--radius-md)",
         display: "flex",

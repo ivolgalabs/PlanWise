@@ -137,7 +137,6 @@ export function MonthView({ tasks, onSelectDay, onChange }: Props) {
                     day={day}
                     inMonth={day.getMonth() === selectedDate.getMonth()}
                     isCurrentWeek={isCurrent}
-                    selected={isSameDay(day, selectedDate)}
                     dayTasks={tasksForDay(day)}
                     onClickDay={() => setMenuDay(day)}
                   />
@@ -325,15 +324,12 @@ function MonthCell({
   day,
   inMonth,
   isCurrentWeek,
-  selected,
   dayTasks,
   onClickDay,
 }: {
   day: Date;
   inMonth: boolean;
   isCurrentWeek: boolean;
-  /** Выбранная дата — лёгкая подсветка, чтобы было видно, что смотрит пользователь. */
-  selected: boolean;
   dayTasks: Task[];
   onClickDay: () => void;
 }) {
@@ -353,10 +349,8 @@ function MonthCell({
       style={{
         background: isOver
           ? accentTint(0.12)
-          : selected
-            ? accentTint(0.08)
-            : COLORS.card,
-        // Рамки нет; «сегодня» выделяется акцентной обводкой (boxShadow).
+          : COLORS.card,
+        // Рамки и подсветки выбранного дня нет; «сегодня» — акцентная обводка.
         boxShadow: isTd
           ? `inset 0 0 0 1.5px ${COLORS.accent}`
           : "none",
