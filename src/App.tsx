@@ -18,11 +18,13 @@ import { RightPanel } from "./components/RightPanel";
 import { TaskDndContext } from "./drag";
 import "./App.css";
 
-/** Ширина правой панели в «Неделе» (resize-ручка): мин/макс/ключ/дефолт. */
+/** Ширина правой панели (общая для «Недели» и «Дня»): resize-ручка в неделе,
+ *  мин/макс/ключ/дефолт. Ключ сменили — новая единая ширина 320 применяется
+ *  и в дне, и в неделе (старое значение 280/300 не переживает). */
 const CAL_MIN = 200;
 const CAL_MAX = 520;
-const CAL_KEY = "week.calWidth";
-const CAL_DEFAULT = 300;
+const CAL_KEY = "panel.calWidth";
+const CAL_DEFAULT = 320;
 
 function loadCalWidth(): number {
   const v = Number(localStorage.getItem(CAL_KEY));
@@ -443,8 +445,10 @@ function AppRightPanel({
     document.body.style.userSelect = "none";
   };
 
+  // Единая ширина панели в «Дне» и «Неделе» (calWidth): resize-ручка есть
+  // только в неделе, но значение общее — панель не «гуляет» между видами.
   if (view === "day") {
-    return <RightPanel tasks={tasks} width={280} onSelect={onSelect} onChange={onChange} />;
+    return <RightPanel tasks={tasks} width={calWidth} onSelect={onSelect} onChange={onChange} />;
   }
   return (
     <div
