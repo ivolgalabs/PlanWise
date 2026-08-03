@@ -96,11 +96,14 @@ pub fn delete_task(state: State<'_, Db>, id: String) {
 #[tauri::command]
 pub fn move_task(state: State<'_, Db>, id: String, new_date: i64) {
     let conn = state.0.lock().unwrap();
-    // Перенос задачи на прошедший день = задача закрыта: автоматом помечаем
-    // её выполненной (уже выполненные не трогаем).
+    // Перенос в прошлое = задача закрыта (выполнена); перенос в будущее из
+    // прошлого = снова актуальна (не выполнена). Сегодня не трогаем.
     conn.execute(
         "UPDATE tasks SET date = ?1, someday = 0, archived = 0,
-           is_done = CASE WHEN is_done = 0 AND ?1 < ?2 THEN 1 ELSE is_done END,
+           is_done = CASE
+             WHEN ?1 < ?2 THEN 1
+             WHEN ?1 > ?2 AND is_done = 1 THEN 0
+             ELSE is_done END,
            updated_at = ?3 WHERE id = ?4",
         rusqlite::params![new_date, today_epoch_day(), now_ms(), id],
     )
@@ -265,10 +268,13 @@ pub fn get_archived_tasks(state: State<'_, Db>) -> Vec<Task> {
 pub fn restore_archived(state: State<'_, Db>, id: String, date: i64) {
     let conn = state.0.lock().unwrap();
     // Возврат на прошедший день = задача закрыта (иначе на следующем старте
-    // она снова уйдёт в архив как просроченная).
+    // она снова уйдёт в архив как просроченная); в будущее = снова актуальна.
     conn.execute(
         "UPDATE tasks SET archived = 0, date = ?1, someday = 0,
-           is_done = CASE WHEN is_done = 0 AND ?1 < ?2 THEN 1 ELSE is_done END,
+           is_done = CASE
+             WHEN ?1 < ?2 THEN 1
+             WHEN ?1 > ?2 AND is_done = 1 THEN 0
+             ELSE is_done END,
            updated_at = ?3 WHERE id = ?4",
         rusqlite::params![date, today_epoch_day(), now_ms(), id],
     )
