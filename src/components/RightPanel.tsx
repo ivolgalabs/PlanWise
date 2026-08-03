@@ -41,10 +41,16 @@ export function RightPanel({ tasks, width, onSelect, onChange }: Props) {
       ) : (
         <>
           {visibility.miniCalendar && (
-            // Нижний отступ меньше верхнего: «Когда-нибудь» сидит ближе к календарю.
-            <div style={{ flex: 1, overflowY: "auto", padding: "var(--sp-4) var(--sp-4) var(--sp-2)", minWidth: 0 }}>
-              <MiniCalendar tasks={tasks} large onSelect={onSelect} />
+            // Карточка календаря растягивается на всю область (fill), чтобы
+            // под ней не оставалось мёртвого пространства — зазор до
+            // «Когда-нибудь» задаётся явно (спейсер 3% ниже).
+            <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", padding: "var(--sp-4) var(--sp-4) 0", minWidth: 0 }}>
+              <MiniCalendar tasks={tasks} large onSelect={onSelect} fill />
             </div>
+          )}
+          {visibility.miniCalendar && (
+            // Отступ 3% от высоты панели между календарём и «Когда-нибудь».
+            <div style={{ height: "3%", flexShrink: 0 }} />
           )}
           {visibility.someday && (
             <SomedayColumn tasks={tasks.filter((t) => t.someday)} onChange={onChange} />

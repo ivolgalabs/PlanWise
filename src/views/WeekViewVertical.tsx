@@ -64,7 +64,8 @@ export function WeekViewVertical({ tasks, onChange }: Props) {
 
   return (
     <div style={{ display: "flex", height: "100%", minHeight: 0 }}>
-      <WeekShiftZone dir={-1} />
+      {/* Зона «следующая неделя» — только справа; перенос в прошлую неделю
+          убран по желанию пользователя. */}
       <div
         style={{
           flex: 1,

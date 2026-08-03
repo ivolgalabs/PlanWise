@@ -59,7 +59,8 @@ export function WeekView({ tasks, onChange, showPanel, onTogglePanel }: Props) {
             <WeekViewVertical tasks={tasks} onChange={onChange} />
           ) : (
             <div style={{ display: "flex", height: "100%", minHeight: 0 }}>
-              <WeekShiftZone dir={-1} />
+              {/* Зона «следующая неделя» — только справа; перенос в прошлую
+                  неделю убран по желанию пользователя. */}
               <div style={{ display: "flex", flexDirection: "column", gap: 4, padding: 4, flex: 1, minWidth: 0, height: "100%", minHeight: 0 }}>
                 {/* Два ряда: Пн–Чт сверху, Пт–Вс снизу. Колонки равные и
                     широкие — текст задач читается без обрезки. */}

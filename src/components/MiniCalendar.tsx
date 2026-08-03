@@ -27,6 +27,9 @@ interface Props {
    * false — в WeekView, чтобы ячейки не перехватывали collision у дней недели.
    */
   droppable?: boolean;
+  /** Растянуть карточку на всю высоту родителя (flex-контейнер правой
+   *  панели), чтобы под календарём не оставалось мёртвого пространства. */
+  fill?: boolean;
 }
 
 /** Максимум точек-задач в ячейке; остаток показываем как «+N». */
@@ -38,7 +41,7 @@ const MAX_DOTS = 4;
  * задач — несколько цветов). В виде «Неделя» подсвечивается неделя выбранной
  * даты, в «Дне» — сам выбранный день.
  */
-export function MiniCalendar({ tasks, large, onSelect, droppable = true }: Props) {
+export function MiniCalendar({ tasks, large, onSelect, droppable = true, fill = false }: Props) {
   const { selectedDate, setSelectedDate, mondayFirst, view } = useStore();
   const [collapsed, setCollapsed] = useState(false);
   // Месяц календаря — собственное состояние, отвязанное от выбранной даты:
@@ -84,6 +87,8 @@ export function MiniCalendar({ tasks, large, onSelect, droppable = true }: Props
         border: `1px solid ${COLORS.cardBorder}`,
         borderRadius: "var(--radius-md)",
         padding: large ? "var(--sp-6)" : "var(--sp-4)",
+        // fill: растягиваем карточку на всю высоту flex-родителя (панель).
+        ...(fill ? { flex: 1, minHeight: 0 } : {}),
       }}
     >
       <div
