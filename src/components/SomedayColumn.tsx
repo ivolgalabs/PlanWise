@@ -43,7 +43,8 @@ export function SomedayColumn({ tasks, onChange }: Props) {
     >
       <div
         style={{
-          padding: "var(--sp-2) var(--sp-3)",
+          // Верхний отступ меньше: секция сидит ближе к календарю.
+          padding: "var(--sp-1) var(--sp-3)",
           fontSize: "var(--fs-sm)",
           fontWeight: 700,
           color: COLORS.accent,

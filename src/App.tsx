@@ -12,6 +12,7 @@ import type { PeriodFilter, StatusFilter, SortKey } from "./views/SearchResults"
 import { DayView } from "./views/DayView";
 import { WeekView } from "./views/WeekView";
 import { MonthView } from "./views/MonthView";
+import { RightPanel } from "./components/RightPanel";
 import "./App.css";
 
 /** Разрешить id темы по mode + предпочтениям. */
@@ -71,6 +72,15 @@ function App() {
   // Период «Произвольный»: диапазон с/по (epoch-day; null = край не задан).
   const [searchPeriodFrom, setSearchPeriodFrom] = useState<number | null>(null);
   const [searchPeriodTo, setSearchPeriodTo] = useState<number | null>(null);
+  // Поиск «активен», когда задан хоть один фильтр: тогда результаты
+  // заменяют основной вид, а правая панель остаётся видимой рядом.
+  const searchActive =
+    searchOpen &&
+    (searchQuery.trim() !== "" ||
+      searchColor !== null ||
+      searchPeriod !== "all" ||
+      searchStatus !== "all" ||
+      searchSort !== "dateAsc");
 
   // Тема: применяем разрешённый id, при system — следим за ОС.
   useEffect(() => {
@@ -259,12 +269,7 @@ function App() {
       <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           {/* Активный поиск заменяет вид списком результатов по всем задачам. */}
-          {searchOpen &&
-          (searchQuery.trim() !== "" ||
-            searchColor !== null ||
-            searchPeriod !== "all" ||
-            searchStatus !== "all" ||
-            searchSort !== "dateAsc") ? (
+          {searchActive ? (
             <SearchResults
               tasks={tasks}
               query={searchQuery}
@@ -309,6 +314,20 @@ function App() {
             </>
           )}
         </div>
+        {/* Правая панель (календарь + «Когда-нибудь» + архив) остаётся
+            видимой и при открытом поиске — компактный поиск её не трогает.
+            Клик по дню в календаре переходит к нему, как в результатах. */}
+        {searchActive && (
+          <RightPanel
+            tasks={tasks}
+            width={280}
+            onSelect={(d) => {
+              setSelectedDate(d);
+              setView("day");
+            }}
+            onChange={reload}
+          />
+        )}
       </div>
 
       {settingsOpen && (

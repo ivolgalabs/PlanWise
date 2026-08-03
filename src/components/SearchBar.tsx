@@ -126,14 +126,15 @@ export function SearchBar({ query, onQuery, color, onColor, period, status, sort
   const toggle = (k: FilterKey) => setOpenKey((cur) => (cur === k ? null : k));
 
   return (
-    <div ref={barRef} style={{ padding: "var(--sp-1) var(--sp-4) var(--sp-2)", borderBottom: `1px solid ${COLORS.cardBorder}`, display: "flex", flexDirection: "column", gap: "var(--sp-1)" }}>
-      {/* Ряд 1: инпут + закрыть */}
+    <div ref={barRef} style={{ padding: "var(--sp-1) var(--sp-4)", borderBottom: `1px solid ${COLORS.cardBorder}`, display: "flex", flexDirection: "column", gap: "var(--sp-1)" }}>
+      {/* Ряд 1: инпут (заметно выше — текст не липнет к краям) + закрыть */}
       <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)" }}>
-        <input autoFocus value={query} onChange={(e) => onQuery(e.target.value)} placeholder="Поиск задач…" className="inline-input" style={{ flex: 1, minWidth: 0, border: `1px solid ${COLORS.cardBorder}`, borderRadius: "var(--radius-md)", padding: "var(--sp-1) var(--sp-3)", fontSize: "var(--fs-sm)", background: "transparent", color: COLORS.text, outline: "none" }} />
+        <input autoFocus value={query} onChange={(e) => onQuery(e.target.value)} placeholder="Поиск задач…" className="inline-input" style={{ flex: 1, minWidth: 0, border: `1px solid ${COLORS.cardBorder}`, borderRadius: "var(--radius-md)", padding: "8px 12px", fontSize: "var(--fs-md)", background: "transparent", color: COLORS.text, outline: "none" }} />
         <button className="icon-btn" onClick={onClose} title="Закрыть поиск"><Icon name="close" size={14} /></button>
       </div>
-      {/* Ряд 2: категории — чипы с цветом и именем */}
-      <div style={{ display: "flex", gap: "var(--sp-1)", overflowX: "auto", paddingBottom: 2 }}>
+      {/* Ряд 2: категории + период/статус/сортировка — один компактный ряд
+          с переносом, чтобы не занимать лишнюю высоту */}
+      <div style={{ display: "flex", gap: "var(--sp-1)", flexWrap: "wrap", alignItems: "center", paddingBottom: 2 }}>
         <button className="text-chip" onClick={() => onColor(null)} style={{ border: `1px solid ${color === null ? COLORS.accent : COLORS.cardBorder}`, background: color === null ? accentTint(0.1) : "transparent" }}>Все</button>
         {sets.map((c) => (
           <button key={c.id} className="text-chip" onClick={() => onColor(c.id)} title={c.name}
@@ -142,9 +143,6 @@ export function SearchBar({ query, onQuery, color, onColor, period, status, sort
             {c.name}
           </button>
         ))}
-      </div>
-      {/* Ряд 3: период / статус / сортировка — один ряд дропдаунов */}
-      <div style={{ display: "flex", gap: "var(--sp-2)", flexWrap: "wrap" }}>
         <FilterSelect label="Период" value={period} options={[["all", "Все"], ["today", "Сегодня"], ["overdue", "Просроч."], ["7days", "7 дней"], ["month", "Месяц"], ["custom", "Произвольный…"]] as const}
           open={openKey === "period"} onToggle={() => toggle("period")} onChange={onPeriod} />
         <FilterSelect label="Статус" value={status} options={[["all", "Все"], ["active", "Активные"], ["done", "Выполн."]] as const}

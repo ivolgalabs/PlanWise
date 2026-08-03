@@ -41,36 +41,41 @@ export function RightPanel({ tasks, width, onSelect, onChange }: Props) {
       ) : (
         <>
           {visibility.miniCalendar && (
-            <div style={{ flex: 1, overflowY: "auto", padding: "var(--sp-4)", minWidth: 0 }}>
+            // Нижний отступ меньше верхнего: «Когда-нибудь» сидит ближе к календарю.
+            <div style={{ flex: 1, overflowY: "auto", padding: "var(--sp-4) var(--sp-4) var(--sp-2)", minWidth: 0 }}>
               <MiniCalendar tasks={tasks} large onSelect={onSelect} />
             </div>
           )}
           {visibility.someday && (
             <SomedayColumn tasks={tasks.filter((t) => t.someday)} onChange={onChange} />
           )}
-          {archivedTasks.length > 0 && (
-            <button
-              onClick={() => setArchiveOpen(true)}
-              title="Открыть архив"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "var(--sp-2)",
-                width: "100%",
-                border: "none",
-                borderTop: `1px solid ${COLORS.cardBorder}`,
-                background: "transparent",
-                padding: "var(--sp-2) var(--sp-3)",
-                fontSize: "var(--fs-sm)",
-                fontWeight: 600,
-                color: COLORS.muted,
-                cursor: "pointer",
-              }}
-            >
-              <Icon name="note" size={14} />
-              Архив · {archivedTasks.length}
-            </button>
-          )}
+          {/* Полоска «Архив · N» — всегда видна (N = 0 при пустом архиве) и
+              прижата к низу панели (marginTop auto). */}
+          <button
+            onClick={() => setArchiveOpen(true)}
+            title="Открыть архив"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "var(--sp-2)",
+              width: "100%",
+              border: "none",
+              borderTop: `1px solid ${COLORS.cardBorder}`,
+              background: "transparent",
+              padding: "var(--sp-2) var(--sp-3)",
+              fontSize: "var(--fs-sm)",
+              fontWeight: 700,
+              color: COLORS.accent,
+              cursor: "pointer",
+              marginTop: "auto",
+            }}
+          >
+            <Icon name="note" size={14} />
+            Архив
+            <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted, fontWeight: 400 }}>
+              {archivedTasks.length}
+            </span>
+          </button>
         </>
       )}
     </div>
