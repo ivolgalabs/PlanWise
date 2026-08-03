@@ -89,10 +89,19 @@ export function ArchivePanel({ tasks, onClose, onChange }: Props) {
               {fromEpochDay(t.date).toLocaleDateString("ru", { day: "numeric", month: "short" })}
             </span>
             <button
-              className="chip-btn"
               onClick={() => setRestoring(t)}
               title="Вернуть на выбранную дату"
-              style={{ fontSize: "var(--fs-2xs)", flexShrink: 0 }}
+              style={{
+                fontSize: "var(--fs-2xs)",
+                flexShrink: 0,
+                border: `1px solid ${COLORS.cardBorder}`,
+                background: "transparent",
+                borderRadius: "var(--radius-md)",
+                padding: "4px 10px",
+                cursor: "pointer",
+                color: COLORS.text,
+                whiteSpace: "nowrap",
+              }}
             >
               Вернуть…
             </button>

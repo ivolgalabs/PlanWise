@@ -307,3 +307,11 @@
   justify-content: center;
   gap: 4px;
 }
+
+/* На тач-устройствах и узких окнах (<820px — narrow-режим недели) выбор
+   «Списком/Сеткой» бесполезен: неделя принудительно списком. */
+@media (pointer: coarse), (max-width: 820px) {
+  .week-layout-setting {
+    display: none;
+  }
+}

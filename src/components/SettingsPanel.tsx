@@ -784,19 +784,24 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged }: Props)
             <p className="section-hint" style={{ margin: "var(--sp-2) 0 var(--sp-1)" }}>
               Открывать неделю по умолчанию:
             </p>
-            <div className="theme-status-modes">
-              <button
-                className={`theme-status-mode-btn ${weekVertical ? "active" : ""}`}
-                onClick={() => setWeekVertical(true)}
-              >
-                Списком
-              </button>
-              <button
-                className={`theme-status-mode-btn ${!weekVertical ? "active" : ""}`}
-                onClick={() => setWeekVertical(false)}
-              >
-                Сеткой
-              </button>
+            {/* На узких/тач-экранах неделя всегда списком (narrow-режим),
+                поэтому выбор «Списком/Сеткой» скрывается (класс
+                week-layout-setting + media-запрос). */}
+            <div className="week-layout-setting">
+              <div className="theme-status-modes">
+                <button
+                  className={`theme-status-mode-btn ${weekVertical ? "active" : ""}`}
+                  onClick={() => setWeekVertical(true)}
+                >
+                  Списком
+                </button>
+                <button
+                  className={`theme-status-mode-btn ${!weekVertical ? "active" : ""}`}
+                  onClick={() => setWeekVertical(false)}
+                >
+                  Сеткой
+                </button>
+              </div>
             </div>
           </section>
 
