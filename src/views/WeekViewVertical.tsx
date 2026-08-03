@@ -28,10 +28,8 @@ export function WeekViewVertical({ tasks, onChange }: Props) {
     tasks
       .filter((t) => isSameDay(fromEpochDay(t.date), d))
       .sort((a, b) => {
-        // Вторичный ключ sortOrder — сохраняет порядок ввода (как в Rust ORDER BY).
-        const at = a.timeMinutes ?? 9999;
-        const bt = b.timeMinutes ?? 9999;
-        return at - bt || a.sortOrder - b.sortOrder;
+        // Порядок — только ручной (sortOrder); время не сортирует.
+        return a.sortOrder - b.sortOrder;
       });
 
   const dayKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;

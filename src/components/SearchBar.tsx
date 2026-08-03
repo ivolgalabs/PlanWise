@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { fromEpochDay } from "../api";
 import { COLORS, argbToHex, accentTint } from "../theme";
 import { useStore } from "../store";
 import { Icon } from "./Icon";
@@ -17,6 +18,11 @@ interface Props {
   onPeriod: (v: PeriodFilter) => void;
   onStatus: (v: StatusFilter) => void;
   onSort: (v: SortKey) => void;
+  /** Границы произвольного периода «с/по» (epoch-day; null = край не задан). */
+  from: number | null;
+  to: number | null;
+  onFrom: (v: number | null) => void;
+  onTo: (v: number | null) => void;
   onClose: () => void;
 }
 
@@ -99,7 +105,7 @@ function FilterSelect<T extends string>({ label, value, options, open, onToggle,
 
 /** Полоса поиска: текст, категории (чипы с именами), период/статус/сортировка
  *  — компактные выпадающие фильтры в один ряд. */
-export function SearchBar({ query, onQuery, color, onColor, period, status, sort, onPeriod, onStatus, onSort, onClose }: Props) {
+export function SearchBar({ query, onQuery, color, onColor, period, status, sort, onPeriod, onStatus, onSort, from, to, onFrom, onTo, onClose }: Props) {
   const { colorSets } = useStore();
   const sets = colorSets.filter((s) => s.id !== "cs-none");
   // Какой фильтр раскрыт (один на панель); null — все свёрнуты.
@@ -139,13 +145,44 @@ export function SearchBar({ query, onQuery, color, onColor, period, status, sort
       </div>
       {/* Ряд 3: период / статус / сортировка — один ряд дропдаунов */}
       <div style={{ display: "flex", gap: "var(--sp-2)", flexWrap: "wrap" }}>
-        <FilterSelect label="Период" value={period} options={[["all", "Все"], ["today", "Сегодня"], ["overdue", "Просроч."], ["7days", "7 дней"], ["month", "Месяц"]] as const}
+        <FilterSelect label="Период" value={period} options={[["all", "Все"], ["today", "Сегодня"], ["overdue", "Просроч."], ["7days", "7 дней"], ["month", "Месяц"], ["custom", "Произвольный…"]] as const}
           open={openKey === "period"} onToggle={() => toggle("period")} onChange={onPeriod} />
         <FilterSelect label="Статус" value={status} options={[["all", "Все"], ["active", "Активные"], ["done", "Выполн."]] as const}
           open={openKey === "status"} onToggle={() => toggle("status")} onChange={onStatus} />
-        <FilterSelect label="Сортировка" value={sort} options={[["dateAsc", "По дате ↑"], ["dateDesc", "По дате ↓"], ["alpha", "А-Я"], ["alphaDesc", "Я-А"], ["time", "По времени ↑"], ["timeDesc", "По времени ↓"], ["category", "Категория"]] as const}
+        <FilterSelect label="Сортировка" value={sort} options={[["dateAsc", "По дате ↑"], ["dateDesc", "По дате ↓"], ["alpha", "А-Я"], ["alphaDesc", "Я-А"], ["category", "Категория"]] as const}
           open={openKey === "sort"} onToggle={() => toggle("sort")} onChange={onSort} />
       </div>
+      {/* Строка диапазона произвольного периода «с/по» */}
+      {period === "custom" && (
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)", fontSize: "var(--fs-xs)", color: COLORS.muted }}>
+          <span>с</span>
+          <input
+            type="date"
+            value={from ? toISODate(from) : ""}
+            onChange={(e) => onFrom(e.target.value ? fromISODate(e.target.value) : null)}
+            style={{ border: `1px solid ${COLORS.cardBorder}`, borderRadius: "var(--radius-sm)", padding: "2px 6px", background: "transparent", color: COLORS.text, outline: "none" }}
+          />
+          <span>по</span>
+          <input
+            type="date"
+            value={to ? toISODate(to) : ""}
+            onChange={(e) => onTo(e.target.value ? fromISODate(e.target.value) : null)}
+            style={{ border: `1px solid ${COLORS.cardBorder}`, borderRadius: "var(--radius-sm)", padding: "2px 6px", background: "transparent", color: COLORS.text, outline: "none" }}
+          />
+        </div>
+      )}
     </div>
   );
 }
+
+/** epoch-day → ISO-строка YYYY-MM-DD (для <input type="date">). */
+const toISODate = (ed: number): string => {
+  const d = fromEpochDay(ed);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
+/** ISO-строка YYYY-MM-DD → epoch-day. */
+const fromISODate = (iso: string): number => {
+  const [y, m, d] = iso.split("-").map(Number);
+  return Math.floor(Date.UTC(y, m - 1, d) / 86_400_000);
+};

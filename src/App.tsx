@@ -68,6 +68,9 @@ function App() {
   const [searchPeriod, setSearchPeriod] = useState<PeriodFilter>("all");
   const [searchStatus, setSearchStatus] = useState<StatusFilter>("all");
   const [searchSort, setSearchSort] = useState<SortKey>("dateAsc");
+  // Период «Произвольный»: диапазон с/по (epoch-day; null = край не задан).
+  const [searchPeriodFrom, setSearchPeriodFrom] = useState<number | null>(null);
+  const [searchPeriodTo, setSearchPeriodTo] = useState<number | null>(null);
 
   // Тема: применяем разрешённый id, при system — следим за ОС.
   useEffect(() => {
@@ -113,6 +116,8 @@ function App() {
       setSearchPeriod("all");
       setSearchStatus("all");
       setSearchSort("dateAsc");
+      setSearchPeriodFrom(null);
+      setSearchPeriodTo(null);
     }
   }, [visibility.search]);
 
@@ -192,6 +197,8 @@ function App() {
           setSearchPeriod("all");
           setSearchStatus("all");
           setSearchSort("dateAsc");
+          setSearchPeriodFrom(null);
+          setSearchPeriodTo(null);
         }}
         visibility={visibility}
       />
@@ -207,6 +214,10 @@ function App() {
           onPeriod={setSearchPeriod}
           onStatus={setSearchStatus}
           onSort={setSearchSort}
+          from={searchPeriodFrom}
+          to={searchPeriodTo}
+          onFrom={setSearchPeriodFrom}
+          onTo={setSearchPeriodTo}
           onClose={() => {
             setSearchOpen(false);
             setSearchQuery("");
@@ -214,6 +225,8 @@ function App() {
             setSearchPeriod("all");
             setSearchStatus("all");
             setSearchSort("dateAsc");
+            setSearchPeriodFrom(null);
+            setSearchPeriodTo(null);
           }}
         />
       )}
@@ -259,6 +272,8 @@ function App() {
               period={searchPeriod}
               status={searchStatus}
               sort={searchSort}
+              from={searchPeriodFrom}
+              to={searchPeriodTo}
               onJumpToDay={(d) => {
                 setSelectedDate(d);
                 setView("day");
@@ -271,6 +286,8 @@ function App() {
                 setSearchPeriod("all");
                 setSearchStatus("all");
                 setSearchSort("dateAsc");
+                setSearchPeriodFrom(null);
+                setSearchPeriodTo(null);
               }}
             />
           ) : (

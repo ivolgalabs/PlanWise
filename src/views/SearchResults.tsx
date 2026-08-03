@@ -4,12 +4,13 @@ import { COLORS, setHex } from "../theme";
 import { isToday, isPast } from "../date";
 import { useStore } from "../store";
 
-/** Фильтр по периоду: все / сегодня / просроченные / ближайшие 7 дней / календарный месяц. */
-export type PeriodFilter = "all" | "today" | "overdue" | "7days" | "month";
+/** Фильтр по периоду: все / сегодня / просроченные / ближайшие 7 дней /
+ *  календарный месяц / произвольный диапазон «с/по». */
+export type PeriodFilter = "all" | "today" | "overdue" | "7days" | "month" | "custom";
 /** Фильтр по статусу выполнения. */
 export type StatusFilter = "all" | "active" | "done";
 /** Ключ сортировки результатов поиска. */
-export type SortKey = "dateAsc" | "dateDesc" | "alpha" | "alphaDesc" | "time" | "timeDesc" | "category";
+export type SortKey = "dateAsc" | "dateDesc" | "alpha" | "alphaDesc" | "category";
 
 interface Props {
   tasks: Task[];
@@ -19,6 +20,9 @@ interface Props {
   period: PeriodFilter;
   status: StatusFilter;
   sort: SortKey;
+  /** Границы произвольного периода «с/по» (epoch-day; null = край не задан). */
+  from: number | null;
+  to: number | null;
   onJumpToDay: (d: Date) => void;
   onChange: () => void;
   onResetFilters: () => void;
@@ -29,7 +33,7 @@ interface Props {
  * сортировка по ключу. Заменяет основной вид, пока активен фильтр.
  * Чекбокс отмечает задачу, кнопка с датой переходит к дню задачи.
  */
-export function SearchResults({ tasks, query, color, period, status, sort, onJumpToDay, onChange, onResetFilters }: Props) {
+export function SearchResults({ tasks, query, color, period, status, sort, from, to, onJumpToDay, onChange, onResetFilters }: Props) {
   const { colorSets } = useStore();
   const q = query.trim().toLowerCase();
 
@@ -59,26 +63,26 @@ export function SearchResults({ tasks, query, color, period, status, sort, onJum
       if (period === "month") {
         const n = new Date(); return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth();
       }
+      if (period === "custom") {
+        // Произвольный диапазон: epoch-day задачи сравниваем напрямую;
+        // незаполненный край — без ограничения.
+        if (from != null && t.date < from) return false;
+        if (to != null && t.date > to) return false;
+        return true;
+      }
       return true;
     })
     .sort((a, b) => {
       const ad = a.date, bd = b.date;
-      const at = a.timeMinutes ?? 9999, bt = b.timeMinutes ?? 9999;
       switch (sort) {
-        case "dateDesc": return bd - ad || at - bt;
+        case "dateDesc": return bd - ad || a.sortOrder - b.sortOrder;
         case "alpha": return a.title.localeCompare(b.title, "ru", { sensitivity: "base" });
         case "alphaDesc": return b.title.localeCompare(a.title, "ru", { sensitivity: "base" });
-        case "time": return at - bt || ad - bd;
-        case "timeDesc": {
-          // От поздних к ранним; задачи без времени (-1) — в конце, при равенстве — по дате убыв.
-          const at2 = a.timeMinutes ?? -1, bt2 = b.timeMinutes ?? -1;
-          return bt2 - at2 || bd - ad;
-        }
         case "category": {
           const an = colorName(a.colorSetId), bn = colorName(b.colorSetId);
-          return an.localeCompare(bn, "ru") || ad - bd;
+          return an.localeCompare(bn, "ru") || ad - bd || a.sortOrder - b.sortOrder;
         }
-        default: return ad - bd || at - bt;
+        default: return ad - bd || a.sortOrder - b.sortOrder;
       }
     });
 

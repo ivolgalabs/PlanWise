@@ -64,11 +64,8 @@ export function DayView({ day, tasks, onChange }: Props) {
       );
     })
     .sort((a, b) => {
-      // Сначала задачи со временем (по возрастанию), потом без времени.
-      // Вторичный ключ sortOrder — сохраняет порядок ввода (как в Rust ORDER BY).
-      const at = a.timeMinutes ?? 9999;
-      const bt = b.timeMinutes ?? 9999;
-      return at - bt || a.sortOrder - b.sortOrder;
+      // Порядок — только ручной (sortOrder); время не сортирует.
+      return a.sortOrder - b.sortOrder;
     });
 
   const epochDay = Math.floor(
