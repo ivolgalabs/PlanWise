@@ -41,17 +41,17 @@ export const PALETTES: PaletteDef[] = [
 export const THEME_FAMILIES: ThemeFamily[] = PALETTES.map((p) => {
   // bg/text берём из Universal UI themes.css для каждого режима.
   const meta: Record<string, { light: [string, string]; dark: [string, string] }> = {
-    slate:     { light: ["#f4f5f7", "#1f2329"], dark: ["#0f1013", "#f2f3f5"] },
-    sepia:     { light: ["#fcfaf2", "#433422"], dark: ["#171412", "#efebe4"] },
-    evergreen: { light: ["#f1f7f4", "#1c2e24"], dark: ["#0f1a14", "#e2e8e6"] },
-    nord:      { light: ["#eceff4", "#2e3440"], dark: ["#2e3440", "#eceff4"] },
-    midnight:  { light: ["#f0f4fe", "#1a1b26"], dark: ["#1a1b26", "#c0caf5"] },
-    dracula:   { light: ["#f6f3fc", "#282a36"], dark: ["#282a36", "#f8f8f2"] },
-    amber:     { light: ["#fffdf5", "#3d321d"], dark: ["#1a130f", "#fdf5f0"] },
-    sakura:    { light: ["#fff0f5", "#5c2c3a"], dark: ["#1f1619", "#ffd1dc"] },
-    terra:     { light: ["#f2f1ec", "#3a362e"], dark: ["#1a1916", "#eceae5"] },
-    indigo:    { light: ["#f2f1ec", "#3a362e"], dark: ["#1a1916", "#eceae5"] },
-    sage:      { light: ["#f2f1ec", "#3a362e"], dark: ["#1a1916", "#eceae5"] },
+    slate:     { light: ["#f4f5f7", "#1f2329"], dark: ["#121316", "#f2f3f5"] },
+    sepia:     { light: ["#fcfaf2", "#433422"], dark: ["#1b1715", "#efebe4"] },
+    evergreen: { light: ["#f1f7f4", "#1c2e24"], dark: ["#121e17", "#e2e8e6"] },
+    nord:      { light: ["#eceff4", "#2e3440"], dark: ["#363d4b", "#eceff4"] },
+    midnight:  { light: ["#f0f4fe", "#1a1b26"], dark: ["#1e202c", "#c0caf5"] },
+    dracula:   { light: ["#f6f3fc", "#282a36"], dark: ["#2f313f", "#f8f8f2"] },
+    amber:     { light: ["#fffdf5", "#3d321d"], dark: ["#1e1612", "#fdf5f0"] },
+    sakura:    { light: ["#fff0f5", "#5c2c3a"], dark: ["#241a1d", "#ffd1dc"] },
+    terra:     { light: ["#f2f1ec", "#3a362e"], dark: ["#1e1d1a", "#eceae5"] },
+    indigo:    { light: ["#f2f1ec", "#3a362e"], dark: ["#1e1d1a", "#eceae5"] },
+    sage:      { light: ["#f2f1ec", "#3a362e"], dark: ["#1e1d1a", "#eceae5"] },
   };
   const m = meta[p.id];
   return {
