@@ -16,7 +16,7 @@
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-2xl);
   width: 100%;
-  max-width: 560px;
+  max-width: 720px;
   max-height: 90vh;
   display: flex;
   flex-direction: column;

@@ -87,8 +87,11 @@ export function MiniCalendar({ tasks, large, onSelect, droppable = true, fill = 
         border: `1px solid ${COLORS.cardBorder}`,
         borderRadius: "var(--radius-md)",
         padding: large ? "var(--sp-6)" : "var(--sp-4)",
-        // fill: растягиваем карточку на всю высоту flex-родителя (панель).
-        ...(fill ? { flex: 1, minHeight: 0 } : {}),
+        // fill: растягиваем карточку на всю высоту flex-родителя (панель),
+        // но НЕ сжимаем ниже содержимого (42 ячейки) — иначе при малой
+        // высоте окна числа месяцев вылезают за нижний край карточки
+        // (обёртка панели сама скроллится).
+        ...(fill ? { flex: "1 0 auto", overflow: "hidden" } : {}),
       }}
     >
       <div

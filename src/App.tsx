@@ -79,13 +79,15 @@ function App() {
   useEffect(() => {
     localStorage.setItem(CAL_KEY, String(calWidth));
   }, [calWidth]);
-  // Панель скрывается в узком окне; порог зависит от вида (неделя 1200,
-  // день 700 — как раньше было в видах).
+  // Панель скрывается в узком окне; порог зависит от вида (неделя 1000,
+  // день 700). Раньше у недели был порог 1200 — при дефолтном окне 1100
+  // панель в неделе пропадала; 1000 — панель видна, а при 1140+ вместе
+  // с сеткой недели.
   const [calNarrow, setCalNarrow] = useState(
-    () => window.matchMedia(`(max-width: ${view === "day" ? 700 : 1200}px)`).matches,
+    () => window.matchMedia(`(max-width: ${view === "day" ? 700 : 1000}px)`).matches,
   );
   useEffect(() => {
-    const mq = window.matchMedia(`(max-width: ${view === "day" ? 700 : 1200}px)`);
+    const mq = window.matchMedia(`(max-width: ${view === "day" ? 700 : 1000}px)`);
     const handler = (e: MediaQueryListEvent) => setCalNarrow(e.matches);
     mq.addEventListener("change", handler);
     // Сразу синхронизируем при смене вида (порог другой) — иначе состояние
