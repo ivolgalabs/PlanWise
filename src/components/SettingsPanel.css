@@ -178,3 +178,132 @@
   color: var(--text-primary);
   border-color: var(--accent);
 }
+
+/* === Конструктор «Свой выбор» (Палитра) ===
+ * Карточки, сегменты режимов фона и вспомогательные элементы — в стиле
+ * остальных секций настроек (bg-tertiary + border + токены UUI). */
+
+/* Сетка карточек «Акцент / Фон» — две колонки, на узком экране одна. */
+.pv-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-4);
+}
+@media (max-width: 560px) {
+  .pv-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Карточка конструктора — как секция настроек. */
+.pv-card {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: var(--sp-5) var(--sp-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  min-width: 0;
+  box-sizing: border-box;
+}
+.pv-card h3 {
+  margin: 0;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+/* Примечания-подсказки внутри конструктора. */
+.pv-note,
+.preset-actions-hint,
+.pv-hint {
+  margin: 0;
+  font-size: var(--fs-2xs);
+  color: var(--text-muted);
+}
+
+/* Режим фона («Из темы / Светлый / Тёмный / OLED») — сегментированный
+   контрол, как кнопки светлой/тёмной темы (theme-status-modes). */
+.pv-bg-row {
+  display: flex;
+  gap: var(--sp-1);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 2px;
+  align-self: flex-start;
+  flex-wrap: wrap;
+}
+.pv-bg-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.pv-bg-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.pv-bg-btn.active {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  font-weight: 700;
+}
+
+/* Строки слотов «☀️/🌙» — колонка с зазорами. */
+.slot-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+/* Выбор слота при сохранении стиля — как поле имени (preset-name-input). */
+.preset-slot-select {
+  flex-shrink: 0;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 8px 10px;
+  color: var(--text-primary);
+  font-size: var(--fs-xs);
+  font-family: inherit;
+  outline: none;
+  cursor: pointer;
+}
+.preset-slot-select:focus {
+  border-color: var(--accent);
+}
+
+/* «Сбросить акцент» — вторичная кнопка, как preset-btn. */
+.reset-accent-btn {
+  font-size: var(--fs-xs);
+  padding: var(--sp-1) var(--sp-3);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  border: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+}
+.reset-accent-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--accent);
+}
+
+/* Кнопки действий пресета (Применить / копировать / удалить) — иконки
+   ровно по центру, как в остальных кнопках приложения. */
+.preset-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}

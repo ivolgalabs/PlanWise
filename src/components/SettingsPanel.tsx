@@ -683,7 +683,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged }: Props)
                                   title="Очистить слот"
                                   onClick={() => clearSlot(kind)}
                                 >
-                                  ✕
+                                  <Icon name="close" size={12} />
                                 </button>
                               </>
                             )}
@@ -710,14 +710,14 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged }: Props)
                               {applied ? "✓ применён" : "Применить"}
                             </button>
                             <button className="preset-action-btn" title="Скопировать TMT-код" onClick={() => copyPresetCode(p)}>
-                              📋
+                              <Icon name="copy" size={12} />
                             </button>
                             <button
                               className="preset-action-btn delete"
                               title="Удалить"
                               onClick={() => setPresets(presets.filter((x) => x.id !== p.id))}
                             >
-                              ✕
+                              <Icon name="trash" size={12} />
                             </button>
                           </div>
                         </div>
