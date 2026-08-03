@@ -10,19 +10,21 @@ export interface VisibilityState {
   navArrows: boolean; search: boolean; datePicker: boolean;
   miniCalendar: boolean; taskTime: boolean; subtasks: boolean; notes: boolean;
   someday: boolean;
-  taskActions: boolean; rolloverBanner: boolean;
+  taskActions: boolean; archiveBanner: boolean;
 }
 
 /** Видимость по умолчанию — все элементы показаны. */
 const DEFAULT_VISIBILITY: VisibilityState = {
   navArrows: true, search: true, datePicker: true, miniCalendar: true,
-  taskTime: true, subtasks: true, notes: true, someday: true, taskActions: true, rolloverBanner: true,
+  taskTime: true, subtasks: true, notes: true, someday: true, taskActions: true, archiveBanner: true,
 };
 
 interface PlannerState {
   selectedDate: Date;
   view: ViewKind;
   tasks: Task[];
+  /** Задачи «Архива» (скрыты из видов, ждут возврата) — отдельным пулом. */
+  archivedTasks: Task[];
   mondayFirst: boolean;
   /** Режим темы: light/dark/system. */
   themeMode: ThemeMode;
@@ -36,8 +38,8 @@ interface PlannerState {
   uiScale: number;
   /** Множитель размера шрифта 0.8-1.6 (меняет --fs-* токены через html font-size). */
   fontScale: number;
-  /** Авто-перенос невыполненных прошлых задач на сегодня (вкл/выкл). */
-  rolloverEnabled: boolean;
+  /** Авто-архив просроченных невыполненных задач (вкл/выкл). */
+  archiveEnabled: boolean;
   /** Категории (цвет-сеты) из БД — грузятся при старте. */
   colorSets: ColorSet[];
   /** Видимость элементов интерфейса — можно прятать в настройках. */
@@ -45,6 +47,7 @@ interface PlannerState {
   setSelectedDate: (d: Date) => void;
   setView: (v: ViewKind) => void;
   setTasks: (t: Task[]) => void;
+  setArchivedTasks: (t: Task[]) => void;
   setColorSets: (s: ColorSet[]) => void;
   toggleMondayFirst: () => void;
   setThemeMode: (m: ThemeMode) => void;
@@ -53,7 +56,7 @@ interface PlannerState {
   setUseOledForDarkMode: (v: boolean) => void;
   setUiScale: (s: number) => void;
   setFontScale: (s: number) => void;
-  setRolloverEnabled: (v: boolean) => void;
+  setArchiveEnabled: (v: boolean) => void;
   setVisibility: (k: keyof VisibilityState, v: boolean) => void;
 }
 
@@ -72,12 +75,14 @@ export const useStore = create<PlannerState>()(
       useOledForDarkMode: false,
       uiScale: 1.0,
       fontScale: 1.0,
-      rolloverEnabled: true,
+      archiveEnabled: true,
+      archivedTasks: [],
       colorSets: [],
       visibility: DEFAULT_VISIBILITY,
       setSelectedDate: (d) => set({ selectedDate: d }),
       setView: (v) => set({ view: v }),
       setTasks: (t) => set({ tasks: t }),
+      setArchivedTasks: (t) => set({ archivedTasks: t }),
       setColorSets: (s) => set({ colorSets: s }),
       toggleMondayFirst: () => set((s) => ({ mondayFirst: !s.mondayFirst })),
       setThemeMode: (m) => set({ themeMode: m }),
@@ -86,7 +91,7 @@ export const useStore = create<PlannerState>()(
       setUseOledForDarkMode: (v) => set({ useOledForDarkMode: v }),
       setUiScale: (s) => set({ uiScale: s }),
       setFontScale: (s) => set({ fontScale: s }),
-      setRolloverEnabled: (v) => set({ rolloverEnabled: v }),
+      setArchiveEnabled: (v) => set({ archiveEnabled: v }),
       setVisibility: (k, v) =>
         set((s) => ({ visibility: { ...s.visibility, [k]: v } })),
     }),
@@ -102,7 +107,7 @@ export const useStore = create<PlannerState>()(
         useOledForDarkMode: s.useOledForDarkMode,
         uiScale: s.uiScale,
         fontScale: s.fontScale,
-        rolloverEnabled: s.rolloverEnabled,
+        archiveEnabled: s.archiveEnabled,
         visibility: s.visibility,
       }),
       // Дефолтный shallow-merge zustand заменяет visibility целиком —

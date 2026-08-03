@@ -2,7 +2,7 @@
  * Браузерный фоллбек API: используется, когда приложение открыто вне Tauri
  * (vite dev в обычном браузере). Реализует те же команды, что Rust, поверх
  * localStorage — чтобы UI можно было тестировать без сборки Rust.
- * Сортировки совпадают с commands.rs (время ASC → sortOrder ASC).
+ * Сортировки совпадают с commands.rs (sortOrder ASC).
  */
 import type { Task, ColorSet, Subtask } from "./api";
 
@@ -23,24 +23,22 @@ const load = <T,>(k: string): T[] => {
 const save = (k: string, v: unknown) => localStorage.setItem(k, JSON.stringify(v));
 
 const sortTasks = (arr: Task[]): Task[] =>
-  arr.sort((a, b) => {
-    const at = a.timeMinutes ?? 9999, bt = b.timeMinutes ?? 9999;
-    return at - bt || a.sortOrder - b.sortOrder;
-  });
+  arr.sort((a, b) => a.sortOrder - b.sortOrder);
 
 export const browserApi = {
   async getTasks(startDay: number, endDay: number): Promise<Task[]> {
-    // Нормализуем notes: у старых записей localStorage поля нет (undefined),
-    // а Rust всегда отдаёт "" — приводим к единому виду, чтобы TaskCard не падал.
+    // Нормализуем notes/archived: у старых записей localStorage поля нет
+    // (undefined), а Rust всегда отдаёт ""/false — приводим к единому виду,
+    // чтобы TaskCard не падал.
     return sortTasks(
       load<Task>(K.tasks)
-        .filter((t) => !t.someday && t.date >= startDay && t.date <= endDay)
-        .map((t) => ({ ...t, notes: t.notes ?? "" })),
+        .filter((t) => !t.someday && !t.archived && t.date >= startDay && t.date <= endDay)
+        .map((t) => ({ ...t, notes: t.notes ?? "", archived: t.archived ?? false })),
     );
   },
   async upsertTask(task: Task): Promise<Task> {
     const id = task.id || crypto.randomUUID();
-    const rec: Task = { ...task, id, notes: task.notes ?? "", someday: task.someday ?? false };
+    const rec: Task = { ...task, id, notes: task.notes ?? "", someday: task.someday ?? false, archived: task.archived ?? false };
     const all = load<Task>(K.tasks).filter((t) => t.id !== id);
     all.push(rec);
     save(K.tasks, all);
@@ -51,13 +49,13 @@ export const browserApi = {
     save(K.subs, load<Subtask>(K.subs).filter((s) => s.taskId !== id));
   },
   async moveTask(id: string, newDay: number): Promise<void> {
-    save(K.tasks, load<Task>(K.tasks).map((t) => (t.id === id ? { ...t, date: newDay, someday: false, notes: t.notes ?? "" } : t)));
+    save(K.tasks, load<Task>(K.tasks).map((t) => (t.id === id ? { ...t, date: newDay, someday: false, archived: false, notes: t.notes ?? "" } : t)));
   },
   async getSomedayTasks(): Promise<Task[]> {
-    return sortTasks(load<Task>(K.tasks).filter((t) => t.someday));
+    return sortTasks(load<Task>(K.tasks).filter((t) => t.someday && !t.archived));
   },
   async setSomeday(id: string): Promise<void> {
-    save(K.tasks, load<Task>(K.tasks).map((t) => (t.id === id ? { ...t, someday: true, date: 0, notes: t.notes ?? "" } : t)));
+    save(K.tasks, load<Task>(K.tasks).map((t) => (t.id === id ? { ...t, someday: true, date: 0, archived: false, notes: t.notes ?? "" } : t)));
   },
   async getColorSets(): Promise<ColorSet[]> {
     // Первый запуск (или после очистки storage): создаём дефолтные категории.
@@ -77,13 +75,22 @@ export const browserApi = {
     save(K.sets, load<ColorSet>(K.sets).filter((s) => s.id !== id));
     save(K.tasks, load<Task>(K.tasks).map((t) => (t.colorSetId === id ? { ...t, colorSetId: null } : t)));
   },
-  async rolloverOverdue(todayDay: number): Promise<number> {
+  async archiveOverdue(todayDay: number): Promise<number> {
     let n = 0;
     save(K.tasks, load<Task>(K.tasks).map((t) => {
-      if (t.date < todayDay && !t.isDone && !t.someday) { n++; return { ...t, date: todayDay }; }
+      if (t.date < todayDay && !t.isDone && !t.someday && !t.archived) { n++; return { ...t, archived: true }; }
       return t;
     }));
     return n;
+  },
+  async getArchivedTasks(): Promise<Task[]> {
+    return load<Task>(K.tasks)
+      .filter((t) => t.archived)
+      .map((t) => ({ ...t, notes: t.notes ?? "", archived: t.archived ?? false }))
+      .sort((a, b) => b.date - a.date || b.updatedAt - a.updatedAt);
+  },
+  async restoreArchived(id: string, date: number): Promise<void> {
+    save(K.tasks, load<Task>(K.tasks).map((t) => (t.id === id ? { ...t, archived: false, date, someday: false, notes: t.notes ?? "" } : t)));
   },
   async getSubtasks(taskId: string): Promise<Subtask[]> {
     return load<Subtask>(K.subs)

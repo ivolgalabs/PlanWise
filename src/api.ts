@@ -14,6 +14,7 @@ export interface Task {
   timeMinutes?: number | null; // 0-1439, null = «в течение дня»
   notes: string; // заметка, '' = нет
   someday: boolean; // «Когда-нибудь»: задача без привязки ко дню
+  archived: boolean; // «Архив»: скрыта из видов, ждёт возврата
 }
 
 export interface ColorSet {
@@ -64,6 +65,7 @@ export const api = {
       updatedAt: 0, deviceId: task.deviceId ?? "", timeMinutes: task.timeMinutes ?? null,
       notes: task.notes ?? "",
       someday: task.someday ?? false,
+      archived: task.archived ?? false,
     };
     return isTauri() ? invoke<Task>("upsert_task", { task: t }) : browserApi.upsertTask(t);
   },
@@ -84,10 +86,17 @@ export const api = {
   },
   /** Удалить категорию; задачи с ней становятся без категории. */
   deleteColorSet: (id: string) => (isTauri() ? invoke<void>("delete_color_set", { id }) : browserApi.deleteColorSet(id)),
-  /** Перенести невыполненные прошлые задачи на сегодня. Возвращает кол-во. */
-  rolloverOverdue: (today: Date) => {
+  /** Архив: просроченные невыполненные задачи. Возвращает кол-во. */
+  archiveOverdue: (today: Date) => {
     const td = toEpochDay(today);
-    return isTauri() ? invoke<number>("rollover_overdue", { todayEpochDay: td }) : browserApi.rolloverOverdue(td);
+    return isTauri() ? invoke<number>("archive_overdue", { todayEpochDay: td }) : browserApi.archiveOverdue(td);
+  },
+  /** Задачи «Архива» (скрыты из видов, ждут возврата). */
+  getArchivedTasks: () => (isTauri() ? invoke<Task[]>("get_archived_tasks") : browserApi.getArchivedTasks()),
+  /** Вернуть задачу из архива на выбранную дату. */
+  restoreArchived: (id: string, date: Date) => {
+    const d = toEpochDay(date);
+    return isTauri() ? invoke<void>("restore_archived", { id, date: d }) : browserApi.restoreArchived(id, d);
   },
   getSubtasks: (taskId: string) => (isTauri() ? invoke<Subtask[]>("get_subtasks", { taskId }) : browserApi.getSubtasks(taskId)),
   upsertSubtask: (sub: Partial<Subtask> & { taskId: string; title: string }) => {

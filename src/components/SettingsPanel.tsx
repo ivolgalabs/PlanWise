@@ -42,7 +42,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged }: Props)
     useOledForDarkMode,
     uiScale,
     fontScale,
-    rolloverEnabled,
+    archiveEnabled,
     colorSets,
     visibility,
     toggleMondayFirst,
@@ -52,7 +52,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged }: Props)
     setUseOledForDarkMode,
     setUiScale,
     setFontScale,
-    setRolloverEnabled,
+    setArchiveEnabled,
     setVisibility,
   } = useStore();
 
@@ -369,10 +369,10 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged }: Props)
             <label className="oled-toggle">
               <input
                 type="checkbox"
-                checked={rolloverEnabled}
-                onChange={(e) => setRolloverEnabled(e.target.checked)}
+                checked={archiveEnabled}
+                onChange={(e) => setArchiveEnabled(e.target.checked)}
               />
-              <span>Авто-перенос невыполненных задач на сегодня</span>
+              <span>Авто-архив просроченных задач</span>
             </label>
           </section>
 
@@ -390,7 +390,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged }: Props)
               ["notes", "Заметки"],
               ["someday", "«Когда-нибудь»"],
               ["taskActions", "Кнопки «цвет» и «удалить» в задачах"],
-              ["rolloverBanner", "Баннер «Перенесено задач»"],
+              ["archiveBanner", "Баннер «Архивировано задач»"],
             ] as [keyof VisibilityState, string][]).map(([k, label]) => (
               <label key={k} className="oled-toggle">
                 <input type="checkbox" checked={visibility[k]} onChange={(e) => setVisibility(k, e.target.checked)} />

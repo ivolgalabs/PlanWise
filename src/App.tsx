@@ -44,21 +44,22 @@ function App() {
     useOledForDarkMode,
     uiScale,
     fontScale,
-    rolloverEnabled,
+    archiveEnabled,
     visibility,
     setSelectedDate,
     setView,
     setTasks,
+    setArchivedTasks,
     setColorSets,
   } = useStore();
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [datePickerOpen, setDatePickerOpen] = useState(false);
-  const [rolloverCount, setRolloverCount] = useState(0);
-  // Флаг «rollover уже выполнен за маунт»: в dev React.StrictMode монтирует
-  // компонент дважды и эффект вызывается два раза — второй вызов переносит
+  const [archiveCount, setArchiveCount] = useState(0);
+  // Флаг «архив уже выполнен за маунт»: в dev React.StrictMode монтирует
+  // компонент дважды и эффект вызывается два раза — второй вызов архивирует
   // 0 задач и затирает счётчик из первого (баннер не появляется).
-  const rolloverRan = useRef(false);
+  const archiveRan = useRef(false);
   // Поиск: полоса поиска открыта, текст, фильтр по цвету-сету,
   // период, статус и сортировка результатов.
   const [searchOpen, setSearchOpen] = useState(false);
@@ -88,19 +89,19 @@ function App() {
     document.documentElement.style.fontSize = `calc(clamp(13px, 1.05vw, 17px) * ${fontScale})`;
   }, [fontScale]);
 
-  // Авто-перенос невыполненных задач (если включён в настройках).
-  // Выполняется один раз за маунт — см. rolloverRan выше.
+  // Авто-архив просроченных невыполненных задач (если включён в настройках).
+  // Выполняется один раз за маунт — см. archiveRan выше.
   useEffect(() => {
-    if (!rolloverEnabled || rolloverRan.current) return;
-    rolloverRan.current = true;
+    if (!archiveEnabled || archiveRan.current) return;
+    archiveRan.current = true;
     (async () => {
       try {
-        setRolloverCount(await api.rolloverOverdue(new Date()));
+        setArchiveCount(await api.archiveOverdue(new Date()));
       } catch {
         /* некритично */
       }
     })();
-  }, [rolloverEnabled]);
+  }, [archiveEnabled]);
 
   // Если кнопка поиска скрыта настройками — закрываем открытый поиск
   // и сбрасываем всё его состояние (запрос, фильтры, сортировку).
@@ -119,13 +120,16 @@ function App() {
   // правый мини-календарь можно листать на любой месяц, поэтому ограничивать
   // выборку видимым окном нельзя — иначе на будущих неделях не будет задач.
   const reload = useCallback(async () => {
-    // Обычные задачи (широкий диапазон для календаря) + «Когда-нибудь».
-    const [regular, someday] = await Promise.all([
+    // Обычные задачи (широкий диапазон для календаря) + «Когда-нибудь» +
+    // «Архив» (отдельным пулом — в виды не попадает).
+    const [regular, someday, archived] = await Promise.all([
       api.getTasks(new Date(0), new Date(9999, 0, 1)),
       api.getSomedayTasks(),
+      api.getArchivedTasks(),
     ]);
     setTasks([...regular, ...someday]);
-  }, [setTasks]);
+    setArchivedTasks(archived);
+  }, [setTasks, setArchivedTasks]);
 
   useEffect(() => {
     reload();
@@ -213,8 +217,8 @@ function App() {
           }}
         />
       )}
-      {/* Баннер переноса скрывается настройками видимости. */}
-      {visibility.rolloverBanner && rolloverCount > 0 && (
+      {/* Баннер архива скрывается настройками видимости. */}
+      {visibility.archiveBanner && archiveCount > 0 && (
         <div
           style={{
             background: accentTint(0.15),
@@ -227,12 +231,12 @@ function App() {
           }}
         >
           <span>
-            Перенесено невыполненных задач на сегодня: {rolloverCount}
+            Архивировано просроченных задач: {archiveCount}
           </span>
           <button
             className="icon-btn"
             style={{ marginLeft: "auto" }}
-            onClick={() => setRolloverCount(0)}
+            onClick={() => setArchiveCount(0)}
             title="Скрыть"
           >
             <Icon name="close" size={14} />
