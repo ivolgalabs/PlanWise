@@ -18,6 +18,8 @@ pub struct Task {
     pub notes: String, // заметка к задаче, '' = нет
     #[serde(default)]
     pub someday: bool, // «Когда-нибудь»: задача без привязки ко дню
+    #[serde(default)]
+    pub archived: bool, // «Архив»: задача скрыта из видов, ждёт возврата
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -75,5 +77,18 @@ mod tests {
         }))
         .expect("parse task without someday");
         assert!(!t.someday);
+    }
+
+    /// Старый JSON без archived десериализуется в false.
+    #[test]
+    fn task_deserializes_without_archived() {
+        let t: Task = serde_json::from_value(serde_json::json!({
+            "id": "a", "title": "T", "date": 0, "isDone": false,
+            "colorSetId": null, "sortOrder": 0.0, "createdAt": 0,
+            "updatedAt": 0, "deviceId": "d", "timeMinutes": null,
+            "notes": "", "someday": false,
+        }))
+        .expect("parse task without archived");
+        assert!(!t.archived);
     }
 }

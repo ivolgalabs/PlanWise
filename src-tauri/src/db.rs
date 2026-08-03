@@ -86,4 +86,26 @@ mod tests {
             .unwrap_or(0);
         assert_eq!(default, 0);
     }
+
+    /// V6: у tasks есть колонка archived с default 0.
+    #[test]
+    fn migrations_add_archived_column() {
+        let conn = open(":memory:");
+        let has: bool = conn
+            .query_row(
+                "SELECT COUNT(*) > 0 FROM pragma_table_info('tasks') WHERE name = 'archived'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("pragma archived");
+        assert!(has, "после миграций у tasks должна быть колонка archived");
+        let default: i64 = conn
+            .query_row(
+                "SELECT archived FROM tasks WHERE id = 'x'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+        assert_eq!(default, 0);
+    }
 }
