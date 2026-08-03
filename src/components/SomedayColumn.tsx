@@ -11,8 +11,9 @@ interface Props {
   onChange: () => void;
 }
 
-/** Колонка «Когда-нибудь» (аналог Someday в tweek): задачи без привязки ко дню.
- *  Принимает задачи drag-ом; перенос в день — обычным drag на колонку дня. */
+/** Секция «Когда-нибудь» внутри правой панели (календарь сверху, эта секция
+ *  под ним): задачи без привязки ко дню. Принимает задачи drag-ом; перенос
+ *  в день — обычным drag на колонку дня. */
 export function SomedayColumn({ tasks, onChange }: Props) {
   const [newTitle, setNewTitle] = useState("");
   const { setNodeRef, isOver } = useDroppable({ id: somedayZoneId });
@@ -29,12 +30,14 @@ export function SomedayColumn({ tasks, onChange }: Props) {
     <div
       ref={setNodeRef}
       style={{
-        width: 280,
-        flexShrink: 0,
-        borderLeft: `1px solid ${COLORS.cardBorder}`,
         display: "flex",
         flexDirection: "column",
+        // Растёт до 45% высоты панели; без календаря (настройка выключена)
+        // flex-grow растягивает секцию на всю высоту.
+        flex: "1 1 auto",
+        maxHeight: "45%",
         minHeight: 0,
+        borderTop: `1px solid ${COLORS.cardBorder}`,
         background: isOver ? accentTint(0.08) : undefined,
       }}
     >

@@ -3,11 +3,11 @@ import { useDroppable } from "@dnd-kit/core";
 import type { Task } from "../api";
 import { api, fromEpochDay } from "../api";
 import { TaskCard } from "../components/TaskCard";
-import { MiniCalendar } from "../components/MiniCalendar";
+import { Icon } from "../components/Icon";
+import { RightPanel } from "../components/RightPanel";
 import { COLORS, accentTint } from "../theme";
 import { useStore } from "../store";
 import { TaskDndContext, dayId } from "../drag";
-import { SomedayColumn } from "../components/SomedayColumn";
 import { isToday } from "../date";
 
 interface Props {
@@ -26,21 +26,8 @@ export function DayView({ day, tasks, onChange }: Props) {
   const newInputRef = useRef<HTMLInputElement>(null);
   const { setSelectedDate, visibility } = useStore();
 
-  // В узком окне прячем колонку «Когда-нибудь» — она крадёт ширину у задач.
-  // Порог 820px как narrow в WeekView; matchMedia реагирует на ресайз окна.
-  const [narrow, setNarrow] = useState(
-    () =>
-      typeof window !== "undefined" &&
-      window.matchMedia("(max-width: 820px)").matches,
-  );
-  useEffect(() => {
-    const mq = window.matchMedia("(max-width: 820px)");
-    const handler = (e: MediaQueryListEvent) => setNarrow(e.matches);
-    mq.addEventListener("change", handler);
-    return () => mq.removeEventListener("change", handler);
-  }, []);
-  // В узком окне прячем правую панель календаря — она крадёт ширину у задач
-  // (порог 700px, отдельный от someday-колонки).
+  // В узком окне прячем правую панель (календарь + «Когда-нибудь») — она
+  // крадёт ширину у задач (порог 700px).
   const [calNarrow, setCalNarrow] = useState(
     () => window.matchMedia("(max-width: 700px)").matches,
   );
@@ -60,6 +47,12 @@ export function DayView({ day, tasks, onChange }: Props) {
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
   }, []);
+
+  // Панель возможна, если включена хоть одна секция (календарь или
+  // «Когда-нибудь»); локальный showPanel — кнопка в заголовке дня.
+  const [showPanel, setShowPanel] = useState(true);
+  const panelPossible = visibility.miniCalendar || visibility.someday;
+  const panelVisible = showPanel && panelPossible && !calNarrow;
 
   const dayTasks = tasks
     .filter((t) => {
@@ -122,29 +115,22 @@ export function DayView({ day, tasks, onChange }: Props) {
           setNewTitle={setNewTitle}
           addTask={addTask}
           newInputRef={newInputRef}
+          showPanel={showPanel}
+          onTogglePanel={() => setShowPanel((v) => !v)}
+          panelPossible={panelPossible}
         />
         {/* Боковая зона «завтра» — перенос задачи/подзадачи на завтра;
             в узком окне (tiny) скрыта, чтобы не красть ширину у задач */}
         {!tiny && <SideDayZone day={nextDay} label="завтра ▶" />}
-        {/* Колонка «Когда-нибудь» — задачи без даты; скрывается настройкой
-            и в узком окне (narrow). */}
-        {visibility.someday && !narrow && (
-          <SomedayColumn tasks={tasks.filter((t) => t.someday)} onChange={onChange} />
-        )}
-        {/* Правая панель — мини-календарь (также droppable через дни);
-            скрывается настройками видимости и в узком окне (calNarrow). */}
-        {visibility.miniCalendar && !calNarrow && (
-          <div
-            style={{
-              width: 280,
-              flexShrink: 0,
-              padding: "var(--sp-6) var(--sp-4)",
-              borderLeft: `1px solid ${COLORS.cardBorder}`,
-              overflowY: "auto",
-            }}
-          >
-            <MiniCalendar tasks={tasks} large onSelect={(d) => setSelectedDate(d)} />
-          </div>
+        {/* Правая панель: календарь + «Когда-нибудь» + архив. Скрывается
+            кнопкой в заголовке дня, настройками и в узком окне (calNarrow). */}
+        {panelVisible && (
+          <RightPanel
+            tasks={tasks}
+            width={280}
+            onSelect={(d) => setSelectedDate(d)}
+            onChange={onChange}
+          />
         )}
       </div>
     </TaskDndContext>
@@ -193,6 +179,9 @@ function DayTasksArea({
   setNewTitle,
   addTask,
   newInputRef,
+  showPanel,
+  onTogglePanel,
+  panelPossible,
 }: {
   day: Date;
   dayTasks: Task[];
@@ -202,6 +191,11 @@ function DayTasksArea({
   setNewTitle: (v: string) => void;
   addTask: () => void;
   newInputRef: React.RefObject<HTMLInputElement | null>;
+  /** Правая панель показана — кнопка в заголовке прячет/показывает её. */
+  showPanel: boolean;
+  onTogglePanel: () => void;
+  /** Панель возможна (включена хоть одна секция) — иначе кнопки нет. */
+  panelPossible: boolean;
 }) {
   // НЕ useDroppable: в DayView droppable-дни обслуживает MiniCalendar (ячейки)
   // и SideDayZone (завтра). Здесь droppable с dayId(epochDay) дублировал бы
@@ -218,22 +212,34 @@ function DayTasksArea({
         boxShadow: today ? `inset 3px 0 0 ${COLORS.accent}` : "none",
       }}
     >
-      <h2
-        style={{
-          fontSize: "var(--fs-xl)",
-          fontWeight: 700,
-          color: today ? COLORS.accent : COLORS.text,
-          margin: "0 0 var(--sp-6)",
-          textTransform: "capitalize",
-        }}
-      >
-        {day.toLocaleDateString("ru", {
-          day: "numeric",
-          month: "long",
-          weekday: "long",
-        })}
-        {today && " ●"}
-      </h2>
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-3)", margin: "0 0 var(--sp-6)" }}>
+        <h2
+          style={{
+            fontSize: "var(--fs-xl)",
+            fontWeight: 700,
+            color: today ? COLORS.accent : COLORS.text,
+            margin: 0,
+            textTransform: "capitalize",
+          }}
+        >
+          {day.toLocaleDateString("ru", {
+            day: "numeric",
+            month: "long",
+            weekday: "long",
+          })}
+          {today && " ●"}
+        </h2>
+        {panelPossible && (
+          <button
+            className="chip-btn"
+            onClick={onTogglePanel}
+            title={showPanel ? "Скрыть панель" : "Показать панель"}
+            style={{ flexShrink: 0 }}
+          >
+            {showPanel ? <Icon name="calendarHide" size={14} /> : <Icon name="calendar" size={14} />}
+          </button>
+        )}
+      </div>
 
       <div>
         {dayTasks.length === 0 && (

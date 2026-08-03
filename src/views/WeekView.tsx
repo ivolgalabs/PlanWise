@@ -3,14 +3,12 @@ import type { Task } from "../api";
 import { fromEpochDay } from "../api";
 import { weekDays, isSameDay } from "../date";
 import { DayColumn } from "../components/DayColumn";
-import { MiniCalendar } from "../components/MiniCalendar";
 import { WeekShiftZone } from "../components/WeekShiftZone";
 import { WeekViewVertical } from "./WeekViewVertical";
 import { Icon } from "../components/Icon";
-import { COLORS } from "../theme";
+import { RightPanel } from "../components/RightPanel";
 import { useStore } from "../store";
 import { TaskDndContext } from "../drag";
-import { SomedayColumn } from "../components/SomedayColumn";
 
 interface Props {
   tasks: Task[];
@@ -39,9 +37,9 @@ export function WeekView({ tasks, onChange }: Props) {
   const [showCalendar, setShowCalendar] = useState(true);
   const [calWidth, setCalWidth] = useState<number>(loadCalWidth);
   const days = weekDays(selectedDate, mondayFirst);
-  // Эффективная видимость календаря: локальный переключатель И настройка
-  // «Мини-календарь справа» (если настройка выключена — панель скрыта).
-  const showCal = showCalendar && visibility.miniCalendar;
+  // Эффективная видимость панели: локальный переключатель И хотя бы одна
+  // секция (календарь или «Когда-нибудь») включена настройками.
+  const showPanel = showCalendar && (visibility.miniCalendar || visibility.someday);
 
   // В узком окне принудительно вертикальный список — сетка из 7 узких колонок
   // нечитаема. matchMedia реагирует на ресайз окна.
@@ -81,9 +79,9 @@ export function WeekView({ tasks, onChange }: Props) {
             vertical={effectiveVertical}
             canToggle={!narrow}
             onToggleOrientation={() => setVertical((v) => !v)}
-            showCalendar={showCal}
+            showCalendar={showPanel}
             onToggleCalendar={() => setShowCalendar((v) => !v)}
-            calendarVisible={visibility.miniCalendar}
+            calendarVisible={visibility.miniCalendar || visibility.someday}
           />
           <div style={{ flex: 1, minHeight: 0 }}>
             {effectiveVertical ? (
@@ -109,19 +107,15 @@ export function WeekView({ tasks, onChange }: Props) {
             )}
           </div>
         </div>
-        {/* Колонка «Когда-нибудь» — справа от сетки (скрывается настройкой
-            и в узком окне, как календарь). */}
-        {visibility.someday && !narrow && (
-          <SomedayColumn tasks={tasks.filter((t) => t.someday)} onChange={onChange} />
-        )}
-        {/* Календарь скрыт в узком окне — он крадёт дефицитную ширину.
-            Также скрывается настройками видимости (showCal). */}
-        {showCal && !narrow && !calNarrow && (
+        {/* Правая панель: календарь + «Когда-нибудь» + архив. Скрывается
+            кнопкой тулбара, настройками видимости и в узком окне. */}
+        {showPanel && !narrow && !calNarrow && (
           <RightCalendar
             width={calWidth}
             onResize={setCalWidth}
             tasks={tasks}
             onSelect={setSelectedDate}
+            onChange={onChange}
           />
         )}
       </div>
@@ -144,7 +138,8 @@ function Toolbar({
   onToggleOrientation: () => void;
   showCalendar: boolean;
   onToggleCalendar: () => void;
-  /** Настройка видимости «Мини-календарь справа» — false прячет кнопку. */
+  /** Настройки видимости панели («Мини-календарь» или «Когда-нибудь») —
+   *  false прячет кнопку. */
   calendarVisible: boolean;
 }) {
   return (
@@ -179,7 +174,7 @@ function Toolbar({
         <button
           onClick={onToggleCalendar}
           className="icon-btn"
-          title={showCalendar ? "Скрыть календарь" : "Показать календарь"}
+          title={showCalendar ? "Скрыть панель" : "Показать панель"}
           style={{ display: "inline-flex", alignItems: "center", gap: "var(--sp-3)" }}
         >
           {showCalendar ? <Icon name="calendarHide" size={14} /> : <Icon name="calendar" size={14} />}
@@ -189,17 +184,20 @@ function Toolbar({
   );
 }
 
-/** Правая панель с крупным мини-календарём. Ширина регулируется drag-handle. */
+/** Правая панель недели: resize-handle + общий RightPanel (календарь,
+ *  «Когда-нибудь», архив). */
 function RightCalendar({
   width,
   onResize,
   tasks,
   onSelect,
+  onChange,
 }: {
   width: number;
   onResize: (w: number) => void;
   tasks: Task[];
   onSelect: (d: Date) => void;
+  onChange: () => void;
 }) {
   const draggingRef = useRef(false);
 
@@ -243,13 +241,13 @@ function RightCalendar({
         position: "relative",
         width,
         flexShrink: 0,
-        borderLeft: `1px solid ${COLORS.cardBorder}`,
-        // overflow: visible — иначе абсолютно позиционированный handle
-        // с left:0 обрезался бы по границе скролл-контейнера.
+        display: "flex",
+        flexDirection: "column",
+        minHeight: 0,
       }}
     >
-      {/* Drag-handle для изменения ширины. Сиблинг скролл-обёртки, чтобы
-          overflow:auto внутреннего контейнера его не обрезал. */}
+      {/* Drag-handle для изменения ширины. Сиблинг контента, чтобы его не
+          обрезал внутренний скролл. */}
       <div
         onMouseDown={startResize}
         title="Тяните, чтобы изменить ширину"
@@ -263,20 +261,7 @@ function RightCalendar({
           zIndex: 2,
         }}
       />
-      {/* Внутренний скролл-контейнер: именно он скроллит содержимое. */}
-      <div
-        style={{
-          height: "100%",
-          overflowY: "auto",
-          padding: "var(--sp-4)",
-          minWidth: 0,
-        }}
-      >
-        {/* Календарь снова droppable — теперь у ячеек префикс dc:, поэтому они
-            не конфликтуют с основными зонами дней недели (d:). Можно
-            перетащить задачу на любой день месяца через календарь. */}
-        <MiniCalendar tasks={tasks} large onSelect={onSelect} />
-      </div>
+      <RightPanel tasks={tasks} onSelect={onSelect} onChange={onChange} />
     </div>
   );
 }
