@@ -109,7 +109,7 @@ function DayRow({
 }: {
   day: Date;
   dayKey: string;
-  /** Выбранная дата — рамка акцента, чтобы отличать от «сегодня» (●). */
+  /** Выбранная дата — лёгкая подсветка фона, чтобы отличать от «сегодня» (●). */
   selected: boolean;
   dayTasks: Task[];
   onChange: () => void;
@@ -162,8 +162,8 @@ function DayRow({
           : selected
             ? accentTint(0.05)
             : "transparent",
-        // Рамка выбранного дня — отдельный маркер от «сегодня» (● в заголовке).
-        border: `1px solid ${selected ? COLORS.accent : "transparent"}`,
+        // Рамки нет; выбранный день выделяется акцент-фоном выше.
+        border: "none",
       }}
     >
       <div

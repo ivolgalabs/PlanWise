@@ -60,7 +60,6 @@ export function RightPanel({ tasks, width, onSelect, onChange }: Props) {
               gap: "var(--sp-2)",
               width: "100%",
               border: "none",
-              borderTop: `1px solid ${COLORS.cardBorder}`,
               background: "transparent",
               padding: "var(--sp-2) var(--sp-3)",
               fontSize: "var(--fs-sm)",

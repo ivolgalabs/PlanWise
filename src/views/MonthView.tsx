@@ -163,7 +163,7 @@ export function MonthView({ tasks, onSelectDay, onChange }: Props) {
             style={{
               background: COLORS.card,
               border: `1px solid ${COLORS.cardBorder}`,
-              borderRadius: "var(--radius-xl)",
+              borderRadius: "var(--radius-md)",
               padding: "var(--sp-6)",
               width: 460,
               maxWidth: "92vw",
@@ -350,7 +350,10 @@ function MonthCell({
           : selected
             ? accentTint(0.08)
             : COLORS.card,
-        border: `${isTd ? 2 : 1}px solid ${isTd ? COLORS.accent : COLORS.cardBorder}`,
+        // Рамки нет; «сегодня» выделяется акцентной обводкой (boxShadow).
+        boxShadow: isTd
+          ? `inset 0 0 0 1.5px ${COLORS.accent}`
+          : "none",
         borderRadius: "var(--radius-md)",
         padding: "var(--sp-2)",
         cursor: "pointer",

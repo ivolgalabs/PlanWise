@@ -45,7 +45,7 @@ function FilterSelect<T extends string>({ label, value, options, open, onToggle,
         className="text-chip"
         onClick={onToggle}
         style={{
-          border: `1px solid ${open ? COLORS.accent : COLORS.cardBorder}`,
+          border: `1px solid ${open ? COLORS.accent : "transparent"}`,
           background: open ? accentTint(0.1) : "transparent",
           display: "inline-flex",
           alignItems: "center",
@@ -135,10 +135,10 @@ export function SearchBar({ query, onQuery, color, onColor, period, status, sort
       {/* Ряд 2: категории + период/статус/сортировка — один компактный ряд
           с переносом, чтобы не занимать лишнюю высоту */}
       <div style={{ display: "flex", gap: "var(--sp-1)", flexWrap: "wrap", alignItems: "center", paddingBottom: 2 }}>
-        <button className="text-chip" onClick={() => onColor(null)} style={{ border: `1px solid ${color === null ? COLORS.accent : COLORS.cardBorder}`, background: color === null ? accentTint(0.1) : "transparent" }}>Все</button>
+        <button className="text-chip" onClick={() => onColor(null)} style={{ border: `1px solid ${color === null ? COLORS.accent : "transparent"}`, background: color === null ? accentTint(0.1) : "transparent" }}>Все</button>
         {sets.map((c) => (
           <button key={c.id} className="text-chip" onClick={() => onColor(c.id)} title={c.name}
-            style={{ border: `1px solid ${color === c.id ? COLORS.accent : COLORS.cardBorder}`, background: color === c.id ? accentTint(0.1) : "transparent" }}>
+            style={{ border: `1px solid ${color === c.id ? COLORS.accent : "transparent"}`, background: color === c.id ? accentTint(0.1) : "transparent" }}>
             <span style={{ width: 10, height: 10, borderRadius: "50%", background: argbToHex(c.color), flexShrink: 0 }} />
             {c.name}
           </button>

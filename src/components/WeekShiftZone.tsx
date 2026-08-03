@@ -34,7 +34,6 @@ export function WeekShiftZone({ dir }: Props) {
         fontWeight: 600,
         color: isOver ? COLORS.accent : COLORS.muted,
         background: isOver ? accentTint(0.12) : "transparent",
-        border: `1px dashed ${isOver ? COLORS.accent : COLORS.cardBorder}`,
         borderRadius: "var(--radius-md)",
         margin: "var(--sp-2)",
         userSelect: "none",

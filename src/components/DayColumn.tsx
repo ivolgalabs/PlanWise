@@ -28,7 +28,7 @@ export function DayColumn({
   const newInputRef = useRef<HTMLInputElement>(null);
   const { selectedDate } = useStore();
   const today = isToday(day);
-  // Выбранная дата — рамка акцента (отдельно от «сегодня» ●).
+  // Выбранная дата — акцентный фон колонки (отдельно от «сегодня» ●).
   const selected = isSameDay(day, selectedDate);
   const past = isPast(day);
   const weight = dayWeight(day);
@@ -106,10 +106,10 @@ export function DayColumn({
             : past
               ? COLORS.tertiary
               : COLORS.card,
-        border: `${today || selected ? 2 : 1}px solid ${
-          today || selected ? COLORS.accent : COLORS.cardBorder
-        }`,
-        borderRadius: "var(--radius-lg)",
+        // Рамка только у «сегодня»; остальные колонки — фон без рамки
+        // (выбранный день выделяется акцент-фоном выше).
+        border: today ? `2px solid ${COLORS.accent}` : "none",
+        borderRadius: "var(--radius-md)",
         display: "flex",
         flexDirection: "column",
         minHeight: 0,

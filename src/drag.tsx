@@ -259,7 +259,7 @@ export function TaskDndContext({ children, onChange }: TaskDndContextProps) {
             style={{
               background: COLORS.card,
               border: `1px solid ${COLORS.cardBorder}`,
-              borderRadius: "var(--radius-xl)",
+              borderRadius: "var(--radius-md)",
               padding: "var(--sp-6)",
               width: 320,
               boxShadow: "var(--shadow-xl)",
@@ -331,7 +331,7 @@ function DragGhost({ task }: { task: Task }) {
         maxWidth: 280,
         background: COLORS.card,
         border: `1px solid ${COLORS.cardBorder}`,
-        borderRadius: 6,
+        borderRadius: "var(--radius-md)",
         boxShadow: "0 4px 14px rgba(0,0,0,.18)",
         opacity: 0.92,
       }}

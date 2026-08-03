@@ -94,7 +94,7 @@ function badgeStyle(hasTime: boolean): React.CSSProperties {
 const menuStyle: React.CSSProperties = {
   position: "absolute", right: 0, top: "100%", marginTop: 4,
   background: COLORS.card, border: `1px solid ${COLORS.cardBorder}`,
-  borderRadius: "var(--radius-lg)", padding: "var(--sp-2)",
+  borderRadius: "var(--radius-md)", padding: "var(--sp-2)",
   boxShadow: "var(--shadow-lg)", zIndex: 200, minWidth: 180,
 };
 function presetBtn(active: boolean): React.CSSProperties {

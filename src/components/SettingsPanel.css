@@ -13,7 +13,7 @@
 .settings-window {
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-md);
   box-shadow: var(--shadow-2xl);
   width: 100%;
   max-width: 560px;
@@ -45,7 +45,7 @@
 
 .settings-section {
   padding: var(--sp-4);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
   margin-bottom: var(--sp-4);

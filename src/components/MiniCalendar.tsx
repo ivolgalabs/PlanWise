@@ -82,7 +82,7 @@ export function MiniCalendar({ tasks, large, onSelect, droppable = true }: Props
       style={{
         background: COLORS.card,
         border: `1px solid ${COLORS.cardBorder}`,
-        borderRadius: "var(--radius-lg)",
+        borderRadius: "var(--radius-md)",
         padding: large ? "var(--sp-6)" : "var(--sp-4)",
       }}
     >

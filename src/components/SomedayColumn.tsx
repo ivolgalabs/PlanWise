@@ -78,7 +78,6 @@ export function SomedayColumn({ tasks, onChange }: Props) {
         style={{
           width: "100%",
           border: "none",
-          borderTop: `1px solid ${COLORS.cardBorder}`,
           padding: "4px 8px",
           fontSize: 12,
           background: "transparent",
