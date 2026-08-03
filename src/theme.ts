@@ -31,6 +31,10 @@ export const PALETTES: PaletteDef[] = [
   { id: "dracula", label: "Dracula", accent: "#9444d6" },
   { id: "amber", label: "Amber", accent: "#d35400" },
   { id: "sakura", label: "Sakura", accent: "#d87093" },
+  // Дополнительные проверочные палитры (по референсу: нейтральный фон + акцент).
+  { id: "terra", label: "Terra", accent: "#e8612f" },
+  { id: "indigo", label: "Indigo", accent: "#56568c" },
+  { id: "sage", label: "Sage", accent: "#75894d" },
 ];
 
 /** Семьи тем для свотчей с превью фона/текста (как в multispend-tracker). */
@@ -38,13 +42,16 @@ export const THEME_FAMILIES: ThemeFamily[] = PALETTES.map((p) => {
   // bg/text берём из Universal UI themes.css для каждого режима.
   const meta: Record<string, { light: [string, string]; dark: [string, string] }> = {
     slate:     { light: ["#f4f5f7", "#1f2329"], dark: ["#0f1013", "#f2f3f5"] },
-    sepia:     { light: ["#fcfaf2", "#433422"], dark: ["#1e1b18", "#efebe4"] },
+    sepia:     { light: ["#fcfaf2", "#433422"], dark: ["#171412", "#efebe4"] },
     evergreen: { light: ["#f1f7f4", "#1c2e24"], dark: ["#0f1a14", "#e2e8e6"] },
     nord:      { light: ["#eceff4", "#2e3440"], dark: ["#2e3440", "#eceff4"] },
     midnight:  { light: ["#f0f4fe", "#1a1b26"], dark: ["#1a1b26", "#c0caf5"] },
     dracula:   { light: ["#f6f3fc", "#282a36"], dark: ["#282a36", "#f8f8f2"] },
     amber:     { light: ["#fffdf5", "#3d321d"], dark: ["#1a130f", "#fdf5f0"] },
     sakura:    { light: ["#fff0f5", "#5c2c3a"], dark: ["#1f1619", "#ffd1dc"] },
+    terra:     { light: ["#f2f1ec", "#3a362e"], dark: ["#1a1916", "#eceae5"] },
+    indigo:    { light: ["#f2f1ec", "#3a362e"], dark: ["#1a1916", "#eceae5"] },
+    sage:      { light: ["#f2f1ec", "#3a362e"], dark: ["#1a1916", "#eceae5"] },
   };
   const m = meta[p.id];
   return {
@@ -72,7 +79,7 @@ export interface FullTheme {
   label: string;
 }
 
-/** Все 24 темы (8 палитр × 3 режима). */
+/** Все темы (11 палитр × 3 режима). */
 export const ALL_THEMES: FullTheme[] = PALETTES.flatMap((p) =>
   (["light", "dark", "oled"] as ThemeMode[]).map((mode) => ({
     id: `${mode}-${p.id}`,
