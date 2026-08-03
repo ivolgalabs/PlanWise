@@ -372,7 +372,7 @@ function SubtaskGhost({ subtask }: { subtask: Subtask }) {
         maxWidth: 260,
         background: COLORS.card,
         border: `1px dashed ${COLORS.accent}`,
-        borderRadius: 6,
+        borderRadius: "var(--radius-md)",
         boxShadow: "0 4px 14px rgba(0,0,0,.18)",
         opacity: 0.92,
         fontSize: 12,
