@@ -9,6 +9,7 @@ import {
 } from "../theme";
 import type { CustomSlot, ThemePreset } from "../theme";
 import type { ThemeMode, VisibilityState } from "../store";
+import { DEFAULT_VISIBILITY } from "../store";
 import { api, isTauri } from "../api";
 import { Icon, type IconName } from "./Icon";
 import "./SettingsPanel.css";
@@ -45,6 +46,8 @@ interface Props {
   onSetsChanged: () => void;
   /** Перезагрузить задачи после импорта (App обновляет store.tasks). */
   onTasksChanged: () => void;
+  /** Сброс настроек интерфейса: ширина правой панели живёт в App (не в store). */
+  onResetUI?: () => void;
 }
 
 const SCALE_PRESETS = [0.7, 0.85, 1.0, 1.25, 1.5, 1.75, 2.0];
@@ -64,7 +67,7 @@ interface SetDraft {
  * Полноценное окно настроек: Оформление (тема свотчами + режим +
  * OLED + масштаб ползунком), Неделя и Категории (цвет-сеты).
  */
-export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged }: Props) {
+export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetUI }: Props) {
   const {
     mondayFirst,
     weekVertical,
@@ -80,6 +83,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged }: Props)
     archiveEnabled,
     colorSets,
     visibility,
+    panelGap,
     toggleMondayFirst,
     setThemeMode,
     setPreferredLightTheme,
@@ -93,6 +97,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged }: Props)
     setFontScale,
     setArchiveEnabled,
     setVisibility,
+    setPanelGap,
   } = useStore();
 
   // Черновики категорий для редактирования (служебный cs-none скрыт).
@@ -226,6 +231,21 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged }: Props)
   const msg = (text: string, ok = true) => {
     setFlash({ text, ok });
     window.setTimeout(() => setFlash(null), 4000);
+  };
+
+  // Сброс настроек интерфейса: видимость элементов, зазор панели, ориентация
+  // недели, масштабы. Ширина панели (App) сбрасывается через onResetUI.
+  const resetInterface = () => {
+    (Object.keys(DEFAULT_VISIBILITY) as (keyof VisibilityState)[]).forEach((k) =>
+      setVisibility(k, DEFAULT_VISIBILITY[k]),
+    );
+    setPanelGap(20);
+    setWeekVertical(true);
+    setUiScale(1);
+    setFontScale(1);
+    if (!mondayFirst) toggleMondayFirst();
+    onResetUI?.();
+    msg("Настройки интерфейса сброшены к умолчаниям");
   };
 
   // Применяем черновик (или активный слот) поверх темы вживую.
@@ -839,6 +859,27 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged }: Props)
                 <span>{label}</span>
               </label>
             ))}
+            {/* Расстояние между календарём и «Когда-нибудь» — сохраняется
+                между запусками; 0 = секции вплотную. */}
+            <div className="section-head" style={{ marginTop: "var(--sp-3)" }}>
+              <div>
+                <h3 className="section-title">Панель справа</h3>
+                <p className="section-hint">Расстояние между календарём и «Когда-нибудь»</p>
+              </div>
+              <span className="scale-badge">{panelGap}px</span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={80}
+              step={2}
+              value={panelGap}
+              onChange={(e) => setPanelGap(parseInt(e.target.value, 10))}
+              className="scale-slider"
+            />
+            <button className="preset-btn danger" onClick={resetInterface} style={{ marginTop: "var(--sp-3)" }}>
+              Сбросить настройки интерфейса
+            </button>
           </section>
 
           {/* ── Категории (цвет-сеты) ── */}

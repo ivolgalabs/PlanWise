@@ -19,6 +19,7 @@ const DEFAULT_VISIBILITY: VisibilityState = {
   navArrows: true, search: true, datePicker: true, miniCalendar: true,
   taskTime: true, subtasks: true, notes: true, someday: true, taskActions: true, archiveBanner: true,
 };
+export { DEFAULT_VISIBILITY };
 
 interface PlannerState {
   selectedDate: Date;
@@ -58,6 +59,8 @@ interface PlannerState {
   colorSets: ColorSet[];
   /** Видимость элементов интерфейса — можно прятать в настройках. */
   visibility: VisibilityState;
+  /** Зазор между мини-календарём и «Когда-нибудь» в правой панели (px). */
+  panelGap: number;
   setSelectedDate: (d: Date) => void;
   setWeekDate: (d: Date) => void;
   setMonthDate: (d: Date) => void;
@@ -78,6 +81,7 @@ interface PlannerState {
   setFontScale: (s: number) => void;
   setArchiveEnabled: (v: boolean) => void;
   setVisibility: (k: keyof VisibilityState, v: boolean) => void;
+  setPanelGap: (v: number) => void;
 }
 
 export const useStore = create<PlannerState>()(
@@ -105,6 +109,7 @@ export const useStore = create<PlannerState>()(
       archivedTasks: [],
       colorSets: [],
       visibility: DEFAULT_VISIBILITY,
+      panelGap: 20,
       setSelectedDate: (d) => set({ selectedDate: d }),
       setWeekDate: (d) => set({ weekDate: d }),
       setMonthDate: (d) => set({ monthDate: d }),
@@ -126,6 +131,7 @@ export const useStore = create<PlannerState>()(
       setArchiveEnabled: (v) => set({ archiveEnabled: v }),
       setVisibility: (k, v) =>
         set((s) => ({ visibility: { ...s.visibility, [k]: v } })),
+      setPanelGap: (v) => set({ panelGap: v }),
     }),
     {
       name: "todo-settings",
@@ -145,6 +151,7 @@ export const useStore = create<PlannerState>()(
         fontScale: s.fontScale,
         archiveEnabled: s.archiveEnabled,
         visibility: s.visibility,
+        panelGap: s.panelGap,
       }),
       // Дефолтный shallow-merge zustand заменяет visibility целиком —
       // новые флаги (например, notes) терялись бы у старых установок.

@@ -9,12 +9,15 @@ import { somedayZoneId } from "../drag";
 interface Props {
   tasks: Task[];
   onChange: () => void;
+  /** Растянуть на всю высоту панели (когда мини-календарь скрыт/в месяце),
+   *  чтобы под секцией не оставалось пустоты. */
+  stretch?: boolean;
 }
 
 /** Секция «Когда-нибудь» внутри правой панели (календарь сверху, эта секция
  *  под ним): задачи без привязки ко дню. Принимает задачи drag-ом; перенос
  *  в день — обычным drag на колонку дня. */
-export function SomedayColumn({ tasks, onChange }: Props) {
+export function SomedayColumn({ tasks, onChange, stretch = false }: Props) {
   const [newTitle, setNewTitle] = useState("");
   const { setNodeRef, isOver } = useDroppable({ id: somedayZoneId });
 
@@ -32,10 +35,10 @@ export function SomedayColumn({ tasks, onChange }: Props) {
       style={{
         display: "flex",
         flexDirection: "column",
-        // Растёт до 45% высоты панели; без календаря (настройка выключена)
-        // flex-grow растягивает секцию на всю высоту.
+        // Растёт до 45% высоты панели (календарь сверху); без календаря
+        // (stretch) — на всю высоту, чтобы не было мёртвого пространства.
         flex: "1 1 auto",
-        maxHeight: "45%",
+        maxHeight: stretch ? "none" : "45%",
         minHeight: 0,
         borderTop: `1px solid ${COLORS.cardBorder}`,
         background: isOver ? accentTint(0.08) : undefined,

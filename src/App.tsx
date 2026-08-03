@@ -414,7 +414,12 @@ function App() {
       </TaskDndContext>
 
       {settingsOpen && (
-        <SettingsPanel onClose={() => setSettingsOpen(false)} onSetsChanged={reloadSets} onTasksChanged={reload} />
+        <SettingsPanel
+          onClose={() => setSettingsOpen(false)}
+          onSetsChanged={reloadSets}
+          onTasksChanged={reload}
+          onResetUI={() => setCalWidth(CAL_DEFAULT)}
+        />
       )}
       {datePickerOpen && (
         <DatePickerModal

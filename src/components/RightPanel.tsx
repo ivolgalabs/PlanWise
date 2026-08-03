@@ -18,8 +18,12 @@ interface Props {
 /** Правая панель: мини-календарь сверху, «Когда-нибудь» под ним, полоска
  *  «Архив · N» внизу. Разворот архива занимает панель целиком. */
 export function RightPanel({ tasks, width, onSelect, onChange }: Props) {
-  const { visibility, archivedTasks, view } = useStore();
+  const { visibility, archivedTasks, view, panelGap } = useStore();
   const [archiveOpen, setArchiveOpen] = useState(false);
+  // Календарь виден не везде: в «Месяце» его нет, и настройкой его можно
+  // скрыть. Тогда «Когда-нибудь» растягивается на всю панель (stretch),
+  // чтобы под ней не оставалось мёртвого пространства.
+  const calVisible = visibility.miniCalendar && view !== "month";
 
   return (
     <div
@@ -42,19 +46,19 @@ export function RightPanel({ tasks, width, onSelect, onChange }: Props) {
         <>
           {visibility.miniCalendar && view !== "month" && (
             // Карточка календаря растягивается на всю область (fill), чтобы
-            // под ней не оставалось мёртвого пространства — зазор до
-            // «Когда-нибудь» задаётся явно (спейсер 3% ниже). В «Месяце»
+            // под ней не оставалось мёртвого пространства. В «Месяце»
             // календарь не показываем — сетка месяца и так видна.
             <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", padding: "var(--sp-4) var(--sp-4) 0", minWidth: 0 }}>
               <MiniCalendar tasks={tasks} large onSelect={onSelect} fill />
             </div>
           )}
-          {visibility.miniCalendar && view !== "month" && (
-            // Отступ 3% от высоты панели между календарём и «Когда-нибудь».
-            <div style={{ height: "3%", flexShrink: 0 }} />
+          {calVisible && (
+            // Зазор между календарём и «Когда-нибудь» — настраивается
+            // в настройках интерфейса (panelGap, px) и сохраняется.
+            <div style={{ height: panelGap, flexShrink: 0 }} />
           )}
           {visibility.someday && (
-            <SomedayColumn tasks={tasks.filter((t) => t.someday)} onChange={onChange} />
+            <SomedayColumn tasks={tasks.filter((t) => t.someday)} onChange={onChange} stretch={!calVisible} />
           )}
           {/* Полоска «Архив · N» — всегда видна (N = 0 при пустом архиве) и
               прижата к низу панели (marginTop auto). */}
