@@ -87,6 +87,9 @@ function App() {
     const mq = window.matchMedia(`(max-width: ${view === "day" ? 700 : 1200}px)`);
     const handler = (e: MediaQueryListEvent) => setCalNarrow(e.matches);
     mq.addEventListener("change", handler);
+    // Сразу синхронизируем при смене вида (порог другой) — иначе состояние
+    // останется от старого порога до следующего ресайза.
+    setCalNarrow(mq.matches);
     return () => mq.removeEventListener("change", handler);
   }, [view]);
   const [archiveCount, setArchiveCount] = useState(0);
