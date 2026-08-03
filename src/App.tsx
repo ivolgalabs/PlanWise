@@ -53,6 +53,8 @@ function resolveActiveTheme(): string {
 function App() {
   const {
     selectedDate,
+    weekDate,
+    monthDate,
     view,
     tasks,
     mondayFirst,
@@ -67,6 +69,8 @@ function App() {
     archiveEnabled,
     visibility,
     setSelectedDate,
+    setWeekDate,
+    setMonthDate,
     setView,
     setTasks,
     setArchivedTasks,
@@ -214,23 +218,46 @@ function App() {
     reloadSets();
   }, [reloadSets]);
 
+  // Активная дата вида: у каждого вида свой якорь (weekDate/monthDate),
+  // чтобы выбор дня в «Дне» не двигал неделю/месяц; null = вид ещё не
+  // открывался — используем выбранный день.
+  const topDate =
+    view === "week"
+      ? (weekDate ?? selectedDate)
+      : view === "month"
+        ? (monthDate ?? selectedDate)
+        : selectedDate;
+
+  // Выбор даты (мини-календарь, кнопка «Дата») в контексте текущего вида:
+  // в «Дне» меняется только выбранный день, в «Неделе»/«Месяце» — ещё и якорь.
+  const pickDate = (d: Date) => {
+    if (view === "week") {
+      setWeekDate(d);
+      setSelectedDate(d);
+    } else if (view === "month") {
+      setMonthDate(d);
+      setSelectedDate(d);
+    } else {
+      setSelectedDate(d);
+    }
+  };
+
   const shift = (dir: number) => {
     if (view === "day") {
       const d = new Date(selectedDate);
       d.setDate(d.getDate() + dir);
       setSelectedDate(d);
     } else if (view === "week") {
-      const d = new Date(selectedDate);
+      const base = weekDate ?? selectedDate;
+      const d = new Date(base);
       d.setDate(d.getDate() + 7 * dir);
+      setWeekDate(d);
       setSelectedDate(d);
     } else {
-      setSelectedDate(
-        new Date(
-          selectedDate.getFullYear(),
-          selectedDate.getMonth() + dir,
-          selectedDate.getDate(),
-        ),
-      );
+      const base = monthDate ?? selectedDate;
+      const d = new Date(base.getFullYear(), base.getMonth() + dir, base.getDate());
+      setMonthDate(d);
+      setSelectedDate(d);
     }
   };
 
@@ -246,7 +273,7 @@ function App() {
       }}
     >
       <TopBar
-        selectedDate={selectedDate}
+        selectedDate={topDate}
         view={view}
         mondayFirst={mondayFirst}
         onViewChanged={setView}
@@ -376,7 +403,7 @@ function App() {
               tasks={tasks}
               calWidth={calWidth}
               onResize={setCalWidth}
-              onSelect={setSelectedDate}
+              onSelect={pickDate}
               onChange={reload}
             />
           )}
@@ -389,7 +416,7 @@ function App() {
       {datePickerOpen && (
         <DatePickerModal
           tasks={tasks}
-          onPick={setSelectedDate}
+          onPick={pickDate}
           onClose={() => setDatePickerOpen(false)}
         />
       )}

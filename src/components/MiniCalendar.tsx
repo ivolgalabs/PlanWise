@@ -42,7 +42,7 @@ const MAX_DOTS = 4;
  * даты, в «Дне» — сам выбранный день.
  */
 export function MiniCalendar({ tasks, large, onSelect, droppable = true, fill = false }: Props) {
-  const { selectedDate, setSelectedDate, mondayFirst, view } = useStore();
+  const { selectedDate, weekDate, setSelectedDate, mondayFirst, view } = useStore();
   const [collapsed, setCollapsed] = useState(false);
   // Месяц календаря — собственное состояние, отвязанное от выбранной даты:
   // можно свободно листать вперёд/назад, не сдвигая выбранный день.
@@ -51,9 +51,10 @@ export function MiniCalendar({ tasks, large, onSelect, droppable = true, fill = 
   const gridStart = startOfWeek(first, mondayFirst);
 
   // Неделя выбранной даты — подсветка в виде «Неделя», чтобы было видно,
-  // какой диапазон пользователь сейчас смотрит.
+  // какой диапазон пользователь сейчас смотрит. Используем якорь недели
+  // (weekDate), а не выбранный день — выбор дня в «Дне» не двигает неделю.
   const selectedWeek =
-    view === "week" ? weekDays(selectedDate, mondayFirst) : null;
+    view === "week" ? weekDays(weekDate ?? selectedDate, mondayFirst) : null;
 
   const tasksForDay = (d: Date): Task[] =>
     tasks.filter((t) => isSameDay(fromEpochDay(t.date), d));

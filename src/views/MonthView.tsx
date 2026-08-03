@@ -21,7 +21,13 @@ interface Props {
  * Drag задач между днями — через @dnd-kit.
  */
 export function MonthView({ tasks, onSelectDay, onChange }: Props) {
-  const { selectedDate, mondayFirst, colorSets } = useStore();
+  const { selectedDate, monthDate, setMonthDate, mondayFirst, colorSets } = useStore();
+  // Якорь месяца: фиксируем при первом открытии вида — выбор дня в «Дне»
+  // не будет двигать месяц (см. store.ts monthDate).
+  useEffect(() => {
+    if (monthDate === null) setMonthDate(selectedDate);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // Категории для меню добавления (без служебного «Без категории»).
   const sets = colorSets.filter((s) => s.id !== "cs-none");
   const [menuDay, setMenuDay] = useState<Date | null>(null);
@@ -44,7 +50,7 @@ export function MonthView({ tasks, onSelectDay, onChange }: Props) {
     return () => window.removeEventListener("keydown", onKey);
   }, [menuDay]);
 
-  const first = firstOfMonth(selectedDate);
+  const first = firstOfMonth(monthDate ?? selectedDate);
   const gridStart = startOfWeek(first, mondayFirst);
 
   const cells: Date[] = Array.from({ length: 42 }, (_, i) => {

@@ -20,8 +20,14 @@ interface Props {
  * Панель и drag-контекст — на уровне App; здесь только сетка дней.
  */
 export function WeekView({ tasks, onChange }: Props) {
-  const { selectedDate, mondayFirst, weekVertical, setWeekVertical } = useStore();
-  const days = weekDays(selectedDate, mondayFirst);
+  const { selectedDate, weekDate, setWeekDate, mondayFirst, weekVertical, setWeekVertical } = useStore();
+  // Якорь недели: фиксируем при первом открытии вида (позже клики в «Дне»
+  // не будут двигать неделю — см. store.ts weekDate).
+  useEffect(() => {
+    if (weekDate === null) setWeekDate(selectedDate);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const days = weekDays(weekDate ?? selectedDate, mondayFirst);
 
   // В узком окне принудительно вертикальный список — сетка из 7 узких колонок
   // нечитаема. matchMedia реагирует на ресайз окна.

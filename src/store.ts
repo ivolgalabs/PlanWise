@@ -22,6 +22,12 @@ const DEFAULT_VISIBILITY: VisibilityState = {
 
 interface PlannerState {
   selectedDate: Date;
+  /** Якорь недели: позиция, на которой остановился вид «Неделя». Выбор дня
+   *  в «Дне» не двигает неделю (у каждого вида свой якорь; null = ещё не
+   *  открывался — показывается selectedDate). */
+  weekDate: Date | null;
+  /** Якорь месяца — аналогично weekDate для вида «Месяц». */
+  monthDate: Date | null;
   view: ViewKind;
   tasks: Task[];
   /** Задачи «Архива» (скрыты из видов, ждут возврата) — отдельным пулом. */
@@ -53,6 +59,8 @@ interface PlannerState {
   /** Видимость элементов интерфейса — можно прятать в настройках. */
   visibility: VisibilityState;
   setSelectedDate: (d: Date) => void;
+  setWeekDate: (d: Date) => void;
+  setMonthDate: (d: Date) => void;
   setView: (v: ViewKind) => void;
   setTasks: (t: Task[]) => void;
   setArchivedTasks: (t: Task[]) => void;
@@ -78,6 +86,8 @@ export const useStore = create<PlannerState>()(
   persist(
     (set) => ({
       selectedDate: new Date(),
+      weekDate: null,
+      monthDate: null,
       view: "week",
       tasks: [],
       mondayFirst: true,
@@ -96,6 +106,8 @@ export const useStore = create<PlannerState>()(
       colorSets: [],
       visibility: DEFAULT_VISIBILITY,
       setSelectedDate: (d) => set({ selectedDate: d }),
+      setWeekDate: (d) => set({ weekDate: d }),
+      setMonthDate: (d) => set({ monthDate: d }),
       setView: (v) => set({ view: v }),
       setTasks: (t) => set({ tasks: t }),
       setArchivedTasks: (t) => set({ archivedTasks: t }),
