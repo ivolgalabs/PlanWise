@@ -307,3 +307,54 @@ input[type="checkbox"] {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
 }
+
+/* === Мобильный/тач-режим ===
+ * Срабатывает на тач-устройствах (pointer: coarse) или в узком окне ≤560px.
+ * Два рычага:
+ *  1. Крупнее типографика — переопределяем --fs-* токены (rem): инлайн-стили
+ *     компонентов ссылаются на var(--fs-*), поэтому подхватывают автоматически.
+ *  2. Крупнее тач-таргеты: чекбоксы, иконки-кнопки, чипы, поля настроек. */
+@media (pointer: coarse), (max-width: 560px) {
+  :root {
+    --fs-2xs: 0.8rem;
+    --fs-xs: 0.85rem;
+    --fs-sm: 0.95rem;
+  }
+
+  input[type="checkbox"] {
+    width: 22px;
+    height: 22px;
+  }
+
+  .icon-btn {
+    min-width: 40px;
+    height: 40px;
+  }
+
+  .chip-btn {
+    width: 32px;
+    height: 32px;
+  }
+
+  .text-chip {
+    min-height: 40px;
+    padding: 6px 12px;
+  }
+
+  /* Кнопки действий в модалках (добавление задачи в месяце). */
+  .modal-action-btn {
+    min-height: 44px;
+  }
+
+  .mode-btn {
+    padding: 12px var(--sp-4);
+  }
+
+  .preset-btn {
+    padding: 10px 14px;
+  }
+
+  .set-name {
+    padding: 10px 12px;
+  }
+}

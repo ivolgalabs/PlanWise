@@ -309,8 +309,8 @@ export function MonthView({ tasks, onSelectDay, onChange }: Props) {
               ))}
             </div>
             <div style={{ display: "flex", gap: "var(--sp-2)" }}>
-              <button onClick={() => addTask(menuDay)} style={btnStyle(false)}>Добавить</button>
-              <button onClick={() => openDay(menuDay)} style={btnStyle(true)}>Перейти к дню</button>
+              <button className="modal-action-btn" onClick={() => addTask(menuDay)} style={btnStyle(false)}>Добавить</button>
+              <button className="modal-action-btn" onClick={() => openDay(menuDay)} style={btnStyle(true)}>Перейти к дню</button>
             </div>
           </div>
         </div>
