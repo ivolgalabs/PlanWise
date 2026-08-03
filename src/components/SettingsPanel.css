@@ -46,7 +46,9 @@
 .settings-section {
   padding: var(--sp-4);
   border-radius: var(--radius-md);
-  background: var(--bg-tertiary);
+  /* Блоки светлее основного фона (secondary), а не темнее (tertiary) —
+     иначе секции настроек выглядят «тёмными пятнами» на светлом фоне. */
+  background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   margin-bottom: var(--sp-4);
 }
@@ -195,9 +197,9 @@
   }
 }
 
-/* Карточка конструктора — как секция настроек. */
+/* Карточка конструктора — как секция настроек (светлее основного фона). */
 .pv-card {
-  background: var(--bg-tertiary);
+  background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   padding: var(--sp-5) var(--sp-6);
@@ -314,4 +316,12 @@
   .week-layout-setting {
     display: none;
   }
+}
+
+/* Блоки секции «Оформление» (канон UUI theme-status) — как и секции настроек,
+   светлее основного фона (secondary), а не темнее (tertiary). */
+.settings-window .theme-status,
+.settings-window .theme-status-oled,
+.settings-window .presets-list {
+  background: var(--bg-secondary);
 }
