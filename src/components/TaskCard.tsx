@@ -315,51 +315,58 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
           <TimePicker value={task.timeMinutes ?? null} onChange={setTime} compact={compact} />
         )}
       </div>
-      {/* Заметка — кнопка рядом со временем, скрывается настройкой и в
-          компактной сетке недели (не влезает). Подсвечена, если текст
-          непустой. */}
-      {showTime && visibility.notes && !compact && (
-        <button
-          className="chip-btn"
-          onClick={() => setNotesOpen((v) => !v)}
-          title="Заметка"
-          style={{
-            opacity: task.notes ? 1 : 0.5,
-            color: task.notes ? COLORS.accent : COLORS.muted,
-            flexShrink: 0,
-          }}
-        >
-          <Icon name="note" size={14} />
-        </button>
-      )}
-      {/* Перенос на другой день — кнопка видна только в тач-режиме
-          (класс task-move-btn скрывает её на десктопе). */}
+      {/* Кнопки действий строки: заметка, перенос (мобильный), цвет/удаление.
+          Общий контейнер с зазором, чтобы кнопки не слипались вплотную. */}
       {!compact && (
-        <button
-          className="chip-btn task-move-btn"
-          onClick={() => setMoveOpen(true)}
-          title="Перенести на другой день"
-          style={{ flexShrink: 0 }}
+        <div
+          className="task-chips"
+          style={{ display: "flex", alignItems: "center", gap: "var(--sp-3)", marginLeft: "var(--sp-3)", flexShrink: 0 }}
         >
-          <Icon name="calendarCheck" size={14} />
-        </button>
-      )}
-      {/* Кнопки цвета/удаления — приглушены, ярче при hover; скрываются
-          настройкой «Кнопки „цвет“ и „удалить“ в задачах». */}
-      {visibility.taskActions && !compact && (
-        <div className="task-actions" style={{ display: "flex", gap: "var(--sp-1)" }}>
+          {/* Заметка — кнопка рядом со временем, скрывается настройкой и в
+              компактной сетке недели (не влезает). Подсвечена, если текст
+              непустой. */}
+          {showTime && visibility.notes && (
+            <button
+              className="chip-btn"
+              onClick={() => setNotesOpen((v) => !v)}
+              title="Заметка"
+              style={{
+                opacity: task.notes ? 1 : 0.5,
+                color: task.notes ? COLORS.accent : COLORS.muted,
+                flexShrink: 0,
+              }}
+            >
+              <Icon name="note" size={14} />
+            </button>
+          )}
+          {/* Перенос на другой день — кнопка видна только в тач-режиме
+              (класс task-move-btn скрывает её на десктопе). */}
           <button
-            onClick={() => setColorMenu((v) => !v)}
-            className="chip-btn"
-            title="Цвет"
-            style={{
-              background: task.colorSetId ? setHex : "transparent",
-              border: task.colorSetId ? "none" : "1px solid " + COLORS.cardBorder,
-            }}
-          />
-          <button onClick={del} className="chip-btn" title="Удалить">
-            <Icon name="close" size={14} />
+            className="chip-btn task-move-btn"
+            onClick={() => setMoveOpen(true)}
+            title="Перенести на другой день"
+            style={{ flexShrink: 0 }}
+          >
+            <Icon name="calendarCheck" size={14} />
           </button>
+          {/* Кнопки цвета/удаления — приглушены, ярче при hover; скрываются
+              настройкой «Кнопки „цвет“ и „удалить“ в задачах». */}
+          {visibility.taskActions && (
+            <div className="task-actions" style={{ display: "flex", gap: "var(--sp-3)" }}>
+              <button
+                onClick={() => setColorMenu((v) => !v)}
+                className="chip-btn"
+                title="Цвет"
+                style={{
+                  background: task.colorSetId ? setHex : "transparent",
+                  border: task.colorSetId ? "none" : "1px solid " + COLORS.cardBorder,
+                }}
+              />
+              <button onClick={del} className="chip-btn" title="Удалить">
+                <Icon name="close" size={14} />
+              </button>
+            </div>
+          )}
         </div>
       )}
       {/* Меню цвета живёт внутри блока кнопок действий — если кнопки

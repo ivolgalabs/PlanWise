@@ -134,7 +134,7 @@ export function SearchBar({ query, onQuery, color, onColor, period, status, sort
       </div>
       {/* Ряд 2: категории + период/статус/сортировка — один компактный ряд
           с переносом, чтобы не занимать лишнюю высоту */}
-      <div style={{ display: "flex", gap: "var(--sp-1)", flexWrap: "wrap", alignItems: "center", paddingBottom: 2 }}>
+      <div style={{ display: "flex", gap: "var(--sp-2)", flexWrap: "wrap", alignItems: "center", paddingBottom: 2 }}>
         <button className="text-chip" onClick={() => onColor(null)} style={{ border: `1px solid ${color === null ? COLORS.accent : "transparent"}`, background: color === null ? accentTint(0.1) : "transparent" }}>Все</button>
         {sets.map((c) => (
           <button key={c.id} className="text-chip" onClick={() => onColor(c.id)} title={c.name}
