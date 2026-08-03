@@ -129,8 +129,10 @@ function SubtaskRow({
         title="Перетащите на день (→ задача) или на другую задачу"
         style={{
           flexShrink: 0,
-          width: 12,
-          textAlign: "center",
+          width: 16,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
           color: COLORS.muted,
           opacity: 0.5,
           cursor: "grab",

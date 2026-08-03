@@ -239,7 +239,9 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
           flexShrink: 0,
           width: compact ? 16 : 20,
           marginRight: "var(--sp-2)",
-          textAlign: "center",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
           color: COLORS.secondary,
           opacity: 0.75,
           cursor: "grab",
@@ -339,7 +341,7 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
           title="Перенести на другой день"
           style={{ flexShrink: 0 }}
         >
-          <Icon name="calendar" size={14} />
+          <Icon name="calendarCheck" size={14} />
         </button>
       )}
       {/* Кнопки цвета/удаления — приглушены, ярче при hover; скрываются

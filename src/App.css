@@ -69,8 +69,9 @@ body {
   color: var(--accent);
 }
 /* Кнопка «Перенести на другой день» — только в мобильном/тач-режиме
-   (drag-перенос на телефоне неудобен); на десктопе скрыта. */
-.task-move-btn {
+   (drag-перенос на телефоне неудобен); на десктопе скрыта. Составной
+   селектор нужен, чтобы перебить display:inline-flex из .chip-btn. */
+.chip-btn.task-move-btn {
   display: none;
 }
 .task-drag-hint:active {
@@ -146,7 +147,12 @@ input[type="checkbox"] {
 }
 
 /* === Кнопки === */
+/* Иконки в кнопках — ровно по центру обеих осей (иначе прижаты к левому
+   краю/верху: text-align не влияет на block-svg внутри button). */
 .icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: none;
   background: transparent;
   color: var(--text-secondary);
@@ -164,6 +170,9 @@ input[type="checkbox"] {
 }
 
 .chip-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: none;
   background: var(--bg-tertiary);
   border-radius: var(--radius-md);
@@ -342,7 +351,7 @@ input[type="checkbox"] {
   }
 
   /* Перенос задачи на другой день — виден только на тач-устройствах. */
-  .task-move-btn {
+  .chip-btn.task-move-btn {
     display: inline-flex;
   }
 

@@ -6,7 +6,7 @@ interface IconProps { name: IconName; size?: number; title?: string; }
 export type IconName =
   | "search" | "calendar" | "gear" | "chevronL" | "chevronR" | "close"
   | "plus" | "drag" | "dots" | "clock" | "palette" | "grid"
-  | "list" | "calendarHide" | "sun" | "moon" | "monitor" | "trash"
+  | "list" | "calendarHide" | "calendarCheck" | "sun" | "moon" | "monitor" | "trash"
   | "save" | "note" | "zoom" | "upload" | "download" | "archive";
 
 const PATHS: Record<IconName, ReactNode> = {
@@ -24,6 +24,9 @@ const PATHS: Record<IconName, ReactNode> = {
   grid: <><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></>,
   list: <><path d="M8 6h13M8 12h13M8 18h13" /><circle cx="4" cy="6" r="1" /><circle cx="4" cy="12" r="1" /><circle cx="4" cy="18" r="1" /></>,
   calendarHide: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M8 3v4M16 3v4M3 10h18" /><path d="M4 21l16-16" /></>,
+  // Календарь с галочкой — «назначить дату» (перенос задачи); геометрия из
+  // Universal UI icons.css (icon--calendar-check).
+  calendarCheck: <><path d="M8 2v4M16 2v4" /><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M3 10h18" /><path d="M9 16l2 2 4-4" /></>,
   sun: <><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></>,
   moon: <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />,
   monitor: <><rect x="2" y="4" width="20" height="13" rx="2" /><path d="M8 21h8M12 17v4" /></>,
