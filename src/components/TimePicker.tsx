@@ -10,10 +10,12 @@ interface Props {
   onChange: (m: number | null) => void;
   /** Компактный режим (сетка недели): без времени — только иконка часов. */
   compact?: boolean;
+  /** Крупный режим (модалка месяца): заметный чип, как остальные поля. */
+  large?: boolean;
 }
 
 /** Компактный time-picker: «в течение дня» / ввод ЧЧ:ММ / быстрые пресеты. */
-export function TimePicker({ value, onChange, compact = false }: Props) {
+export function TimePicker({ value, onChange, compact = false, large = false }: Props) {
   const [custom, setCustom] = useState("");
   const [editing, setEditing] = useState(false);
 
@@ -30,7 +32,7 @@ export function TimePicker({ value, onChange, compact = false }: Props) {
       <button
         onClick={() => setEditing((v) => !v)}
         style={{
-          ...badgeStyle(value !== null),
+          ...badgeStyle(value !== null, large),
           cursor: "pointer",
           border: "none",
           display: "inline-flex",
@@ -39,7 +41,7 @@ export function TimePicker({ value, onChange, compact = false }: Props) {
         }}
         title="Изменить время"
       >
-        <Icon name="clock" size={13} /> {value !== null ? formatMinutes(value) : compact ? "" : "в течение дня"}
+        <Icon name="clock" size={large ? 16 : 13} /> {value !== null ? formatMinutes(value) : compact ? "" : "в течение дня"}
       </button>
 
       {editing && (
@@ -82,12 +84,12 @@ export function TimePicker({ value, onChange, compact = false }: Props) {
 }
 
 const pickerStyle: React.CSSProperties = { position: "relative", display: "inline-flex" };
-function badgeStyle(hasTime: boolean): React.CSSProperties {
+function badgeStyle(hasTime: boolean, large = false): React.CSSProperties {
   return {
-    fontSize: "var(--fs-2xs)",
+    fontSize: large ? "var(--fs-sm)" : "var(--fs-2xs)",
     color: hasTime ? COLORS.accent : COLORS.muted,
     background: hasTime ? accentTint(0.1) : "transparent",
-    padding: "1px 6px",
+    padding: large ? "4px 10px" : "1px 6px",
     borderRadius: "var(--radius-md)",
   };
 }

@@ -55,9 +55,9 @@ export const browserApi = {
     save(K.subs, load<Subtask>(K.subs).filter((s) => s.taskId !== id));
   },
   async moveTask(id: string, newDay: number): Promise<void> {
-    // Перенос на прошедший день = задача закрыта: автоматом помечаем выполненной.
+    // Перенос в прошлое = задача выполнена; в будущее = снова актуальна.
     const today = todayEpochDay();
-    save(K.tasks, load<Task>(K.tasks).map((t) => (t.id === id ? { ...t, date: newDay, someday: false, archived: false, isDone: t.isDone || newDay < today, notes: t.notes ?? "" } : t)));
+    save(K.tasks, load<Task>(K.tasks).map((t) => (t.id === id ? { ...t, date: newDay, someday: false, archived: false, isDone: newDay < today ? true : newDay > today ? false : t.isDone, notes: t.notes ?? "" } : t)));
   },
   async getSomedayTasks(): Promise<Task[]> {
     return sortTasks(load<Task>(K.tasks).filter((t) => t.someday && !t.archived));
@@ -98,9 +98,9 @@ export const browserApi = {
       .sort((a, b) => b.date - a.date || b.updatedAt - a.updatedAt);
   },
   async restoreArchived(id: string, date: number): Promise<void> {
-    // Возврат на прошедший день = задача закрыта (иначе снова уйдёт в архив).
+    // Возврат в прошлое = выполнена (иначе снова уйдёт в архив); в будущее = актуальна.
     const today = todayEpochDay();
-    save(K.tasks, load<Task>(K.tasks).map((t) => (t.id === id ? { ...t, archived: false, date, someday: false, isDone: t.isDone || date < today, notes: t.notes ?? "" } : t)));
+    save(K.tasks, load<Task>(K.tasks).map((t) => (t.id === id ? { ...t, archived: false, date, someday: false, isDone: date < today ? true : date > today ? false : t.isDone, notes: t.notes ?? "" } : t)));
   },
   async getSubtasks(taskId: string): Promise<Subtask[]> {
     return load<Subtask>(K.subs)

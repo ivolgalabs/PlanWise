@@ -237,16 +237,16 @@ export function MonthView({ tasks, onSelectDay, onChange }: Props) {
                 // Поле как в поиске — заметно выше, текст не липнет к краям.
                 width: "100%", fontSize: "var(--fs-md)",
                 border: `1px solid ${COLORS.cardBorder}`, borderRadius: "var(--radius-md)",
-                padding: "8px 12px", marginBottom: "var(--sp-5)",
+                padding: "10px 12px", marginBottom: "var(--sp-5)",
                 background: "transparent", color: COLORS.text,
               }}
             />
-            {/* Время задачи */}
+            {/* Время задачи — крупный чип, как остальные поля панели */}
             <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)", marginBottom: "var(--sp-4)" }}>
               <span style={{ fontSize: "var(--fs-sm)", color: COLORS.muted, minWidth: "var(--island-h)" }}>Время</span>
-              <TimePicker value={addTime} onChange={setAddTime} />
+              <TimePicker value={addTime} onChange={setAddTime} large />
             </div>
-            {/* Цвет (категория) задачи */}
+            {/* Цвет (категория) задачи — крупные свотчи с подписями */}
             <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)", marginBottom: "var(--sp-5)" }}>
               <span style={{ fontSize: "var(--fs-sm)", color: COLORS.muted, minWidth: "var(--island-h)" }}>Цвет</span>
               <button
@@ -260,6 +260,7 @@ export function MonthView({ tasks, onSelectDay, onChange }: Props) {
                   display: "inline-flex",
                   alignItems: "center",
                   justifyContent: "center",
+                  padding: 4,
                 }}
               >
                 <Icon name="close" size={12} />
@@ -269,22 +270,25 @@ export function MonthView({ tasks, onSelectDay, onChange }: Props) {
                   key={c.id}
                   onClick={() => setAddColor(c.id)}
                   title={c.name}
-                  className="chip-btn"
+                  // Без chip-btn: его фиксированный квадрат сжимает колонку
+                  // «свотч + подпись».
                   style={{
                     display: "flex",
                     flexDirection: "column",
                     alignItems: "center",
-                    gap: 2,
-                    padding: "2px",
+                    gap: "var(--sp-1)",
+                    padding: 4,
                     background: "transparent",
                     border: "none",
+                    borderRadius: "var(--radius-md)",
+                    cursor: "pointer",
                     opacity: addColor && addColor !== c.id ? 0.45 : 1,
                   }}
                 >
                   <span
                     style={{
-                      width: 14,
-                      height: 14,
+                      width: 18,
+                      height: 18,
                       borderRadius: "50%",
                       background: argbToHex(c.color),
                       border: `2px solid ${addColor === c.id ? COLORS.accent : "transparent"}`,
@@ -292,9 +296,9 @@ export function MonthView({ tasks, onSelectDay, onChange }: Props) {
                   />
                   <span
                     style={{
-                      fontSize: "var(--fs-2xs)",
+                      fontSize: "var(--fs-xs)",
                       color: COLORS.muted,
-                      maxWidth: 44,
+                      maxWidth: 48,
                       overflow: "hidden",
                       textOverflow: "ellipsis",
                       whiteSpace: "nowrap",
