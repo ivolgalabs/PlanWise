@@ -18,7 +18,7 @@ interface Props {
 /** Правая панель: мини-календарь сверху, «Когда-нибудь» под ним, полоска
  *  «Архив · N» внизу. Разворот архива занимает панель целиком. */
 export function RightPanel({ tasks, width, onSelect, onChange }: Props) {
-  const { visibility, archivedTasks } = useStore();
+  const { visibility, archivedTasks, view } = useStore();
   const [archiveOpen, setArchiveOpen] = useState(false);
 
   return (
@@ -40,15 +40,16 @@ export function RightPanel({ tasks, width, onSelect, onChange }: Props) {
         />
       ) : (
         <>
-          {visibility.miniCalendar && (
+          {visibility.miniCalendar && view !== "month" && (
             // Карточка календаря растягивается на всю область (fill), чтобы
             // под ней не оставалось мёртвого пространства — зазор до
-            // «Когда-нибудь» задаётся явно (спейсер 3% ниже).
+            // «Когда-нибудь» задаётся явно (спейсер 3% ниже). В «Месяце»
+            // календарь не показываем — сетка месяца и так видна.
             <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", padding: "var(--sp-4) var(--sp-4) 0", minWidth: 0 }}>
               <MiniCalendar tasks={tasks} large onSelect={onSelect} fill />
             </div>
           )}
-          {visibility.miniCalendar && (
+          {visibility.miniCalendar && view !== "month" && (
             // Отступ 3% от высоты панели между календарём и «Когда-нибудь».
             <div style={{ height: "3%", flexShrink: 0 }} />
           )}

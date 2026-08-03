@@ -57,6 +57,7 @@ function App() {
     monthDate,
     view,
     tasks,
+    archivedTasks,
     mondayFirst,
     themeMode,
     preferredLightTheme,
@@ -394,10 +395,12 @@ function App() {
               )}
             </div>
           </div>
-          {/* Правая панель — одна на все виды и поиск (в месяце не показывается);
-              скрытие кнопкой убрано по желанию пользователя — только адаптив
-              (calNarrow) и настройки видимости секций. */}
-          {view !== "month" && !calNarrow && (visibility.miniCalendar || visibility.someday) && (
+          {/* Правая панель — одна на все виды (в месяце без мини-календаря,
+              но с «Когда-нибудь» и «Архивом»). Скрытие кнопкой убрано по
+              желанию пользователя — только адаптив (calNarrow) и настройки
+              видимости секций. Панель показываем, если видна хоть одна
+              секция ИЛИ в архиве есть задачи (архив нельзя потерять). */}
+          {!calNarrow && (visibility.miniCalendar || visibility.someday || archivedTasks.length > 0) && (
             <AppRightPanel
               view={view}
               tasks={tasks}
