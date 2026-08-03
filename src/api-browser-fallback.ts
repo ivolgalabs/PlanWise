@@ -8,6 +8,12 @@ import type { Task, ColorSet, Subtask } from "./api";
 
 const K = { tasks: "fb:tasks", sets: "fb:sets", subs: "fb:subtasks" };
 
+/** epoch-day «сегодня» по локальной дате (как toEpochDay на фронте). */
+const todayEpochDay = (): number => {
+  const n = new Date();
+  return Math.floor(Date.UTC(n.getFullYear(), n.getMonth(), n.getDate()) / 86_400_000);
+};
+
 // Дефолтные категории — как сид V1 в SQLite (ARGB-int = 0xFFRRGGBB).
 // Пишутся при первом обращении, если ключа ещё нет в localStorage.
 const DEFAULT_SETS: ColorSet[] = [
@@ -49,7 +55,9 @@ export const browserApi = {
     save(K.subs, load<Subtask>(K.subs).filter((s) => s.taskId !== id));
   },
   async moveTask(id: string, newDay: number): Promise<void> {
-    save(K.tasks, load<Task>(K.tasks).map((t) => (t.id === id ? { ...t, date: newDay, someday: false, archived: false, notes: t.notes ?? "" } : t)));
+    // Перенос на прошедший день = задача закрыта: автоматом помечаем выполненной.
+    const today = todayEpochDay();
+    save(K.tasks, load<Task>(K.tasks).map((t) => (t.id === id ? { ...t, date: newDay, someday: false, archived: false, isDone: t.isDone || newDay < today, notes: t.notes ?? "" } : t)));
   },
   async getSomedayTasks(): Promise<Task[]> {
     return sortTasks(load<Task>(K.tasks).filter((t) => t.someday && !t.archived));
@@ -90,7 +98,9 @@ export const browserApi = {
       .sort((a, b) => b.date - a.date || b.updatedAt - a.updatedAt);
   },
   async restoreArchived(id: string, date: number): Promise<void> {
-    save(K.tasks, load<Task>(K.tasks).map((t) => (t.id === id ? { ...t, archived: false, date, someday: false, notes: t.notes ?? "" } : t)));
+    // Возврат на прошедший день = задача закрыта (иначе снова уйдёт в архив).
+    const today = todayEpochDay();
+    save(K.tasks, load<Task>(K.tasks).map((t) => (t.id === id ? { ...t, archived: false, date, someday: false, isDone: t.isDone || date < today, notes: t.notes ?? "" } : t)));
   },
   async getSubtasks(taskId: string): Promise<Subtask[]> {
     return load<Subtask>(K.subs)

@@ -1,11 +1,18 @@
 use crate::db::Db;
 use crate::models::{ColorSet, Subtask, Task};
-use chrono::Utc;
+use chrono::{Datelike, Utc};
 use tauri::State;
 use uuid::Uuid;
 
 fn now_ms() -> i64 {
     Utc::now().timestamp_millis()
+}
+
+/// epoch-day «сегодня» по локальной дате машины (как toEpochDay на фронте:
+/// локальная дата, отсчёт от 1970-01-01). Нужен для правила «перенос задачи
+/// в прошлое = задача выполнена».
+fn today_epoch_day() -> i64 {
+    chrono::Local::now().date_naive().num_days_from_ce() as i64 - 719_162
 }
 
 #[tauri::command]
@@ -89,9 +96,13 @@ pub fn delete_task(state: State<'_, Db>, id: String) {
 #[tauri::command]
 pub fn move_task(state: State<'_, Db>, id: String, new_date: i64) {
     let conn = state.0.lock().unwrap();
+    // Перенос задачи на прошедший день = задача закрыта: автоматом помечаем
+    // её выполненной (уже выполненные не трогаем).
     conn.execute(
-        "UPDATE tasks SET date = ?1, someday = 0, archived = 0, updated_at = ?2 WHERE id = ?3",
-        rusqlite::params![new_date, now_ms(), id],
+        "UPDATE tasks SET date = ?1, someday = 0, archived = 0,
+           is_done = CASE WHEN is_done = 0 AND ?1 < ?2 THEN 1 ELSE is_done END,
+           updated_at = ?3 WHERE id = ?4",
+        rusqlite::params![new_date, today_epoch_day(), now_ms(), id],
     )
     .expect("move_task");
 }
@@ -253,9 +264,13 @@ pub fn get_archived_tasks(state: State<'_, Db>) -> Vec<Task> {
 #[tauri::command]
 pub fn restore_archived(state: State<'_, Db>, id: String, date: i64) {
     let conn = state.0.lock().unwrap();
+    // Возврат на прошедший день = задача закрыта (иначе на следующем старте
+    // она снова уйдёт в архив как просроченная).
     conn.execute(
-        "UPDATE tasks SET archived = 0, date = ?1, someday = 0, updated_at = ?2 WHERE id = ?3",
-        rusqlite::params![date, now_ms(), id],
+        "UPDATE tasks SET archived = 0, date = ?1, someday = 0,
+           is_done = CASE WHEN is_done = 0 AND ?1 < ?2 THEN 1 ELSE is_done END,
+           updated_at = ?3 WHERE id = ?4",
+        rusqlite::params![date, today_epoch_day(), now_ms(), id],
     )
     .expect("restore_archived");
 }
