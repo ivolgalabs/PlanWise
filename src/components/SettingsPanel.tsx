@@ -2,11 +2,42 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { useStore } from "../store";
-import { COLORS, THEME_FAMILIES, argbToHex, hexToArgb } from "../theme";
+import {
+  COLORS, THEME_FAMILIES, argbToHex, hexToArgb,
+  ACCENTS, LIGHT_SHADES, DARK_SHADES, hslToHex, hexToHue, autoSlotFor,
+  applyCustomSlot,
+} from "../theme";
+import type { CustomSlot, ThemePreset } from "../theme";
 import type { ThemeMode, VisibilityState } from "../store";
 import { api, isTauri } from "../api";
 import { Icon, type IconName } from "./Icon";
 import "./SettingsPanel.css";
+
+// Кодирование TMT-кода (канон UUI): TMT-<тема с _ вместо ->-<accent>-<bgType L/O/D/T>-<bgHex>-<slot L/D/N>
+function encodePresetCode(p: ThemePreset): string {
+  const theme = p.theme.replace(/-/g, "_");
+  const accent = (p.accent || "none").replace("#", "");
+  const bgType = p.bgMode === "light" ? "L" : p.bgMode === "oled" ? "O" : p.bgMode === "dark" ? "D" : "T";
+  const bgHex = (p.bgColor || "none").replace("#", "");
+  const slot = p.slot === "light" ? "L" : p.slot === "dark" ? "D" : "N";
+  return `TMT-${theme}-${accent}-${bgType}-${bgHex}-${slot}`;
+}
+
+function decodePresetCode(code: string): Omit<ThemePreset, "id" | "name"> | null {
+  const parts = code.replace(/^TMT-/, "").split("-");
+  if (parts.length < 4) return null;
+  const [themeEnc, accent, bgType, bgHex, slotChar] = parts;
+  const theme = themeEnc.replace(/_/g, "-");
+  if (!/^(light|dark|oled)-/.test(theme)) return null;
+  const slot: "light" | "dark" | null = slotChar === "L" ? "light" : slotChar === "D" ? "dark" : null;
+  return {
+    theme,
+    accent: accent && accent !== "none" ? `#${accent}` : null,
+    bgMode: bgType === "L" ? "light" : bgType === "O" ? "oled" : bgType === "D" ? "dark" : "theme",
+    bgColor: bgHex && bgHex !== "none" ? `#${bgHex}` : null,
+    slot,
+  };
+}
 
 interface Props {
   onClose: () => void;
@@ -36,10 +67,14 @@ interface SetDraft {
 export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged }: Props) {
   const {
     mondayFirst,
+    weekVertical,
     themeMode,
     preferredLightTheme,
     preferredDarkTheme,
     useOledForDarkMode,
+    customLight,
+    customDark,
+    presets,
     uiScale,
     fontScale,
     archiveEnabled,
@@ -50,6 +85,10 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged }: Props)
     setPreferredLightTheme,
     setPreferredDarkTheme,
     setUseOledForDarkMode,
+    setCustomLight,
+    setCustomDark,
+    setPresets,
+    setWeekVertical,
     setUiScale,
     setFontScale,
     setArchiveEnabled,
@@ -150,6 +189,169 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged }: Props)
     } catch (e) { setDataError(true); setDataMsg(String(e)); }
   };
 
+  // ── Оформление: «Свой выбор» (конструктор, как в TensorMedia) ──
+  // Текущий тёмный режим (для авто-фона и выбора активного слота).
+  const systemIsDark =
+    window.matchMedia("(prefers-color-scheme: dark)").matches;
+  const curDark =
+    themeMode === "dark" || (themeMode === "system" && systemIsDark);
+  // Разрешённая тема сейчас (дубль логики resolveActiveTheme из App).
+  const resolvedTheme =
+    themeMode === "light"
+      ? preferredLightTheme
+      : themeMode === "dark"
+        ? useOledForDarkMode
+          ? preferredDarkTheme.replace(/^(dark|light)-/, "oled-")
+          : preferredDarkTheme
+        : systemIsDark
+          ? useOledForDarkMode
+            ? preferredDarkTheme.replace(/^(dark|light)-/, "oled-")
+            : preferredDarkTheme
+          : preferredLightTheme;
+  // Активный свотч: тема применена сейчас (без OLED-замены показываем базу).
+  const activeBase = resolvedTheme.replace(/^oled-/, "dark-");
+
+  // Черновик «Своего выбора»: применяется вживую; при закрытии сбрасывается.
+  const [draft, setDraft] = useState<CustomSlot | null>(() => {
+    const cur = curDark ? customDark : customLight;
+    return cur ? { ...cur } : null;
+  });
+  const [hue, setHue] = useState(() => (draft?.accent ? hexToHue(draft.accent) : 0));
+  const [tab, setTab] = useState<"standard" | "custom">("standard");
+  const [presetName, setPresetName] = useState("");
+  const [presetSlotSel, setPresetSlotSel] = useState<"auto" | "light" | "dark">("auto");
+  const [importCode, setImportCode] = useState("");
+  const [flash, setFlash] = useState<{ text: string; ok: boolean } | null>(null);
+
+  const msg = (text: string, ok = true) => {
+    setFlash({ text, ok });
+    window.setTimeout(() => setFlash(null), 4000);
+  };
+
+  // Применяем черновик (или активный слот) поверх темы вживую.
+  useEffect(() => {
+    applyCustomSlot(document.documentElement, draft ?? (curDark ? customDark : customLight), curDark);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft, customLight, customDark, themeMode]);
+
+  // Закрытие: сбрасываем черновик (возвращаем активный слот из хранилища).
+  const close = () => {
+    applyCustomSlot(document.documentElement, curDark ? customDark : customLight, curDark);
+    onClose();
+  };
+
+  const handleSetMode = (m: ThemeMode) => {
+    setThemeMode(m);
+    const isD = m === "dark" || (m === "system" && systemIsDark);
+    const cur = isD ? customDark : customLight;
+    setDraft(cur ? { ...cur } : null);
+  };
+
+  // Свотч стандартной темы: применяет и очищает слот своего стиля.
+  const handleSwatch = (id: string) => {
+    if (id.startsWith("light-")) {
+      setPreferredLightTheme(id);
+      setThemeMode("light");
+      setCustomLight(null);
+    } else {
+      setPreferredDarkTheme(id);
+      setThemeMode("dark");
+      setCustomDark(null);
+    }
+    setDraft(null);
+  };
+
+  // Конструктор: акцент / фон. (patchDraft — у черновиков категорий выше.)
+  const patchSlot = (patch: Partial<CustomSlot>) => {
+    setDraft({
+      name: draft?.name || "Мой стиль",
+      accent: draft?.accent ?? null,
+      bgType: draft?.bgType ?? "auto",
+      bgColor: draft?.bgColor ?? null,
+      ...patch,
+    });
+  };
+  const handleAccent = (accent: string) => patchSlot({ accent });
+  const handleBgMode = (bgMode: "theme" | "light" | "dark" | "oled") => {
+    if (bgMode === "theme") {
+      setDraft(draft?.accent ? { name: draft.name, accent: draft.accent, bgType: "auto", bgColor: null } : null);
+    } else {
+      patchSlot({ bgType: bgMode });
+    }
+  };
+  const handleBgShade = (c: string) => {
+    const bgType = LIGHT_SHADES.includes(c) ? "light" : c === "#000000" ? "oled" : "dark";
+    patchSlot({ bgType, bgColor: c });
+  };
+
+  // ── Библиотека «Мои стили» ──
+  const savePreset = () => {
+    let name = presetName.trim();
+    if (!name) {
+      let n = 1;
+      while (presets.some((p) => p.name === `Стиль #${n}`)) n++;
+      name = `Стиль #${n}`;
+    }
+    if (presets.some((p) => p.name.toLowerCase() === name.toLowerCase())) {
+      msg(`Стиль «${name}» уже есть`, false);
+      return;
+    }
+    const slot = presetSlotSel === "auto"
+      ? autoSlotFor({ bgColor: draft?.bgColor || null, bgMode: draft?.bgType || "theme", theme: resolvedTheme })
+      : presetSlotSel;
+    const preset: ThemePreset = {
+      id: Math.random().toString(36).slice(2, 9),
+      name,
+      theme: resolvedTheme,
+      accent: draft?.accent || null,
+      bgMode: draft?.bgColor ? (draft.bgType === "light" ? "light" : draft.bgType === "oled" ? "oled" : "dark") : "theme",
+      bgColor: draft?.bgColor || null,
+      slot,
+    };
+    setPresets([...presets, preset]);
+    setPresetName("");
+    msg(slot === "light" ? "Сохранено в слот ☀️" : "Сохранено в слот 🌙");
+  };
+
+  const applyPreset = (p: ThemePreset) => {
+    if (p.theme.startsWith("light-")) setPreferredLightTheme(p.theme);
+    else if (p.theme.startsWith("oled-")) {
+      setPreferredDarkTheme(p.theme.replace("oled-", "dark-"));
+      setUseOledForDarkMode(true);
+    } else setPreferredDarkTheme(p.theme);
+    const slot = p.slot || autoSlotFor({ bgColor: p.bgColor, bgMode: p.bgMode, theme: p.theme });
+    const slotData: CustomSlot = { name: p.name, accent: p.accent, bgType: p.bgMode === "theme" ? "auto" : p.bgMode, bgColor: p.bgColor };
+    if (slot === "light") setCustomLight(slotData);
+    else setCustomDark(slotData);
+    setThemeMode(slot === "light" ? "light" : "dark");
+    setDraft(null);
+    msg(`Применён стиль «${p.name}»`);
+  };
+
+  const copyPresetCode = (p: ThemePreset) => {
+    const code = encodePresetCode(p);
+    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(code).catch(() => {});
+    setImportCode(code);
+    msg(`Код скопирован: ${code}`);
+  };
+
+  const importPreset = () => {
+    const p = decodePresetCode(importCode.trim());
+    if (!p) { msg("Неверный формат кода", false); return; }
+    setPresets([
+      ...presets,
+      { ...p, id: Math.random().toString(36).slice(2, 9), name: `Импорт ${p.theme}` },
+    ]);
+    setImportCode("");
+    msg("Стиль импортирован");
+  };
+
+  const clearSlot = (kind: "light" | "dark") => {
+    if (kind === "light") setCustomLight(null);
+    else setCustomDark(null);
+    if (curDark === (kind === "dark")) setDraft(null);
+  };
+
   const modes: { mode: ThemeMode; icon: IconName; label: string }[] = [
     { mode: "light", icon: "sun", label: "Светлая" },
     { mode: "dark", icon: "moon", label: "Тёмная" },
@@ -157,7 +359,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged }: Props)
   ];
 
   return (
-    <div className="settings-overlay" onClick={onClose}>
+    <div className="settings-overlay" onClick={close}>
       <div className="settings-window" onClick={(e) => e.stopPropagation()}>
         {/* Шапка */}
         <div className="settings-header">
@@ -167,7 +369,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged }: Props)
           >
             <Icon name="gear" size={18} /> Настройки
           </h2>
-          <button className="icon-btn" onClick={onClose}>
+          <button className="icon-btn" onClick={close}>
             <Icon name="close" size={16} />
           </button>
         </div>
@@ -252,116 +454,320 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged }: Props)
             </div>
           </section>
 
-          {/* ── Режим темы ── */}
+          {/* ── Оформление: статус + вкладки (стандартные / свой выбор) ── */}
           <section className="settings-section">
-            <h3
-              className="section-title"
-              style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)" }}
-            >
-              <Icon name="palette" size={14} /> Режим оформления
-            </h3>
-            <p className="section-hint">Мгновенное переключение между светлой/тёмной/системной</p>
-            <div className="mode-row">
-              {modes.map((m) => (
-                <button
-                  key={m.mode}
-                  onClick={() => setThemeMode(m.mode)}
-                  className={`mode-btn ${themeMode === m.mode ? "active" : ""}`}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: "var(--sp-3)",
-                  }}
-                >
-                  <Icon name={m.icon} size={14} /> {m.label}
-                </button>
-              ))}
-            </div>
-
-            {/* OLED toggle */}
-            <label className="oled-toggle">
-              <input
-                type="checkbox"
-                checked={useOledForDarkMode}
-                onChange={(e) => setUseOledForDarkMode(e.target.checked)}
-              />
-              <span>Использовать OLED (True Black) для тёмного режима</span>
-            </label>
-
-            {/* Текущие предпочтения */}
-            <div className="pref-row">
-              <div className="pref-card">
-                <span className="pref-label">Светлая</span>
-                <strong className="pref-value">{preferredLightTheme}</strong>
-                <span className={`pref-tag ${themeMode === "light" ? "on" : ""}`}>
-                  {themeMode === "light" ? "✓ активна" : "сохранена"}
-                </span>
+            <div className="theme-status">
+              <div className="theme-status-head">
+                <div>
+                  <h3 className="theme-status-title">Оформление</h3>
+                  <p className="theme-status-subtitle">
+                    Активная тема: <strong>{resolvedTheme}</strong>
+                  </p>
+                </div>
+                <div className="theme-status-modes">
+                  {modes.map((m) => (
+                    <button
+                      key={m.mode}
+                      className={`theme-status-mode-btn ${themeMode === m.mode ? "active" : ""}`}
+                      onClick={() => handleSetMode(m.mode)}
+                    >
+                      <Icon name={m.icon} size={13} /> {m.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <div className="pref-card">
-                <span className="pref-label">Тёмная{useOledForDarkMode ? " (OLED)" : ""}</span>
-                <strong className="pref-value">{preferredDarkTheme}</strong>
-                <span className={`pref-tag ${themeMode === "dark" ? "on" : ""}`}>
-                  {themeMode === "dark" ? "✓ активна" : "сохранена"}
-                </span>
-              </div>
-            </div>
-          </section>
-
-          {/* ── Выбор темы (свотчи по семьям) ── */}
-          <section className="settings-section">
-            <h3 className="section-title">Палитра</h3>
-            <p className="section-hint">Нажмите на свотч — тема применится мгновенно</p>
-            <div className="theme-families">
-              {THEME_FAMILIES.map((fam) => (
-                <div key={fam.family} className="family-block">
-                  <div className="family-head">
-                    <span className="family-dot" style={{ background: fam.accent }} />
-                    <span className="family-name">{fam.label}</span>
+              <div className="theme-status-grid">
+                <div className="theme-status-pref">
+                  <div>
+                    <span className="theme-status-pref-label">Светлая:</span>
+                    <span className="theme-status-pref-value">
+                      {customLight ? customLight.name : preferredLightTheme}
+                    </span>
                   </div>
-                  <div className="swatch-row">
-                    {fam.modes.map((mode) => {
-                      const isLight = mode.id.startsWith("light-");
-                      const isActive = isLight
-                        ? preferredLightTheme === mode.id
-                        : preferredDarkTheme === mode.id;
-                      return (
+                  <span className={`theme-status-tag ${curDark ? "saved" : "active"}`}>
+                    {curDark ? "сохранена" : "✓ активна"}
+                  </span>
+                </div>
+                <div className="theme-status-pref">
+                  <div>
+                    <span className="theme-status-pref-label">Тёмная:</span>
+                    <span className="theme-status-pref-value">
+                      {customDark ? customDark.name : useOledForDarkMode ? preferredDarkTheme.replace(/^(dark|light)-/, "oled-") : preferredDarkTheme}
+                      {!customDark && useOledForDarkMode && <span style={{ color: "var(--text-muted)", fontSize: "var(--fs-2xs)" }}> (OLED)</span>}
+                    </span>
+                  </div>
+                  <span className={`theme-status-tag ${curDark ? "active" : "saved"}`}>
+                    {curDark ? "✓ активна" : "сохранена"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Вкладки: Стандартные / Свой выбор */}
+            <div className="theme-tabs">
+              <button className={`theme-tab-btn ${tab === "standard" ? "active" : ""}`} onClick={() => setTab("standard")}>
+                Стандартные
+              </button>
+              <button className={`theme-tab-btn ${tab === "custom" ? "active" : ""}`} onClick={() => setTab("custom")}>
+                Свой выбор
+              </button>
+            </div>
+
+            {/* ── Вкладка 1: Стандартные (OLED — галочкой) ── */}
+            {tab === "standard" && (
+              <div className="theme-tab-panel">
+                <div className="theme-status-oled">
+                  <div>
+                    <h4 className="theme-status-oled-title">OLED (True Black)</h4>
+                    <p className="theme-status-oled-desc">
+                      Чистый чёрный фон для тёмного режима
+                    </p>
+                  </div>
+                  <label className="switch">
+                    <input
+                      type="checkbox"
+                      checked={useOledForDarkMode}
+                      onChange={(e) => setUseOledForDarkMode(e.target.checked)}
+                    />
+                    <span className="switch-track"></span>
+                  </label>
+                </div>
+                {THEME_FAMILIES.map((f) => (
+                  <div className="theme-family" key={f.family}>
+                    <h4 className="theme-family-label">
+                      <span className="theme-family-dot" style={{ background: f.accent }} />
+                      {f.label}
+                    </h4>
+                    <div className="theme-swatches">
+                      {f.modes
+                        .filter((m) => !m.id.startsWith("oled-"))
+                        .map((m) => {
+                          const isLight = m.id.startsWith("light-");
+                          const active = isLight
+                            ? preferredLightTheme === m.id
+                            : activeBase === m.id;
+                          return (
+                            <button
+                              key={m.id}
+                              className={`theme-swatch ${active ? "active" : ""}`}
+                              style={{ background: m.bg, color: m.text }}
+                              onClick={() => handleSwatch(m.id)}
+                              title={`${f.label} · ${m.name}`}
+                            >
+                              <span className="theme-swatch-colors">
+                                <span style={{ background: m.bg }} />
+                                <span style={{ background: f.accent }} />
+                                <span style={{ background: m.text }} />
+                              </span>
+                              <span className="theme-swatch-name">{m.name}</span>
+                              {active && <span className="theme-swatch-check">✓</span>}
+                            </button>
+                          );
+                        })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* ── Вкладка 2: Свой выбор (конструктор) ── */}
+            {tab === "custom" && (
+              <div className="theme-tab-panel">
+                <p className="pv-note">
+                  Свой акцент и фон — поверх выбранной темы. Применяется сразу;
+                  сохраните в «Мои стили», чтобы не потерять.
+                </p>
+                <div className="pv-grid">
+                  <div className="pv-card">
+                    <h3>Акцент</h3>
+                    <div className="designer-colors-grid">
+                      {ACCENTS.map((c) => (
                         <button
-                          key={mode.id}
-                          onClick={() => {
-                            if (isLight) {
-                              setPreferredLightTheme(mode.id);
-                              setThemeMode("light");
-                            } else {
-                              setPreferredDarkTheme(mode.id);
-                              setThemeMode("dark");
-                            }
-                          }}
-                          className={`theme-swatch ${isActive ? "active" : ""}`}
-                          style={{
-                            background: mode.bg,
-                            borderColor: isActive ? fam.accent : "var(--border-color)",
-                          }}
-                          title={`${fam.label} · ${mode.name}`}
+                          key={c}
+                          className={`color-dot-btn ${draft?.accent === c ? "active" : ""}`}
+                          style={{ background: c }}
+                          title={c}
+                          onClick={() => handleAccent(c)}
+                        />
+                      ))}
+                    </div>
+                    <div className="slider-header-row">
+                      <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-secondary)" }}>Оттенок</span>
+                      <span className="hue-value-indicator">{draft?.accent ? hslToHex(hue, 85, 55) : "—"}</span>
+                    </div>
+                    <div className="rainbow-slider-container">
+                      <input
+                        type="range" min={0} max={360} value={hue}
+                        className="rainbow-hue-slider"
+                        onChange={(e) => {
+                          const v = parseInt(e.target.value);
+                          setHue(v);
+                          handleAccent(hslToHex(v, 85, 55));
+                        }}
+                      />
+                    </div>
+                    <div className="designer-actions-row">
+                      <button
+                        className="reset-accent-btn"
+                        onClick={() => setDraft(draft?.bgColor ? { ...draft, accent: null } : null)}
+                      >
+                        Сбросить акцент
+                      </button>
+                      <span className="pv-hint">
+                        {draft?.accent ? `Свой акцент: ${draft.accent}` : "Акцент — из темы"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="pv-card">
+                    <h3>Фон</h3>
+                    <div className="pv-bg-row">
+                      {([["theme", "Из темы"], ["light", "Светлый"], ["dark", "Тёмный"], ["oled", "OLED"]] as const).map(([v, label]) => (
+                        <button
+                          key={v}
+                          className={`pv-bg-btn ${(draft?.bgColor || draft?.accent) && draft?.bgType === v ? "active" : (!draft && v === "theme" ? "active" : "")}`}
+                          onClick={() => handleBgMode(v)}
                         >
-                          <div className="swatch-colors">
-                            <span style={{ background: mode.bg }} />
-                            <span style={{ background: fam.accent }} />
-                            <span style={{ background: mode.text }} />
-                          </div>
-                          <span className="swatch-name" style={{ color: mode.text }}>
-                            {mode.name}
-                          </span>
-                          {isActive && (
-                            <span className="swatch-check" style={{ color: fam.accent }}>✓</span>
-                          )}
+                          {label}
                         </button>
+                      ))}
+                    </div>
+                    <div style={{ fontSize: "var(--fs-xs)", color: "var(--text-muted)", display: draft?.bgType === "oled" ? "none" : "" }}>
+                      Оттенки:
+                    </div>
+                    <div className="bg-preset-shades" style={{ display: draft?.bgType === "oled" ? "none" : "" }}>
+                      {(draft?.bgType === "light" ? LIGHT_SHADES : DARK_SHADES).map((c) => (
+                        <button
+                          key={c}
+                          className={`bg-shade-btn ${draft?.bgColor === c ? "active" : ""}`}
+                          style={{ background: c }}
+                          title={c}
+                          onClick={() => handleBgShade(c)}
+                        />
+                      ))}
+                    </div>
+                    <p className="pv-note">
+                      {draft?.bgType === "oled" ? "OLED — чистый чёрный, без оттенков." : "Выберите оттенок фона."}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="pv-card">
+                  <h3>Мои стили</h3>
+                  <p className="preset-actions-hint">Слоты ☀️/🌙 заполняются при «Применить» из библиотеки</p>
+                  <div className="slot-rows">
+                    {(["light", "dark"] as const).map((kind) => {
+                      const slot = kind === "light" ? customLight : customDark;
+                      const isCur = curDark === (kind === "dark");
+                      return (
+                        <div className="preset-item-row" key={kind}>
+                          <div className="preset-item-info">
+                            <span
+                              className="preset-preview-circle"
+                              style={{ background: slot?.bgColor || (kind === "light" ? "#f4f0ec" : "#0f0f15") }}
+                            >
+                              <span className="preset-preview-dot" style={{ background: slot?.accent || "#4c5699" }} />
+                            </span>
+                            <span className="preset-item-name">
+                              {kind === "light" ? "☀️ " : "🌙 "}Слот: {slot ? slot.name : "—"}
+                            </span>
+                          </div>
+                          <div className="preset-item-actions">
+                            {slot && (
+                              <>
+                                <span className={`theme-status-tag ${isCur && slot ? "active" : "saved"}`}>
+                                  {isCur && slot ? "✓ применён" : "сохранён"}
+                                </span>
+                                <button
+                                  className="preset-action-btn delete"
+                                  title="Очистить слот"
+                                  onClick={() => clearSlot(kind)}
+                                >
+                                  ✕
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </div>
                       );
                     })}
                   </div>
+                  <p className="preset-actions-hint">Библиотека — сохранить, применить, скопировать код</p>
+                  <div className="presets-list">
+                    {presets.length === 0 && <p className="no-presets-text">Своих стилей пока нет.</p>}
+                    {presets.map((p) => {
+                      const applied = p.slot && ((p.slot === "light" ? customLight : customDark)?.name === p.name);
+                      return (
+                        <div className="preset-item-row" key={p.id}>
+                          <div className="preset-item-info" title="Применить" onClick={() => applyPreset(p)}>
+                            <span className="preset-preview-circle" style={{ background: p.bgColor || "#f4f0ec" }}>
+                              <span className="preset-preview-dot" style={{ background: p.accent || "#4c5699" }} />
+                            </span>
+                            <span className="preset-item-name">{p.name}</span>
+                          </div>
+                          <div className="preset-item-actions">
+                            <button className={`preset-action-btn apply ${applied ? "active" : ""}`} onClick={() => applyPreset(p)}>
+                              {applied ? "✓ применён" : "Применить"}
+                            </button>
+                            <button className="preset-action-btn" title="Скопировать TMT-код" onClick={() => copyPresetCode(p)}>
+                              📋
+                            </button>
+                            <button
+                              className="preset-action-btn delete"
+                              title="Удалить"
+                              onClick={() => setPresets(presets.filter((x) => x.id !== p.id))}
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="save-preset-form">
+                    <input
+                      type="text"
+                      className="preset-name-input"
+                      value={presetName}
+                      placeholder="Имя стиля"
+                      onChange={(e) => setPresetName(e.target.value)}
+                    />
+                    <select
+                      className="preset-slot-select"
+                      value={presetSlotSel}
+                      onChange={(e) => setPresetSlotSel(e.target.value as typeof presetSlotSel)}
+                      title="Слот"
+                    >
+                      <option value="auto">Авто</option>
+                      <option value="light">☀️ Светлый</option>
+                      <option value="dark">🌙 Тёмный</option>
+                    </select>
+                    <button className="save-preset-btn" onClick={savePreset}>
+                      Сохранить
+                    </button>
+                  </div>
+                  <div className="import-preset-form">
+                    <div className="import-input-wrap">
+                      <input
+                        type="text"
+                        className="preset-import-input"
+                        value={importCode}
+                        placeholder="TMT-код для импорта"
+                        onChange={(e) => setImportCode(e.target.value)}
+                      />
+                      <button className="import-preset-btn" onClick={importPreset}>
+                        Импорт
+                      </button>
+                    </div>
+                    {flash && (
+                      <span className="import-error-msg" style={{ color: flash.ok ? "var(--success)" : "var(--danger)" }}>
+                        {flash.text}
+                      </span>
+                    )}
+                  </div>
                 </div>
-              ))}
-            </div>
+              </div>
+            )}
           </section>
 
           {/* ── Неделя ── */}
@@ -375,6 +781,23 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged }: Props)
               />
               <span>Начинается с понедельника</span>
             </label>
+            <p className="section-hint" style={{ margin: "var(--sp-2) 0 var(--sp-1)" }}>
+              Открывать неделю по умолчанию:
+            </p>
+            <div className="theme-status-modes">
+              <button
+                className={`theme-status-mode-btn ${weekVertical ? "active" : ""}`}
+                onClick={() => setWeekVertical(true)}
+              >
+                Списком
+              </button>
+              <button
+                className={`theme-status-mode-btn ${!weekVertical ? "active" : ""}`}
+                onClick={() => setWeekVertical(false)}
+              >
+                Сеткой
+              </button>
+            </div>
           </section>
 
           {/* ── Задачи ── */}

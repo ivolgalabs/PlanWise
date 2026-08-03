@@ -7,6 +7,7 @@ import ReactDOM from "react-dom/client";
 import "universal-ui/tokens.css";
 import "universal-ui/themes.css";
 import "universal-ui/typography.css";
+import "universal-ui/theme-status.css";
 import "./App.css";
 import App from "./App";
 

@@ -6,6 +6,7 @@ import { COLORS, accentTint, argbToHex, hexToArgb } from "../theme";
 import { useStore } from "../store";
 import { TimePicker } from "./TimePicker";
 import { SubtaskList } from "./SubtaskList";
+import { DatePickerModal } from "./DatePickerModal";
 import { Icon } from "./Icon";
 import { taskIdZone } from "../drag";
 
@@ -48,6 +49,9 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
   const [notesOpen, setNotesOpen] = useState(false);
   const [notesValue, setNotesValue] = useState(task.notes);
   const notesRef = useRef<HTMLTextAreaElement>(null);
+  // Мобильный перенос: выбор даты через DatePickerModal (drag на телефоне
+  // неудобен, кнопка видна только в тач-режиме — класс task-move-btn).
+  const [moveOpen, setMoveOpen] = useState(false);
   const { colorSets, setColorSets, visibility } = useStore();
 
   // Перетаскивание задачи через dnd-kit. data.task читается в onDragEnd.
@@ -326,6 +330,18 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
           <Icon name="note" size={14} />
         </button>
       )}
+      {/* Перенос на другой день — кнопка видна только в тач-режиме
+          (класс task-move-btn скрывает её на десктопе). */}
+      {!compact && (
+        <button
+          className="chip-btn task-move-btn"
+          onClick={() => setMoveOpen(true)}
+          title="Перенести на другой день"
+          style={{ flexShrink: 0 }}
+        >
+          <Icon name="calendar" size={14} />
+        </button>
+      )}
       {/* Кнопки цвета/удаления — приглушены, ярче при hover; скрываются
           настройкой «Кнопки „цвет“ и „удалить“ в задачах». */}
       {visibility.taskActions && !compact && (
@@ -452,6 +468,18 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
     )}
     {/* Подзадачи скрываются настройкой «Подзадачи». */}
     {visibility.subtasks && <SubtaskList taskId={task.id} />}
+    {/* Модалка выбора даты для переноса (мобильный режим). */}
+    {moveOpen && (
+      <DatePickerModal
+        tasks={[]}
+        onPick={async (d) => {
+          await api.moveTask(task.id, d);
+          setMoveOpen(false);
+          onChange();
+        }}
+        onClose={() => setMoveOpen(false)}
+      />
+    )}
     </div>
   );
 }

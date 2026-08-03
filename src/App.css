@@ -68,6 +68,11 @@ body {
   opacity: 1;
   color: var(--accent);
 }
+/* Кнопка «Перенести на другой день» — только в мобильном/тач-режиме
+   (drag-перенос на телефоне неудобен); на десктопе скрыта. */
+.task-move-btn {
+  display: none;
+}
 .task-drag-hint:active {
   cursor: grabbing;
 }
@@ -336,6 +341,11 @@ input[type="checkbox"] {
     height: 32px;
   }
 
+  /* Перенос задачи на другой день — виден только на тач-устройствах. */
+  .task-move-btn {
+    display: inline-flex;
+  }
+
   .text-chip {
     min-height: 40px;
     padding: 6px 12px;
@@ -344,10 +354,6 @@ input[type="checkbox"] {
   /* Кнопки действий в модалках (добавление задачи в месяце). */
   .modal-action-btn {
     min-height: 44px;
-  }
-
-  .mode-btn {
-    padding: 12px var(--sp-4);
   }
 
   .preset-btn {

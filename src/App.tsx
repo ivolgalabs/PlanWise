@@ -3,7 +3,7 @@ import { api } from "./api";
 import type { Task } from "./api";
 import { useStore } from "./store";
 import type { ViewKind } from "./store";
-import { COLORS, applyTheme, watchSystemTheme, accentTint } from "./theme";
+import { COLORS, applyTheme, watchSystemTheme, accentTint, applyCustomSlot } from "./theme";
 import { TopBar } from "./components/TopBar";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { DatePickerModal } from "./components/DatePickerModal";
@@ -60,6 +60,8 @@ function App() {
     preferredLightTheme,
     preferredDarkTheme,
     useOledForDarkMode,
+    customLight,
+    customDark,
     uiScale,
     fontScale,
     archiveEnabled,
@@ -73,9 +75,6 @@ function App() {
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [datePickerOpen, setDatePickerOpen] = useState(false);
-  // Правая панель на уровне App: один элемент на все виды и поиск — при
-  // открытии поиска панель не меняет ширину/видимость/положение.
-  const [showPanel, setShowPanel] = useState(true);
   const [calWidth, setCalWidth] = useState<number>(loadCalWidth);
   useEffect(() => {
     localStorage.setItem(CAL_KEY, String(calWidth));
@@ -139,6 +138,16 @@ function App() {
     if (themeMode !== "system") return;
     return watchSystemTheme(apply);
   }, [themeMode, preferredLightTheme, preferredDarkTheme, useOledForDarkMode]);
+
+  // Слот «Свой выбор»: акцент/фон поверх темы. Слот активен по текущему
+  // режиму (тёмный/светлый); в system — по предпочтению ОС.
+  useEffect(() => {
+    const isDark =
+      themeMode === "dark" ||
+      (themeMode === "system" &&
+        window.matchMedia("(prefers-color-scheme: dark)").matches);
+    applyCustomSlot(document.documentElement, isDark ? customDark : customLight, isDark);
+  }, [themeMode, customLight, customDark, useOledForDarkMode]);
 
   // Масштаб интерфейса через document.zoom (масштабирует ВЕСЬ интерфейс).
   useEffect(() => {
@@ -334,16 +343,12 @@ function App() {
                       day={selectedDate}
                       tasks={tasks}
                       onChange={reload}
-                      showPanel={showPanel}
-                      onTogglePanel={() => setShowPanel((v) => !v)}
                     />
                   )}
                   {view === "week" && (
                     <WeekView
                       tasks={tasks}
                       onChange={reload}
-                      showPanel={showPanel}
-                      onTogglePanel={() => setShowPanel((v) => !v)}
                     />
                   )}
                   {view === "month" && (
@@ -360,8 +365,10 @@ function App() {
               )}
             </div>
           </div>
-          {/* Правая панель — одна на все виды и поиск (в месяце не показывается). */}
-          {view !== "month" && showPanel && !calNarrow && (visibility.miniCalendar || visibility.someday) && (
+          {/* Правая панель — одна на все виды и поиск (в месяце не показывается);
+              скрытие кнопкой убрано по желанию пользователя — только адаптив
+              (calNarrow) и настройки видимости секций. */}
+          {view !== "month" && !calNarrow && (visibility.miniCalendar || visibility.someday) && (
             <AppRightPanel
               view={view}
               tasks={tasks}

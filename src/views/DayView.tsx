@@ -3,9 +3,7 @@ import { useDroppable } from "@dnd-kit/core";
 import type { Task } from "../api";
 import { api, fromEpochDay } from "../api";
 import { TaskCard } from "../components/TaskCard";
-import { Icon } from "../components/Icon";
 import { COLORS, accentTint } from "../theme";
-import { useStore } from "../store";
 import { dayId } from "../drag";
 import { isToday } from "../date";
 
@@ -13,9 +11,6 @@ interface Props {
   day: Date;
   tasks: Task[];
   onChange: () => void;
-  /** Видимость правой панели (App) — кнопка в заголовке дня переключает её. */
-  showPanel: boolean;
-  onTogglePanel: () => void;
 }
 
 /**
@@ -23,10 +18,9 @@ interface Props {
  * Задачи можно перетаскивать на соседние дни через боковые drop-зоны
  * (◀ вчера / завтра ▶) и на любой день в мини-календаре.
  */
-export function DayView({ day, tasks, onChange, showPanel, onTogglePanel }: Props) {
+export function DayView({ day, tasks, onChange }: Props) {
   const [newTitle, setNewTitle] = useState("");
   const newInputRef = useRef<HTMLInputElement>(null);
-  const { visibility } = useStore();
 
   // В совсем узком окне прячем и боковую зону «завтра».
   const [tiny, setTiny] = useState(
@@ -38,10 +32,6 @@ export function DayView({ day, tasks, onChange, showPanel, onTogglePanel }: Prop
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
   }, []);
-
-  // Панель возможна, если включена хоть одна секция (календарь или
-  // «Когда-нибудь»); видимость панели — пропс от App (showPanel).
-  const panelPossible = visibility.miniCalendar || visibility.someday;
 
   const dayTasks = tasks
     .filter((t) => {
@@ -104,9 +94,6 @@ export function DayView({ day, tasks, onChange, showPanel, onTogglePanel }: Prop
         setNewTitle={setNewTitle}
         addTask={addTask}
         newInputRef={newInputRef}
-        showPanel={showPanel}
-        onTogglePanel={onTogglePanel}
-        panelPossible={panelPossible}
       />
       {/* Боковая зона «завтра» — перенос задачи/подзадачи на завтра;
           в узком окне (tiny) скрыта, чтобы не красть ширину у задач */}
@@ -157,9 +144,6 @@ function DayTasksArea({
   setNewTitle,
   addTask,
   newInputRef,
-  showPanel,
-  onTogglePanel,
-  panelPossible,
 }: {
   day: Date;
   dayTasks: Task[];
@@ -169,11 +153,6 @@ function DayTasksArea({
   setNewTitle: (v: string) => void;
   addTask: () => void;
   newInputRef: React.RefObject<HTMLInputElement | null>;
-  /** Правая панель показана — кнопка в заголовке прячет/показывает её. */
-  showPanel: boolean;
-  onTogglePanel: () => void;
-  /** Панель возможна (включена хоть одна секция) — иначе кнопки нет. */
-  panelPossible: boolean;
 }) {
   // НЕ useDroppable: в DayView droppable-дни обслуживает MiniCalendar (ячейки)
   // и SideDayZone (завтра). Здесь droppable с dayId(epochDay) дублировал бы
@@ -209,16 +188,6 @@ function DayTasksArea({
           })}
           {today && " ●"}
         </h2>
-        {panelPossible && (
-          <button
-            className="chip-btn"
-            onClick={onTogglePanel}
-            title={showPanel ? "Скрыть панель" : "Показать панель"}
-            style={{ flexShrink: 0 }}
-          >
-            {showPanel ? <Icon name="calendarHide" size={14} /> : <Icon name="calendar" size={14} />}
-          </button>
-        )}
       </div>
 
       <div>

@@ -11,19 +11,16 @@ import { useStore } from "../store";
 interface Props {
   tasks: Task[];
   onChange: () => void;
-  /** Видимость правой панели (App) — кнопка тулбара переключает её. */
-  showPanel: boolean;
-  onTogglePanel: () => void;
 }
 
 /**
  * Вид «Неделя»: дни + (опциональная) правая панель с календарём.
- * Кнопки: переключение горизонтально/вертикально, скрыть/показать календарь.
+ * Кнопка ориентации (список/сетка) меняет сохранённую настройку weekVertical;
+ * кнопка скрытия панели убрана по желанию пользователя.
  * Панель и drag-контекст — на уровне App; здесь только сетка дней.
  */
-export function WeekView({ tasks, onChange, showPanel, onTogglePanel }: Props) {
-  const { selectedDate, mondayFirst, visibility } = useStore();
-  const [vertical, setVertical] = useState(true);
+export function WeekView({ tasks, onChange }: Props) {
+  const { selectedDate, mondayFirst, weekVertical, setWeekVertical } = useStore();
   const days = weekDays(selectedDate, mondayFirst);
 
   // В узком окне принудительно вертикальный список — сетка из 7 узких колонок
@@ -37,8 +34,8 @@ export function WeekView({ tasks, onChange, showPanel, onTogglePanel }: Props) {
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
   }, []);
-  // Вертикаль, если пользователь выбрал его ИЛИ окно узкое.
-  const effectiveVertical = vertical || narrow;
+  // Вертикаль, если выбрано настройкой ИЛИ окно узкое.
+  const effectiveVertical = weekVertical || narrow;
 
   const tasksForDay = (d: Date) =>
     tasks.filter((t) => isSameDay(fromEpochDay(t.date), d));
@@ -49,10 +46,7 @@ export function WeekView({ tasks, onChange, showPanel, onTogglePanel }: Props) {
         <Toolbar
           vertical={effectiveVertical}
           canToggle={!narrow}
-          onToggleOrientation={() => setVertical((v) => !v)}
-          showCalendar={showPanel}
-          onToggleCalendar={onTogglePanel}
-          calendarVisible={visibility.miniCalendar || visibility.someday}
+          onToggleOrientation={() => setWeekVertical(!weekVertical)}
         />
         <div style={{ flex: 1, minHeight: 0 }}>
           {effectiveVertical ? (
@@ -83,24 +77,16 @@ export function WeekView({ tasks, onChange, showPanel, onTogglePanel }: Props) {
   );
 }
 
-/** Панель кнопок недели. */
+/** Панель кнопок недели: только ориентация (список/сетка). */
 function Toolbar({
   vertical,
   canToggle,
   onToggleOrientation,
-  showCalendar,
-  onToggleCalendar,
-  calendarVisible,
 }: {
   vertical: boolean;
   /** false в узком окне — кнопку ориентации прячем (сетка всё равно нечитаема). */
   canToggle: boolean;
   onToggleOrientation: () => void;
-  showCalendar: boolean;
-  onToggleCalendar: () => void;
-  /** Настройки видимости панели («Мини-календарь» или «Когда-нибудь») —
-   *  false прячет кнопку. */
-  calendarVisible: boolean;
 }) {
   return (
     <div
@@ -128,16 +114,6 @@ function Toolbar({
           ) : (
             <><Icon name="list" size={14} /> списком</>
           )}
-        </button>
-      )}
-      {calendarVisible && (
-        <button
-          onClick={onToggleCalendar}
-          className="icon-btn"
-          title={showCalendar ? "Скрыть панель" : "Показать панель"}
-          style={{ display: "inline-flex", alignItems: "center", gap: "var(--sp-3)" }}
-        >
-          {showCalendar ? <Icon name="calendarHide" size={14} /> : <Icon name="calendar" size={14} />}
         </button>
       )}
     </div>

@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { Task, ColorSet } from "./api";
+import type { CustomSlot, ThemePreset } from "./theme";
 
 export type ViewKind = "day" | "week" | "month";
 export type ThemeMode = "light" | "dark" | "system";
@@ -34,6 +35,13 @@ interface PlannerState {
   preferredDarkTheme: string;
   /** Использовать OLED для тёмного режима. */
   useOledForDarkMode: boolean;
+  /** Слоты «Свой выбор»: перекрывают акцент/фон светлой/тёмной темы. */
+  customLight: CustomSlot | null;
+  customDark: CustomSlot | null;
+  /** Библиотека «Мои стили». */
+  presets: ThemePreset[];
+  /** Ориентация недели по умолчанию: true — список (вертикально). */
+  weekVertical: boolean;
   /** Масштаб интерфейса 0.7-2.0 (document.zoom — масштабирует весь UI). */
   uiScale: number;
   /** Множитель размера шрифта 0.8-1.6 (меняет --fs-* токены через html font-size). */
@@ -54,6 +62,10 @@ interface PlannerState {
   setPreferredLightTheme: (t: string) => void;
   setPreferredDarkTheme: (t: string) => void;
   setUseOledForDarkMode: (v: boolean) => void;
+  setCustomLight: (s: CustomSlot | null) => void;
+  setCustomDark: (s: CustomSlot | null) => void;
+  setPresets: (p: ThemePreset[]) => void;
+  setWeekVertical: (v: boolean) => void;
   setUiScale: (s: number) => void;
   setFontScale: (s: number) => void;
   setArchiveEnabled: (v: boolean) => void;
@@ -73,6 +85,10 @@ export const useStore = create<PlannerState>()(
       preferredLightTheme: "light-slate",
       preferredDarkTheme: "dark-slate",
       useOledForDarkMode: false,
+      customLight: null,
+      customDark: null,
+      presets: [],
+      weekVertical: true,
       uiScale: 1.0,
       fontScale: 1.0,
       archiveEnabled: true,
@@ -89,6 +105,10 @@ export const useStore = create<PlannerState>()(
       setPreferredLightTheme: (t) => set({ preferredLightTheme: t }),
       setPreferredDarkTheme: (t) => set({ preferredDarkTheme: t }),
       setUseOledForDarkMode: (v) => set({ useOledForDarkMode: v }),
+      setCustomLight: (s) => set({ customLight: s }),
+      setCustomDark: (s) => set({ customDark: s }),
+      setPresets: (p) => set({ presets: p }),
+      setWeekVertical: (v) => set({ weekVertical: v }),
       setUiScale: (s) => set({ uiScale: s }),
       setFontScale: (s) => set({ fontScale: s }),
       setArchiveEnabled: (v) => set({ archiveEnabled: v }),
@@ -105,6 +125,10 @@ export const useStore = create<PlannerState>()(
         preferredLightTheme: s.preferredLightTheme,
         preferredDarkTheme: s.preferredDarkTheme,
         useOledForDarkMode: s.useOledForDarkMode,
+        customLight: s.customLight,
+        customDark: s.customDark,
+        presets: s.presets,
+        weekVertical: s.weekVertical,
         uiScale: s.uiScale,
         fontScale: s.fontScale,
         archiveEnabled: s.archiveEnabled,
