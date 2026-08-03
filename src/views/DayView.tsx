@@ -4,16 +4,18 @@ import type { Task } from "../api";
 import { api, fromEpochDay } from "../api";
 import { TaskCard } from "../components/TaskCard";
 import { Icon } from "../components/Icon";
-import { RightPanel } from "../components/RightPanel";
 import { COLORS, accentTint } from "../theme";
 import { useStore } from "../store";
-import { TaskDndContext, dayId } from "../drag";
+import { dayId } from "../drag";
 import { isToday } from "../date";
 
 interface Props {
   day: Date;
   tasks: Task[];
   onChange: () => void;
+  /** Видимость правой панели (App) — кнопка в заголовке дня переключает её. */
+  showPanel: boolean;
+  onTogglePanel: () => void;
 }
 
 /**
@@ -21,22 +23,11 @@ interface Props {
  * Задачи можно перетаскивать на соседние дни через боковые drop-зоны
  * (◀ вчера / завтра ▶) и на любой день в мини-календаре.
  */
-export function DayView({ day, tasks, onChange }: Props) {
+export function DayView({ day, tasks, onChange, showPanel, onTogglePanel }: Props) {
   const [newTitle, setNewTitle] = useState("");
   const newInputRef = useRef<HTMLInputElement>(null);
-  const { setSelectedDate, visibility } = useStore();
+  const { visibility } = useStore();
 
-  // В узком окне прячем правую панель (календарь + «Когда-нибудь») — она
-  // крадёт ширину у задач (порог 700px).
-  const [calNarrow, setCalNarrow] = useState(
-    () => window.matchMedia("(max-width: 700px)").matches,
-  );
-  useEffect(() => {
-    const mq = window.matchMedia("(max-width: 700px)");
-    const handler = (e: MediaQueryListEvent) => setCalNarrow(e.matches);
-    mq.addEventListener("change", handler);
-    return () => mq.removeEventListener("change", handler);
-  }, []);
   // В совсем узком окне прячем и боковую зону «завтра».
   const [tiny, setTiny] = useState(
     () => window.matchMedia("(max-width: 560px)").matches,
@@ -49,10 +40,8 @@ export function DayView({ day, tasks, onChange }: Props) {
   }, []);
 
   // Панель возможна, если включена хоть одна секция (календарь или
-  // «Когда-нибудь»); локальный showPanel — кнопка в заголовке дня.
-  const [showPanel, setShowPanel] = useState(true);
+  // «Когда-нибудь»); видимость панели — пропс от App (showPanel).
   const panelPossible = visibility.miniCalendar || visibility.someday;
-  const panelVisible = showPanel && panelPossible && !calNarrow;
 
   const dayTasks = tasks
     .filter((t) => {
@@ -100,37 +89,25 @@ export function DayView({ day, tasks, onChange }: Props) {
   nextDay.setDate(nextDay.getDate() + 1);
 
   return (
-    <TaskDndContext onChange={onChange}>
-      <div style={{ display: "flex", height: "100%", minHeight: 0 }}>
-        {/* Основная область — задачи */}
-        <DayTasksArea
-          day={day}
-          dayTasks={dayTasks}
-          onChange={onChange}
-          createNext={createNext}
-          newTitle={newTitle}
-          setNewTitle={setNewTitle}
-          addTask={addTask}
-          newInputRef={newInputRef}
-          showPanel={showPanel}
-          onTogglePanel={() => setShowPanel((v) => !v)}
-          panelPossible={panelPossible}
-        />
-        {/* Боковая зона «завтра» — перенос задачи/подзадачи на завтра;
-            в узком окне (tiny) скрыта, чтобы не красть ширину у задач */}
-        {!tiny && <SideDayZone day={nextDay} label="завтра ▶" />}
-        {/* Правая панель: календарь + «Когда-нибудь» + архив. Скрывается
-            кнопкой в заголовке дня, настройками и в узком окне (calNarrow). */}
-        {panelVisible && (
-          <RightPanel
-            tasks={tasks}
-            width={280}
-            onSelect={(d) => setSelectedDate(d)}
-            onChange={onChange}
-          />
-        )}
-      </div>
-    </TaskDndContext>
+    <div style={{ display: "flex", height: "100%", minHeight: 0 }}>
+      {/* Основная область — задачи */}
+      <DayTasksArea
+        day={day}
+        dayTasks={dayTasks}
+        onChange={onChange}
+        createNext={createNext}
+        newTitle={newTitle}
+        setNewTitle={setNewTitle}
+        addTask={addTask}
+        newInputRef={newInputRef}
+        showPanel={showPanel}
+        onTogglePanel={onTogglePanel}
+        panelPossible={panelPossible}
+      />
+      {/* Боковая зона «завтра» — перенос задачи/подзадачи на завтра;
+          в узком окне (tiny) скрыта, чтобы не красть ширину у задач */}
+      {!tiny && <SideDayZone day={nextDay} label="завтра ▶" />}
+    </div>
   );
 }
 

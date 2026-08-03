@@ -5,7 +5,7 @@ import { api, fromEpochDay } from "../api";
 import { startOfWeek, firstOfMonth, isSameDay, isToday, isPast, formatMinutes } from "../date";
 import { COLORS, accentTint, setHex, argbToHex } from "../theme";
 import { useStore } from "../store";
-import { TaskDndContext, dayId } from "../drag";
+import { dayId } from "../drag";
 import { TimePicker } from "../components/TimePicker";
 import { Icon } from "../components/Icon";
 
@@ -95,224 +95,222 @@ export function MonthView({ tasks, onSelectDay, onChange }: Props) {
   };
 
   return (
-    <TaskDndContext onChange={onChange}>
-      <div style={{ display: "flex", flexDirection: "column", height: "100%", padding: "var(--sp-4)" }}>
-        <div style={{ display: "flex" }}>
-          {weekdays.map((w) => (
-            <div
-              key={w}
-              style={{
-                flex: 1,
-                textAlign: "center",
-                fontSize: "var(--fs-2xs)",
-                color: COLORS.muted,
-                fontWeight: 600,
-                padding: "var(--sp-2) 0",
-              }}
-            >
-              {w}
-            </div>
-          ))}
-        </div>
-        {/* Строки-недели с распределением высоты: текущая неделя крупнее. */}
-        <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, gap: "var(--sp-2)" }}>
-          {weeks.map((week, wi) => {
-            const isCurrent = wi === todayWeekIdx;
-            // Текущая неделя забирает больше места; остальные делят остаток.
-            const grow = isCurrent ? 2.2 : 1;
-            return (
-              <div
-                key={wi}
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(7, 1fr)",
-                  gap: "var(--sp-2)",
-                  flex: grow,
-                  minHeight: 0,
-                }}
-              >
-                {week.map((day) => {
-                  return (
-                    <MonthCell
-                      key={day.toISOString()}
-                      day={day}
-                      inMonth={day.getMonth() === selectedDate.getMonth()}
-                      isCurrentWeek={isCurrent}
-                      selected={isSameDay(day, selectedDate)}
-                      dayTasks={tasksForDay(day)}
-                      onClickDay={() => setMenuDay(day)}
-                    />
-                  );
-                })}
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Меню при клике на день */}
-        {menuDay && (
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", padding: "var(--sp-4)" }}>
+      <div style={{ display: "flex" }}>
+        {weekdays.map((w) => (
           <div
-            onClick={() => { setMenuDay(null); setAddTitle(""); setAddTime(null); setAddColor(null); }}
+            key={w}
             style={{
-              position: "fixed", inset: 0,
-              background: "var(--overlay)", zIndex: 200,
-              display: "flex", alignItems: "center", justifyContent: "center",
+              flex: 1,
+              textAlign: "center",
+              fontSize: "var(--fs-2xs)",
+              color: COLORS.muted,
+              fontWeight: 600,
+              padding: "var(--sp-2) 0",
             }}
           >
+            {w}
+          </div>
+        ))}
+      </div>
+      {/* Строки-недели с распределением высоты: текущая неделя крупнее. */}
+      <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, gap: "var(--sp-2)" }}>
+        {weeks.map((week, wi) => {
+          const isCurrent = wi === todayWeekIdx;
+          // Текущая неделя забирает больше места; остальные делят остаток.
+          const grow = isCurrent ? 2.2 : 1;
+          return (
             <div
-              onClick={(e) => e.stopPropagation()}
+              key={wi}
               style={{
-                background: COLORS.card,
-                border: `1px solid ${COLORS.cardBorder}`,
-                borderRadius: "var(--radius-xl)",
-                padding: "var(--sp-6)",
-                width: 460,
-                maxWidth: "92vw",
-                maxHeight: "85vh",
-                overflowY: "auto",
-                boxShadow: "var(--shadow-xl)",
+                display: "grid",
+                gridTemplateColumns: "repeat(7, 1fr)",
+                gap: "var(--sp-2)",
+                flex: grow,
+                minHeight: 0,
               }}
             >
-              <div style={{ fontSize: "var(--fs-md)", fontWeight: 600, color: COLORS.text, marginBottom: "var(--sp-4)", textTransform: "capitalize" }}>
-                {menuDay.toLocaleDateString("ru", { day: "numeric", month: "long", weekday: "long" })}
-              </div>
+              {week.map((day) => {
+                return (
+                  <MonthCell
+                    key={day.toISOString()}
+                    day={day}
+                    inMonth={day.getMonth() === selectedDate.getMonth()}
+                    isCurrentWeek={isCurrent}
+                    selected={isSameDay(day, selectedDate)}
+                    dayTasks={tasksForDay(day)}
+                    onClickDay={() => setMenuDay(day)}
+                  />
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
 
-              {/* Список задач дня: клик — перейти к дню */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: "var(--sp-4)" }}>
-                {tasksForDay(menuDay).length === 0 && (
-                  <p style={{ margin: 0, fontSize: "var(--fs-2xs)", color: COLORS.muted }}>
-                    Нет задач на этот день
-                  </p>
-                )}
-                {tasksForDay(menuDay).map((t) => (
-                  <button
-                    key={t.id}
-                    onClick={() => openDay(menuDay)}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "var(--sp-2)",
-                      textAlign: "left",
-                      padding: "var(--sp-1) var(--sp-2)",
-                      borderRadius: "var(--radius-sm)",
-                      border: "none",
-                      background: "transparent",
-                      cursor: "pointer",
-                      fontSize: "var(--fs-sm)",
-                      color: t.isDone ? COLORS.muted : COLORS.text,
-                      textDecoration: t.isDone ? "line-through" : "none",
-                    }}
-                  >
-                    <span
-                      style={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: "50%",
-                        flexShrink: 0,
-                        background:
-                          t.isDone || !t.colorSetId
-                            ? COLORS.muted
-                            : setHex(colorSets, t.colorSetId) ?? COLORS.muted,
-                      }}
-                    />
-                    {t.timeMinutes != null && (
-                      <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted, flexShrink: 0 }}>
-                        {formatMinutes(t.timeMinutes)}
-                      </span>
-                    )}
-                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
-                      {t.title}
-                    </span>
-                  </button>
-                ))}
-              </div>
+      {/* Меню при клике на день */}
+      {menuDay && (
+        <div
+          onClick={() => { setMenuDay(null); setAddTitle(""); setAddTime(null); setAddColor(null); }}
+          style={{
+            position: "fixed", inset: 0,
+            background: "var(--overlay)", zIndex: 200,
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: COLORS.card,
+              border: `1px solid ${COLORS.cardBorder}`,
+              borderRadius: "var(--radius-xl)",
+              padding: "var(--sp-6)",
+              width: 460,
+              maxWidth: "92vw",
+              maxHeight: "85vh",
+              overflowY: "auto",
+              boxShadow: "var(--shadow-xl)",
+            }}
+          >
+            <div style={{ fontSize: "var(--fs-md)", fontWeight: 600, color: COLORS.text, marginBottom: "var(--sp-4)", textTransform: "capitalize" }}>
+              {menuDay.toLocaleDateString("ru", { day: "numeric", month: "long", weekday: "long" })}
+            </div>
 
-              <input
-                autoFocus
-                value={addTitle}
-                onChange={(e) => setAddTitle(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") addTask(menuDay); }}
-                placeholder="Добавить задачу на этот день"
-                style={{
-                  width: "100%", fontSize: "var(--fs-sm)",
-                  border: `1px solid ${COLORS.cardBorder}`, borderRadius: "var(--radius-md)",
-                  padding: "var(--sp-2) var(--sp-3)", marginBottom: "var(--sp-3)",
-                  background: "transparent", color: COLORS.text,
-                }}
-              />
-              {/* Время задачи */}
-              <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)", marginBottom: "var(--sp-3)" }}>
-                <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted, minWidth: "var(--island-h)" }}>Время</span>
-                <TimePicker value={addTime} onChange={setAddTime} />
-              </div>
-              {/* Цвет (категория) задачи */}
-              <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)", marginBottom: "var(--sp-4)" }}>
-                <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted, minWidth: "var(--island-h)" }}>Цвет</span>
+            {/* Список задач дня: клик — перейти к дню */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: "var(--sp-4)" }}>
+              {tasksForDay(menuDay).length === 0 && (
+                <p style={{ margin: 0, fontSize: "var(--fs-2xs)", color: COLORS.muted }}>
+                  Нет задач на этот день
+                </p>
+              )}
+              {tasksForDay(menuDay).map((t) => (
                 <button
-                  onClick={() => setAddColor(null)}
-                  title="Без категории"
-                  className="chip-btn"
+                  key={t.id}
+                  onClick={() => openDay(menuDay)}
                   style={{
-                    background: "transparent",
-                    border: `1px solid ${addColor === null ? COLORS.accent : COLORS.cardBorder}`,
-                    opacity: addColor === null ? 1 : 0.5,
-                    display: "inline-flex",
+                    display: "flex",
                     alignItems: "center",
-                    justifyContent: "center",
+                    gap: "var(--sp-2)",
+                    textAlign: "left",
+                    padding: "var(--sp-1) var(--sp-2)",
+                    borderRadius: "var(--radius-sm)",
+                    border: "none",
+                    background: "transparent",
+                    cursor: "pointer",
+                    fontSize: "var(--fs-sm)",
+                    color: t.isDone ? COLORS.muted : COLORS.text,
+                    textDecoration: t.isDone ? "line-through" : "none",
                   }}
                 >
-                  <Icon name="close" size={12} />
-                </button>
-                {sets.map((c) => (
-                  <button
-                    key={c.id}
-                    onClick={() => setAddColor(c.id)}
-                    title={c.name}
-                    className="chip-btn"
+                  <span
                     style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "center",
-                      gap: 2,
-                      padding: "2px",
-                      background: "transparent",
-                      border: "none",
-                      opacity: addColor && addColor !== c.id ? 0.45 : 1,
+                      width: 8,
+                      height: 8,
+                      borderRadius: "50%",
+                      flexShrink: 0,
+                      background:
+                        t.isDone || !t.colorSetId
+                          ? COLORS.muted
+                          : setHex(colorSets, t.colorSetId) ?? COLORS.muted,
+                    }}
+                  />
+                  {t.timeMinutes != null && (
+                    <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted, flexShrink: 0 }}>
+                      {formatMinutes(t.timeMinutes)}
+                    </span>
+                  )}
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
+                    {t.title}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <input
+              autoFocus
+              value={addTitle}
+              onChange={(e) => setAddTitle(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") addTask(menuDay); }}
+              placeholder="Добавить задачу на этот день"
+              style={{
+                width: "100%", fontSize: "var(--fs-sm)",
+                border: `1px solid ${COLORS.cardBorder}`, borderRadius: "var(--radius-md)",
+                padding: "var(--sp-2) var(--sp-3)", marginBottom: "var(--sp-3)",
+                background: "transparent", color: COLORS.text,
+              }}
+            />
+            {/* Время задачи */}
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)", marginBottom: "var(--sp-3)" }}>
+              <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted, minWidth: "var(--island-h)" }}>Время</span>
+              <TimePicker value={addTime} onChange={setAddTime} />
+            </div>
+            {/* Цвет (категория) задачи */}
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)", marginBottom: "var(--sp-4)" }}>
+              <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted, minWidth: "var(--island-h)" }}>Цвет</span>
+              <button
+                onClick={() => setAddColor(null)}
+                title="Без категории"
+                className="chip-btn"
+                style={{
+                  background: "transparent",
+                  border: `1px solid ${addColor === null ? COLORS.accent : COLORS.cardBorder}`,
+                  opacity: addColor === null ? 1 : 0.5,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Icon name="close" size={12} />
+              </button>
+              {sets.map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => setAddColor(c.id)}
+                  title={c.name}
+                  className="chip-btn"
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: 2,
+                    padding: "2px",
+                    background: "transparent",
+                    border: "none",
+                    opacity: addColor && addColor !== c.id ? 0.45 : 1,
+                  }}
+                >
+                  <span
+                    style={{
+                      width: 14,
+                      height: 14,
+                      borderRadius: "50%",
+                      background: argbToHex(c.color),
+                      border: `2px solid ${addColor === c.id ? COLORS.accent : "transparent"}`,
+                    }}
+                  />
+                  <span
+                    style={{
+                      fontSize: "var(--fs-2xs)",
+                      color: COLORS.muted,
+                      maxWidth: 44,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
                     }}
                   >
-                    <span
-                      style={{
-                        width: 14,
-                        height: 14,
-                        borderRadius: "50%",
-                        background: argbToHex(c.color),
-                        border: `2px solid ${addColor === c.id ? COLORS.accent : "transparent"}`,
-                      }}
-                    />
-                    <span
-                      style={{
-                        fontSize: "var(--fs-2xs)",
-                        color: COLORS.muted,
-                        maxWidth: 44,
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {c.name}
-                    </span>
-                  </button>
-                ))}
-              </div>
-              <div style={{ display: "flex", gap: "var(--sp-2)" }}>
-                <button onClick={() => addTask(menuDay)} style={btnStyle(false)}>Добавить</button>
-                <button onClick={() => openDay(menuDay)} style={btnStyle(true)}>Перейти к дню</button>
-              </div>
+                    {c.name}
+                  </span>
+                </button>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: "var(--sp-2)" }}>
+              <button onClick={() => addTask(menuDay)} style={btnStyle(false)}>Добавить</button>
+              <button onClick={() => openDay(menuDay)} style={btnStyle(true)}>Перейти к дню</button>
             </div>
           </div>
-        )}
-      </div>
-    </TaskDndContext>
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "./api";
+import type { Task } from "./api";
 import { useStore } from "./store";
+import type { ViewKind } from "./store";
 import { COLORS, applyTheme, watchSystemTheme, accentTint } from "./theme";
 import { TopBar } from "./components/TopBar";
 import { SettingsPanel } from "./components/SettingsPanel";
@@ -13,7 +15,20 @@ import { DayView } from "./views/DayView";
 import { WeekView } from "./views/WeekView";
 import { MonthView } from "./views/MonthView";
 import { RightPanel } from "./components/RightPanel";
+import { TaskDndContext } from "./drag";
 import "./App.css";
+
+/** Ширина правой панели в «Неделе» (resize-ручка): мин/макс/ключ/дефолт. */
+const CAL_MIN = 200;
+const CAL_MAX = 520;
+const CAL_KEY = "week.calWidth";
+const CAL_DEFAULT = 300;
+
+function loadCalWidth(): number {
+  const v = Number(localStorage.getItem(CAL_KEY));
+  if (Number.isFinite(v) && v >= CAL_MIN && v <= CAL_MAX) return v;
+  return CAL_DEFAULT;
+}
 
 /** Разрешить id темы по mode + предпочтениям. */
 function resolveActiveTheme(): string {
@@ -56,6 +71,24 @@ function App() {
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [datePickerOpen, setDatePickerOpen] = useState(false);
+  // Правая панель на уровне App: один элемент на все виды и поиск — при
+  // открытии поиска панель не меняет ширину/видимость/положение.
+  const [showPanel, setShowPanel] = useState(true);
+  const [calWidth, setCalWidth] = useState<number>(loadCalWidth);
+  useEffect(() => {
+    localStorage.setItem(CAL_KEY, String(calWidth));
+  }, [calWidth]);
+  // Панель скрывается в узком окне; порог зависит от вида (неделя 1200,
+  // день 700 — как раньше было в видах).
+  const [calNarrow, setCalNarrow] = useState(
+    () => window.matchMedia(`(max-width: ${view === "day" ? 700 : 1200}px)`).matches,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${view === "day" ? 700 : 1200}px)`);
+    const handler = (e: MediaQueryListEvent) => setCalNarrow(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, [view]);
   const [archiveCount, setArchiveCount] = useState(0);
   // Флаг «архив уже выполнен за маунт»: в dev React.StrictMode монтирует
   // компонент дважды и эффект вызывается два раза — второй вызов архивирует
@@ -212,34 +245,6 @@ function App() {
         }}
         visibility={visibility}
       />
-      {searchOpen && (
-        <SearchBar
-          query={searchQuery}
-          onQuery={setSearchQuery}
-          color={searchColor}
-          onColor={setSearchColor}
-          period={searchPeriod}
-          status={searchStatus}
-          sort={searchSort}
-          onPeriod={setSearchPeriod}
-          onStatus={setSearchStatus}
-          onSort={setSearchSort}
-          from={searchPeriodFrom}
-          to={searchPeriodTo}
-          onFrom={setSearchPeriodFrom}
-          onTo={setSearchPeriodTo}
-          onClose={() => {
-            setSearchOpen(false);
-            setSearchQuery("");
-            setSearchColor(null);
-            setSearchPeriod("all");
-            setSearchStatus("all");
-            setSearchSort("dateAsc");
-            setSearchPeriodFrom(null);
-            setSearchPeriodTo(null);
-          }}
-        />
-      )}
       {/* Баннер архива скрывается настройками видимости. */}
       {visibility.archiveBanner && archiveCount > 0 && (
         <div
@@ -266,69 +271,115 @@ function App() {
           </button>
         </div>
       )}
-      <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          {/* Активный поиск заменяет вид списком результатов по всем задачам. */}
-          {searchActive ? (
-            <SearchResults
+      {/* Один общий drag-контекст на контент и панель: переносы между
+          «Когда-нибудь» и днями работают во всех видах и в поиске. */}
+      <TaskDndContext onChange={reload}>
+        <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
+          {/* Левая колонка: строка поиска над контентом — правая панель
+              не сдвигается вниз при открытии поиска. */}
+          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+            {searchOpen && (
+              <SearchBar
+                query={searchQuery}
+                onQuery={setSearchQuery}
+                color={searchColor}
+                onColor={setSearchColor}
+                period={searchPeriod}
+                status={searchStatus}
+                sort={searchSort}
+                onPeriod={setSearchPeriod}
+                onStatus={setSearchStatus}
+                onSort={setSearchSort}
+                from={searchPeriodFrom}
+                to={searchPeriodTo}
+                onFrom={setSearchPeriodFrom}
+                onTo={setSearchPeriodTo}
+                onClose={() => {
+                  setSearchOpen(false);
+                  setSearchQuery("");
+                  setSearchColor(null);
+                  setSearchPeriod("all");
+                  setSearchStatus("all");
+                  setSearchSort("dateAsc");
+                  setSearchPeriodFrom(null);
+                  setSearchPeriodTo(null);
+                }}
+              />
+            )}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              {/* Активный поиск заменяет вид списком результатов по всем задачам. */}
+              {searchActive ? (
+                <SearchResults
+                  tasks={tasks}
+                  query={searchQuery}
+                  color={searchColor}
+                  period={searchPeriod}
+                  status={searchStatus}
+                  sort={searchSort}
+                  from={searchPeriodFrom}
+                  to={searchPeriodTo}
+                  onJumpToDay={(d) => {
+                    setSelectedDate(d);
+                    setView("day");
+                  }}
+                  onChange={reload}
+                  onResetFilters={() => {
+                    // Сброс всех фильтров; поиск остаётся открытым.
+                    setSearchQuery("");
+                    setSearchColor(null);
+                    setSearchPeriod("all");
+                    setSearchStatus("all");
+                    setSearchSort("dateAsc");
+                    setSearchPeriodFrom(null);
+                    setSearchPeriodTo(null);
+                  }}
+                />
+              ) : (
+                <>
+                  {view === "day" && (
+                    <DayView
+                      day={selectedDate}
+                      tasks={tasks}
+                      onChange={reload}
+                      showPanel={showPanel}
+                      onTogglePanel={() => setShowPanel((v) => !v)}
+                    />
+                  )}
+                  {view === "week" && (
+                    <WeekView
+                      tasks={tasks}
+                      onChange={reload}
+                      showPanel={showPanel}
+                      onTogglePanel={() => setShowPanel((v) => !v)}
+                    />
+                  )}
+                  {view === "month" && (
+                    <MonthView
+                      tasks={tasks}
+                      onChange={reload}
+                      onSelectDay={(d) => {
+                        setSelectedDate(d);
+                        setView("day");
+                      }}
+                    />
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+          {/* Правая панель — одна на все виды и поиск (в месяце не показывается). */}
+          {view !== "month" && showPanel && !calNarrow && (visibility.miniCalendar || visibility.someday) && (
+            <AppRightPanel
+              view={view}
               tasks={tasks}
-              query={searchQuery}
-              color={searchColor}
-              period={searchPeriod}
-              status={searchStatus}
-              sort={searchSort}
-              from={searchPeriodFrom}
-              to={searchPeriodTo}
-              onJumpToDay={(d) => {
-                setSelectedDate(d);
-                setView("day");
-              }}
+              calWidth={calWidth}
+              onResize={setCalWidth}
+              onSelect={setSelectedDate}
               onChange={reload}
-              onResetFilters={() => {
-                // Сброс всех фильтров; поиск остаётся открытым.
-                setSearchQuery("");
-                setSearchColor(null);
-                setSearchPeriod("all");
-                setSearchStatus("all");
-                setSearchSort("dateAsc");
-                setSearchPeriodFrom(null);
-                setSearchPeriodTo(null);
-              }}
             />
-          ) : (
-            <>
-          {view === "day" && (
-            <DayView day={selectedDate} tasks={tasks} onChange={reload} />
-          )}
-          {view === "week" && <WeekView tasks={tasks} onChange={reload} />}
-          {view === "month" && (
-            <MonthView
-              tasks={tasks}
-              onChange={reload}
-              onSelectDay={(d) => {
-                setSelectedDate(d);
-                setView("day");
-              }}
-            />
-          )}
-            </>
           )}
         </div>
-        {/* Правая панель (календарь + «Когда-нибудь» + архив) остаётся
-            видимой и при открытом поиске — компактный поиск её не трогает.
-            Клик по дню в календаре переходит к нему, как в результатах. */}
-        {searchActive && (
-          <RightPanel
-            tasks={tasks}
-            width={280}
-            onSelect={(d) => {
-              setSelectedDate(d);
-              setView("day");
-            }}
-            onChange={reload}
-          />
-        )}
-      </div>
+      </TaskDndContext>
 
       {settingsOpen && (
         <SettingsPanel onClose={() => setSettingsOpen(false)} onSetsChanged={reloadSets} onTasksChanged={reload} />
@@ -340,6 +391,85 @@ function App() {
           onClose={() => setDatePickerOpen(false)}
         />
       )}
+    </div>
+  );
+}
+
+/** Правая панель на уровне App: в «Неделе» — с resize-handle и шириной из
+ *  localStorage, в «Дне» — фиксированная 280. Поиск её не трогает. */
+function AppRightPanel({
+  view,
+  tasks,
+  calWidth,
+  onResize,
+  onSelect,
+  onChange,
+}: {
+  view: ViewKind;
+  tasks: Task[];
+  calWidth: number;
+  onResize: (w: number) => void;
+  onSelect: (d: Date) => void;
+  onChange: () => void;
+}) {
+  const draggingRef = useRef(false);
+
+  // Resize мышью через drag-handle на левом краю панели.
+  const startResize = (e: React.MouseEvent) => {
+    e.preventDefault();
+    draggingRef.current = true;
+    const startX = e.clientX;
+    const startWidth = calWidth;
+
+    const onMove = (ev: MouseEvent) => {
+      if (!draggingRef.current) return;
+      // Движение мыши влево увеличивает ширину (handle слева от панели).
+      const next = Math.min(CAL_MAX, Math.max(CAL_MIN, startWidth + (startX - ev.clientX)));
+      onResize(next);
+    };
+    const onUp = () => {
+      draggingRef.current = false;
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  };
+
+  if (view === "day") {
+    return <RightPanel tasks={tasks} width={280} onSelect={onSelect} onChange={onChange} />;
+  }
+  return (
+    <div
+      style={{
+        position: "relative",
+        width: calWidth,
+        flexShrink: 0,
+        display: "flex",
+        flexDirection: "column",
+        minHeight: 0,
+      }}
+    >
+      {/* Drag-handle для изменения ширины. Сиблинг контента, чтобы его не
+          обрезал внутренний скролл. */}
+      <div
+        onMouseDown={startResize}
+        title="Тяните, чтобы изменить ширину"
+        style={{
+          position: "absolute",
+          left: -3,
+          top: 0,
+          bottom: 0,
+          width: 7,
+          cursor: "col-resize",
+          zIndex: 2,
+        }}
+      />
+      <RightPanel tasks={tasks} onSelect={onSelect} onChange={onChange} />
     </div>
   );
 }
