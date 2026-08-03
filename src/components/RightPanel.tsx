@@ -11,13 +11,16 @@ interface Props {
   tasks: Task[];
   /** Ширина панели (DayView); undefined — тянется по родителю (WeekView). */
   width?: number;
+  /** Растянуть по высоте (flex:1) — для column-обёртки (неделя/месяц);
+   *  без него — alignSelf stretch (день, row-контекст). */
+  fill?: boolean;
   onSelect: (d: Date) => void;
   onChange: () => void;
 }
 
 /** Правая панель: мини-календарь сверху, «Когда-нибудь» под ним, полоска
  *  «Архив · N» внизу. Разворот архива занимает панель целиком. */
-export function RightPanel({ tasks, width, onSelect, onChange }: Props) {
+export function RightPanel({ tasks, width, onSelect, onChange, fill = false }: Props) {
   const { visibility, archivedTasks, view, panelGap } = useStore();
   const [archiveOpen, setArchiveOpen] = useState(false);
   // Календарь виден не везде: в «Месяце» его нет, и настройкой его можно
@@ -29,10 +32,14 @@ export function RightPanel({ tasks, width, onSelect, onChange }: Props) {
     <div
       style={{
         ...(width ? { width, flexShrink: 0 } : {}),
+        // Растяжение по высоте: fill — flex:1 (column-обёртка недели/месяца);
+        // иначе alignSelf:stretch (row-контекст дня). Не height:100% —
+        // процентная высота при zoom (uiScale > 1) масштабируется дважды
+        // и панель с архивом вылезала бы за край окна.
+        ...(fill ? { flex: 1, minHeight: 0 } : { alignSelf: "stretch" }),
         display: "flex",
         flexDirection: "column",
         minHeight: 0,
-        height: "100%",
         borderLeft: `1px solid ${COLORS.cardBorder}`,
       }}
     >
@@ -48,7 +55,7 @@ export function RightPanel({ tasks, width, onSelect, onChange }: Props) {
             // Карточка календаря растягивается на всю область (fill), чтобы
             // под ней не оставалось мёртвого пространства. В «Месяце»
             // календарь не показываем — сетка месяца и так видна.
-            <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", padding: "var(--sp-4) var(--sp-4) 0", minWidth: 0 }}>
+            <div style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", padding: "var(--sp-4) var(--sp-4) 0", minWidth: 0 }}>
               <MiniCalendar tasks={tasks} large onSelect={onSelect} fill />
             </div>
           )}

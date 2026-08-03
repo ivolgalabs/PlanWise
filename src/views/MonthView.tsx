@@ -101,7 +101,7 @@ export function MonthView({ tasks, onSelectDay, onChange }: Props) {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", padding: "var(--sp-4)" }}>
+    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, padding: "var(--sp-4)" }}>
       <div style={{ display: "flex" }}>
         {weekdays.map((w) => (
           <div

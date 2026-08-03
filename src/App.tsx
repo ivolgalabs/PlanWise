@@ -266,7 +266,10 @@ function App() {
     <div
       style={{
         background: COLORS.paper,
-        height: "100vh",
+        // height:100% вместо 100vh: vh не масштабируется CSS zoom (uiScale>1),
+        // контейнер получал двойное масштабирование и вылезал за окно
+        // (нижние элементы — архив — становились невидимыми).
+        height: "100%",
         display: "flex",
         flexDirection: "column",
         color: COLORS.text,
@@ -344,7 +347,7 @@ function App() {
                 }}
               />
             )}
-            <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
               {/* Активный поиск заменяет вид списком результатов по всем задачам. */}
               {searchActive ? (
                 <SearchResults
@@ -509,7 +512,7 @@ function AppRightPanel({
           zIndex: 2,
         }}
       />
-      <RightPanel tasks={tasks} onSelect={onSelect} onChange={onChange} />
+      <RightPanel tasks={tasks} onSelect={onSelect} onChange={onChange} fill />
     </div>
   );
 }

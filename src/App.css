@@ -27,6 +27,14 @@ html, body, #root {
   overflow: hidden; /* без горизонтального скролла */
 }
 
+html,
+body,
+#root {
+  /* 100% (не vh): vh не масштабируется CSS zoom — при uiScale>1 контейнер
+     вылезал бы за окно. Проценты считаются от layout-высоты без zoom. */
+  height: 100%;
+}
+
 body {
   background: var(--bg-primary);
   color: var(--text-primary);

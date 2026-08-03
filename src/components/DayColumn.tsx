@@ -94,7 +94,9 @@ export function DayColumn({
       data-day-key={dayKey}
       className="day-column"
       style={{
-        height: "100%",
+        // flex:1 вместо height:100% — см. DayView (zoom-совместимость).
+        flex: 1,
+        minHeight: 0,
         background: isOver
           ? accentTint(0.08)
           : past
@@ -106,7 +108,6 @@ export function DayColumn({
         borderRadius: "var(--radius-md)",
         display: "flex",
         flexDirection: "column",
-        minHeight: 0,
         opacity: dim,
       }}
     >

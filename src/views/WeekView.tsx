@@ -47,7 +47,8 @@ export function WeekView({ tasks, onChange }: Props) {
     tasks.filter((t) => isSameDay(fromEpochDay(t.date), d));
 
   return (
-    <div style={{ display: "flex", height: "100%", minHeight: 0 }}>
+    // flex:1 вместо height:100% — см. DayView (zoom-совместимость).
+    <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
         <Toolbar
           vertical={effectiveVertical}
@@ -58,16 +59,16 @@ export function WeekView({ tasks, onChange }: Props) {
           {effectiveVertical ? (
             <WeekViewVertical tasks={tasks} onChange={onChange} />
           ) : (
-            <div style={{ display: "flex", height: "100%", minHeight: 0 }}>
+            <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
               {/* Зона «следующая неделя» — только справа; перенос в прошлую
                   неделю убран по желанию пользователя. */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 4, padding: 4, flex: 1, minWidth: 0, height: "100%", minHeight: 0 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, padding: 4, flex: 1, minWidth: 0, minHeight: 0 }}>
                 {/* Два ряда: Пн–Чт сверху, Пт–Вс снизу. Колонки равные и
                     широкие — текст задач читается без обрезки. */}
                 {[days.slice(0, 4), days.slice(4)].map((row, ri) => (
                   <div key={ri} style={{ display: "flex", gap: 4, flex: 1, minHeight: 0 }}>
                     {row.map((d) => (
-                      <div key={d.toISOString()} style={{ flex: 1, minWidth: 0, height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
+                      <div key={d.toISOString()} style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", minHeight: 0 }}>
                         <DayColumn day={d} tasks={tasksForDay(d)} onChange={onChange} />
                       </div>
                     ))}

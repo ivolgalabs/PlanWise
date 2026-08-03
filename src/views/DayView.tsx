@@ -83,7 +83,9 @@ export function DayView({ day, tasks, onChange }: Props) {
   nextDay.setDate(nextDay.getDate() + 1);
 
   return (
-    <div style={{ display: "flex", height: "100%", minHeight: 0 }}>
+    // flex:1 вместо height:100% — процентная высота при zoom (uiScale > 1)
+    // масштабируется дважды, и панель с архивом вылезает за край окна.
+    <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
       {/* Основная область — задачи */}
       <DayTasksArea
         day={day}
