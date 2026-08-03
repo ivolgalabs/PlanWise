@@ -164,7 +164,8 @@ export function MonthView({ tasks, onSelectDay, onChange }: Props) {
               background: COLORS.card,
               border: `1px solid ${COLORS.cardBorder}`,
               borderRadius: "var(--radius-md)",
-              padding: "var(--sp-6)",
+              // Просторная панель: крупный заголовок, поля как в поиске.
+              padding: "var(--sp-8)",
               width: 460,
               maxWidth: "92vw",
               maxHeight: "85vh",
@@ -172,14 +173,14 @@ export function MonthView({ tasks, onSelectDay, onChange }: Props) {
               boxShadow: "var(--shadow-xl)",
             }}
           >
-            <div style={{ fontSize: "var(--fs-md)", fontWeight: 600, color: COLORS.text, marginBottom: "var(--sp-4)", textTransform: "capitalize" }}>
+            <div style={{ fontSize: "var(--fs-lg)", fontWeight: 700, color: COLORS.text, marginBottom: "var(--sp-5)", textTransform: "capitalize" }}>
               {menuDay.toLocaleDateString("ru", { day: "numeric", month: "long", weekday: "long" })}
             </div>
 
             {/* Список задач дня: клик — перейти к дню */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: "var(--sp-4)" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-1)", marginBottom: "var(--sp-5)" }}>
               {tasksForDay(menuDay).length === 0 && (
-                <p style={{ margin: 0, fontSize: "var(--fs-2xs)", color: COLORS.muted }}>
+                <p style={{ margin: 0, padding: "var(--sp-1) 0", fontSize: "var(--fs-sm)", color: COLORS.muted }}>
                   Нет задач на этот день
                 </p>
               )}
@@ -192,7 +193,7 @@ export function MonthView({ tasks, onSelectDay, onChange }: Props) {
                     alignItems: "center",
                     gap: "var(--sp-2)",
                     textAlign: "left",
-                    padding: "var(--sp-1) var(--sp-2)",
+                    padding: "var(--sp-2) var(--sp-3)",
                     borderRadius: "var(--radius-sm)",
                     border: "none",
                     background: "transparent",
@@ -233,20 +234,21 @@ export function MonthView({ tasks, onSelectDay, onChange }: Props) {
               onKeyDown={(e) => { if (e.key === "Enter") addTask(menuDay); }}
               placeholder="Добавить задачу на этот день"
               style={{
-                width: "100%", fontSize: "var(--fs-sm)",
+                // Поле как в поиске — заметно выше, текст не липнет к краям.
+                width: "100%", fontSize: "var(--fs-md)",
                 border: `1px solid ${COLORS.cardBorder}`, borderRadius: "var(--radius-md)",
-                padding: "var(--sp-2) var(--sp-3)", marginBottom: "var(--sp-3)",
+                padding: "8px 12px", marginBottom: "var(--sp-5)",
                 background: "transparent", color: COLORS.text,
               }}
             />
             {/* Время задачи */}
-            <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)", marginBottom: "var(--sp-3)" }}>
-              <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted, minWidth: "var(--island-h)" }}>Время</span>
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)", marginBottom: "var(--sp-4)" }}>
+              <span style={{ fontSize: "var(--fs-sm)", color: COLORS.muted, minWidth: "var(--island-h)" }}>Время</span>
               <TimePicker value={addTime} onChange={setAddTime} />
             </div>
             {/* Цвет (категория) задачи */}
-            <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)", marginBottom: "var(--sp-4)" }}>
-              <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted, minWidth: "var(--island-h)" }}>Цвет</span>
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)", marginBottom: "var(--sp-5)" }}>
+              <span style={{ fontSize: "var(--fs-sm)", color: COLORS.muted, minWidth: "var(--island-h)" }}>Цвет</span>
               <button
                 onClick={() => setAddColor(null)}
                 title="Без категории"
@@ -450,7 +452,7 @@ function MonthTaskPreview({ task, past }: { task: Task; past: boolean }) {
 
 function btnStyle(primary: boolean): React.CSSProperties {
   return {
-    flex: 1, padding: "var(--sp-2) var(--sp-3)", cursor: "pointer",
+    flex: 1, padding: "var(--sp-3) var(--sp-4)", cursor: "pointer",
     fontSize: "var(--fs-sm)", borderRadius: "var(--radius-md)",
     border: `1px solid ${primary ? COLORS.accent : COLORS.cardBorder}`,
     background: primary ? COLORS.accent : "transparent",
