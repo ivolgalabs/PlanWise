@@ -90,8 +90,8 @@ export function DayView({ day, tasks, onChange }: Props) {
     await api.upsertTask({ title: "", date: epochDay, sortOrder: sort });
     onChange();
     requestAnimationFrame(() => {
-      const inputs = document.querySelectorAll<HTMLInputElement>(
-        "input[data-task-id]",
+      const inputs = document.querySelectorAll<HTMLTextAreaElement>(
+        "textarea[data-task-id]",
       );
       const empty = Array.from(inputs).find((i) => i.value === "");
       empty?.focus();

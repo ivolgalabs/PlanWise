@@ -58,7 +58,7 @@ export function WeekViewVertical({ tasks, onChange }: Props) {
       const container = document.querySelector(`[data-day-key="${dayKey(day)}"]`);
       if (!container) return;
       const empty = Array.from(
-        container.querySelectorAll<HTMLInputElement>("input[data-task-id]"),
+        container.querySelectorAll<HTMLTextAreaElement>("textarea[data-task-id]"),
       ).find((i) => i.value === "");
       empty?.focus();
     });
