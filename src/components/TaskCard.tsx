@@ -53,6 +53,19 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
   // неудобен, кнопка видна только в тач-режиме — класс task-move-btn).
   const [moveOpen, setMoveOpen] = useState(false);
   const { colorSets, setColorSets, visibility } = useStore();
+  // На тач-устройствах время и кнопки действий собираются в одну строку под
+  // текстом задачи (компактно), а не в ряд с текстом.
+  const [isTouch, setTouch] = useState(
+    () => window.matchMedia("(pointer: coarse), (max-width: 560px)").matches,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia("(pointer: coarse), (max-width: 560px)");
+    const handler = (e: MediaQueryListEvent) => setTouch(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+  // Мобильный компактный ряд (только вне компактной сетки недели).
+  const mobileRow = isTouch && !compact;
 
   // Перетаскивание задачи через dnd-kit. data.task читается в onDragEnd.
   const {
@@ -315,17 +328,23 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
             textDecoration: task.isDone ? "line-through" : "none",
           }}
         />
-        {effectiveShowTime && (!compact || task.timeMinutes != null) && (
+        {effectiveShowTime && !mobileRow && (!compact || task.timeMinutes != null) && (
           <TimePicker value={task.timeMinutes ?? null} onChange={setTime} compact={compact} />
         )}
       </div>
       {/* Кнопки действий строки: заметка, перенос (мобильный), цвет/удаление.
-          Общий контейнер с зазором, чтобы кнопки не слипались вплотную. */}
+          Общий контейнер с зазором, чтобы кнопки не слипались вплотную.
+          На мобильном (mobileRow) сюда же переезжает компактный пикер времени —
+          одна строка под текстом. */}
       {!compact && (
         <div
           className="task-chips"
           style={{ display: "flex", alignItems: "center", gap: "var(--sp-3)", marginLeft: "var(--sp-3)", flexShrink: 0 }}
         >
+          {/* Время — компактно (иконка, «09:00»; без текста «в течение дня»). */}
+          {effectiveShowTime && mobileRow && (
+            <TimePicker value={task.timeMinutes ?? null} onChange={setTime} compact />
+          )}
           {/* Заметка — кнопка рядом со временем, скрывается настройкой и в
               компактной сетке недели (не влезает). Подсвечена, если текст
               непустой. */}

@@ -424,7 +424,7 @@ input[type="checkbox"] {
   }
   .task-chips {
     flex-basis: 100%;
-    justify-content: flex-end;
+    justify-content: flex-start;
     margin-left: 0 !important;
     margin-top: 2px;
   }
