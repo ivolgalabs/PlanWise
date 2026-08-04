@@ -116,6 +116,39 @@ function App() {
   // Период «Произвольный»: диапазон с/по (epoch-day; null = край не задан).
   const [searchPeriodFrom, setSearchPeriodFrom] = useState<number | null>(null);
   const [searchPeriodTo, setSearchPeriodTo] = useState<number | null>(null);
+  // Системная кнопка «назад» (Android): закрывает открытую модалку (настройки,
+  // календарь, поиск), а если всё закрыто — закрывает окно (выход). Подписка
+  // постоянная: обработчик сам решает, что делать (без гонки с unregister).
+  const overlaysRef = useRef({ settingsOpen, datePickerOpen, searchOpen });
+  overlaysRef.current = { settingsOpen, datePickerOpen, searchOpen };
+  useEffect(() => {
+    let unregister: (() => void) | undefined;
+    let cancelled = false;
+    import("@tauri-apps/api/app")
+      .then(({ onBackButtonPress }) =>
+        onBackButtonPress(() => {
+          const o = overlaysRef.current;
+          if (o.settingsOpen) setSettingsOpen(false);
+          else if (o.datePickerOpen) setDatePickerOpen(false);
+          else if (o.searchOpen) setSearchOpen(false);
+          else {
+            // Всё закрыто — стандартное поведение: выйти из приложения.
+            import("@tauri-apps/api/core")
+              .then(({ invoke }) => invoke("exit_app"))
+              .catch(() => {});
+          }
+        }),
+      )
+      .then((listener) => {
+        if (cancelled) listener.unregister();
+        else unregister = listener.unregister;
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+      unregister?.();
+    };
+  }, []);
   // Поиск «активен», когда задан хоть один фильтр: тогда результаты
   // заменяют основной вид, а правая панель остаётся видимой рядом.
   const searchActive =

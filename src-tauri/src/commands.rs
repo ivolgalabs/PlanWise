@@ -498,3 +498,10 @@ pub fn import_from(state: State<'_, Db>, path: String) -> Result<usize, String> 
     tx.commit().map_err(|e| e.to_string())?;
     Ok(tasks.len())
 }
+
+/// Закрывает приложение (системная кнопка «назад» на Android, когда все
+/// модалки закрыты). app.exit(0) завершает и десктоп, и мобильный процесс.
+#[tauri::command]
+pub fn exit_app(app: tauri::AppHandle) {
+    app.exit(0);
+}

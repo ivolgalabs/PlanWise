@@ -30,6 +30,7 @@ pub fn run() {
             commands::get_subtasks,
             commands::upsert_subtask,
             commands::delete_subtask,
+            commands::exit_app,
             commands::export_to,
             commands::import_from,
         ])

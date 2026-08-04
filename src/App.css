@@ -27,6 +27,14 @@ html, body, #root {
   overflow: hidden; /* без горизонтального скролла */
 }
 
+/* Контент не заходит под системные элементы (статус-бар, вырез камеры,
+   жестовая зона навигации). viewport-fit=cover в index.html включает
+   env(safe-area-inset-*); на десктопе инсеты нулевые. */
+#root {
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+    env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
 html,
 body,
 #root {
@@ -359,8 +367,11 @@ input[type="checkbox"] {
   }
 
   input[type="checkbox"] {
-    width: 22px;
-    height: 22px;
+    /* Единый размер с остальным UI: растёт вместе с «Размером шрифта»
+       (--fs-base в rem), чтобы чекбоксы не выглядели мельче кнопок/текста
+       при увеличении шрифта. */
+    width: calc(var(--fs-base) + 10px);
+    height: calc(var(--fs-base) + 10px);
   }
 
   .icon-btn {
