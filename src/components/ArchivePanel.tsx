@@ -61,16 +61,18 @@ export function ArchivePanel({ tasks, onClose, onChange }: Props) {
               borderBottom: `1px solid ${COLORS.cardBorder}`,
             }}
           >
-            <input
-              type="checkbox"
-              checked={t.isDone}
-              onChange={async () => {
-                await api.upsertTask({ ...t, isDone: !t.isDone });
-                onChange();
-              }}
-              title={t.isDone ? "Отметить невыполненной" : "Отметить выполненной"}
-              style={{ flexShrink: 0 }}
-            />
+            <label className="checkbox-hit">
+              <input
+                type="checkbox"
+                checked={t.isDone}
+                onChange={async () => {
+                  await api.upsertTask({ ...t, isDone: !t.isDone });
+                  onChange();
+                }}
+                title={t.isDone ? "Отметить невыполненной" : "Отметить выполненной"}
+                style={{ flexShrink: 0 }}
+              />
+            </label>
             <span
               style={{
                 flex: 1,

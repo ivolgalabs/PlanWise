@@ -152,13 +152,15 @@ export function SearchResults({ tasks, query, color, period, status, sort, from,
                 background: setHex(colorSets, t.colorSetId) ?? "transparent",
               }}
             />
-            <input
-              type="checkbox"
-              checked={t.isDone}
-              onChange={() => toggleDone(t)}
-              style={{ flexShrink: 0 }}
-              title={t.isDone ? "Отметить невыполненной" : "Отметить выполненной"}
-            />
+            <label className="checkbox-hit">
+              <input
+                type="checkbox"
+                checked={t.isDone}
+                onChange={() => toggleDone(t)}
+                style={{ flexShrink: 0 }}
+                title={t.isDone ? "Отметить невыполненной" : "Отметить выполненной"}
+              />
+            </label>
             <span
               style={{
                 flex: 1,

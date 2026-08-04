@@ -142,12 +142,14 @@ function SubtaskRow({
       >
         <Icon name="dots" size={14} />
       </span>
-      <input
-        type="checkbox"
-        checked={subtask.isDone}
-        onChange={onToggle}
-        style={{ margin: 0 }}
-      />
+      <label className="checkbox-hit">
+        <input
+          type="checkbox"
+          checked={subtask.isDone}
+          onChange={onToggle}
+          style={{ margin: 0 }}
+        />
+      </label>
       <span
         style={{
           flex: 1,

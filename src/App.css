@@ -143,12 +143,31 @@ body {
   border-bottom-color: var(--accent);
 }
 
-/* Чекбоксы — компактнее, в цвет акцента */
+/* Чекбоксы — по высоте текста (1em от текущего шрифта строки): не крупнее
+   и не мельче строки задачи. Масштабируются вместе со шрифтом (rem). */
 input[type="checkbox"] {
-  width: calc(var(--fs-base) - 2px);
-  height: calc(var(--fs-base) - 2px);
+  width: 1em;
+  height: 1em;
+  margin: 0;
   cursor: pointer;
   accent-color: var(--accent);
+}
+
+/* Обёртка чекбокса: визуально чекбокс остаётся размером с текст (1em),
+   а кликабельная зона (label) заметно больше — по ней удобно попадать
+   пальцем. */
+.checkbox-hit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  min-height: 26px;
+  margin-right: 6px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.checkbox-hit input[type="checkbox"] {
+  margin: 0;
 }
 
 /* === Inline-поле ввода === */
@@ -366,12 +385,12 @@ input[type="checkbox"] {
     --fs-sm: 0.95rem;
   }
 
-  input[type="checkbox"] {
-    /* Единый размер с остальным UI: растёт вместе с «Размером шрифта»
-       (--fs-base в rem), чтобы чекбоксы не выглядели мельче кнопок/текста
-       при увеличении шрифта. */
-    width: calc(var(--fs-base) + 10px);
-    height: calc(var(--fs-base) + 10px);
+  /* Тап-зона чекбоксов — крупнее на тач-устройствах (рекомендуемые ≥44px),
+     сам чекбокс остаётся размером с текст. */
+  .checkbox-hit {
+    min-width: 44px;
+    min-height: 44px;
+    margin-right: 8px;
   }
 
   .icon-btn {

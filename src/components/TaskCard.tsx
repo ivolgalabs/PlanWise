@@ -261,12 +261,14 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
           background: task.colorSetId ? setHex : "transparent",
         }}
       />
-      <input
-        type="checkbox"
-        checked={task.isDone}
-        onChange={toggleDone}
-        style={{ marginRight: compact ? 4 : 6, flexShrink: 0 }}
-      />
+      <label className="checkbox-hit" title={task.isDone ? "Отметить невыполненной" : "Отметить выполненной"}>
+        <input
+          type="checkbox"
+          checked={task.isDone}
+          onChange={toggleDone}
+          style={{ flexShrink: 0 }}
+        />
+      </label>
       {/* Инпут + время: в компактной сетке — колонкой (текст на всю ширину,
           время мелкой строкой под ним, только если задано); в обычном виде —
           в ряд, как раньше. */}
