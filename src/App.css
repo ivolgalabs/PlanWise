@@ -425,7 +425,9 @@ input[type="checkbox"] {
   .task-chips {
     flex-basis: 100%;
     justify-content: flex-start;
-    margin-left: 0 !important;
+    /* Выравниваем ряд действий по тексту задачи (слева колонка:
+       ручка + полоска + чекбокс ≈ 85px). */
+    margin-left: 85px !important;
     margin-top: 2px;
   }
 
