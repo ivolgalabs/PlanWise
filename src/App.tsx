@@ -375,6 +375,7 @@ function App() {
                     <DayView
                       day={selectedDate}
                       tasks={tasks}
+                      archivedTasks={archivedTasks}
                       onChange={reload}
                     />
                   )}

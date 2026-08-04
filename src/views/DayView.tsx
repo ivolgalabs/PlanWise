@@ -3,6 +3,8 @@ import { useDroppable } from "@dnd-kit/core";
 import type { Task } from "../api";
 import { api, fromEpochDay } from "../api";
 import { TaskCard } from "../components/TaskCard";
+import { SomedayColumn } from "../components/SomedayColumn";
+import { ArchivePanel } from "../components/ArchivePanel";
 import { COLORS, accentTint } from "../theme";
 import { dayId } from "../drag";
 import { isToday } from "../date";
@@ -10,6 +12,8 @@ import { isToday } from "../date";
 interface Props {
   day: Date;
   tasks: Task[];
+  /** Архивные задачи — нужны для доступа к архиву на мобильном. */
+  archivedTasks: Task[];
   onChange: () => void;
 }
 
@@ -18,7 +22,7 @@ interface Props {
  * Задачи можно перетаскивать на соседние дни через боковые drop-зоны
  * (◀ вчера / завтра ▶) и на любой день в мини-календаре.
  */
-export function DayView({ day, tasks, onChange }: Props) {
+export function DayView({ day, tasks, archivedTasks, onChange }: Props) {
   const [newTitle, setNewTitle] = useState("");
   const newInputRef = useRef<HTMLInputElement>(null);
 
@@ -90,6 +94,9 @@ export function DayView({ day, tasks, onChange }: Props) {
       <DayTasksArea
         day={day}
         dayTasks={dayTasks}
+        allTasks={tasks}
+        archivedTasks={archivedTasks}
+        tiny={tiny}
         onChange={onChange}
         createNext={createNext}
         newTitle={newTitle}
@@ -140,6 +147,9 @@ function SideDayZone({ day, label }: { day: Date; label: string }) {
 function DayTasksArea({
   day,
   dayTasks,
+  allTasks,
+  archivedTasks,
+  tiny,
   onChange,
   createNext,
   newTitle,
@@ -149,6 +159,9 @@ function DayTasksArea({
 }: {
   day: Date;
   dayTasks: Task[];
+  allTasks: Task[];
+  archivedTasks: Task[];
+  tiny: boolean;
   onChange: () => void;
   createNext: (afterId: string) => void;
   newTitle: string;
@@ -161,6 +174,9 @@ function DayTasksArea({
   // ячейку календаря того же дня → @dnd-kit перезаписывал ref, ломая drag.
   const today = isToday(day);
   const dayKey = `${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`;
+  // На мобильном правая панель скрыта — «Когда-нибудь» и «Архив» показываем
+  // здесь, внизу дня (раскрытие архива — по кнопке, чтобы не раздувать день).
+  const [archiveOpen, setArchiveOpen] = useState(false);
   return (
     <div
       data-day-key={dayKey}
@@ -230,6 +246,34 @@ function DayTasksArea({
           color: COLORS.text,
         }}
       />
+
+      {/* Мобильный доступ к «Когда-нибудь» и «Архиву»: правая панель на узком
+          экране скрыта, поэтому секции дублируются здесь, внизу дня. */}
+      {tiny && (
+        <div style={{ marginTop: "var(--sp-6)" }}>
+          <SomedayColumn
+            tasks={allTasks.filter((t) => t.someday)}
+            onChange={onChange}
+            stretch
+          />
+          {archiveOpen ? (
+            <ArchivePanel
+              tasks={archivedTasks}
+              onClose={() => setArchiveOpen(false)}
+              onChange={onChange}
+            />
+          ) : (
+            <button
+              className="text-chip"
+              onClick={() => setArchiveOpen(true)}
+              style={{ margin: "var(--sp-3) var(--sp-1)" }}
+              title="Архив задач"
+            >
+              Архив ({archivedTasks.length})
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
