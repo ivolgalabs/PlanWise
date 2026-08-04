@@ -51,14 +51,7 @@ export function TopBar({
   }
 
   return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        padding: "8px 12px",
-        gap: 8,
-      }}
-    >
+    <div className="top-bar">
       {/* Стрелки/кнопка 📅 скрываются по настройкам видимости; заголовок-дата
           и кнопка настроек (gear) остаются всегда. */}
       {visibility.navArrows && (
@@ -98,8 +91,14 @@ export function TopBar({
           <Icon name="search" />
         </button>
       )}
+      {/* Кнопка-дубль заголовка (тот тоже открывает календарь) — на мобильном
+          скрыта, чтобы шапка умещалась в узкий экран. */}
       {visibility.datePicker && (
-        <button className="icon-btn" onClick={onOpenDatePicker} title="Дата">
+        <button
+          className="icon-btn hide-on-mobile"
+          onClick={onOpenDatePicker}
+          title="Дата"
+        >
           <Icon name="calendar" />
         </button>
       )}

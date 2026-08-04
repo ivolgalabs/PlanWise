@@ -28,10 +28,10 @@ export function ViewSwitcher({ view, onChange }: Props) {
         return (
           <button
             key={it.key}
+            className="view-switcher-btn"
             onClick={() => onChange(it.key)}
             style={{
               fontSize: "var(--fs-xs)",
-              padding: "4px 10px",
               border: "none",
               borderRadius: "var(--radius-sm)",
               cursor: "pointer",

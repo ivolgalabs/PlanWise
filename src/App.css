@@ -177,6 +177,21 @@ input[type="checkbox"] {
   color: var(--text-primary);
 }
 
+/* Шапка: отступы и зазор вынесены в CSS, чтобы на узких экранах
+   (мобильный блок ниже) их можно было ужать. */
+.top-bar {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  gap: 8px;
+}
+
+/* Кнопки переключателя День/Неделя/Месяц — padding в CSS (не inline),
+   иначе мобильный оверрайд не сработает. */
+.view-switcher-btn {
+  padding: 4px 10px;
+}
+
 .chip-btn {
   display: inline-flex;
   align-items: center;
@@ -379,5 +394,21 @@ input[type="checkbox"] {
 
   .set-name {
     padding: 10px 12px;
+  }
+
+  /* Кнопка-дубль «Дата» в шапке — скрыта (заголовок тоже открывает календарь),
+     чтобы шапка умещалась в узкий экран. */
+  .hide-on-mobile {
+    display: none !important;
+  }
+
+  /* Переключатель День/Неделя/Месяц — компактнее на узком экране. */
+  .view-switcher-btn {
+    padding: 4px 6px;
+  }
+
+  /* Шапка — меньше зазор, чтобы все кнопки влезали в узкий экран. */
+  .top-bar {
+    gap: 6px;
   }
 }
