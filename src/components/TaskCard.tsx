@@ -271,8 +271,10 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
       </label>
       {/* Инпут + время: в компактной сетке — колонкой (текст на всю ширину,
           время мелкой строкой под ним, только если задано); в обычном виде —
-          в ряд, как раньше. */}
+          в ряд, как раньше. На мобильном CSS переводит в колонку (task-text-wrap),
+          чтобы текст занимал всю ширину строки. */}
       <div
+        className="task-text-wrap"
         style={{
           flex: 1,
           minWidth: 0,

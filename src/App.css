@@ -408,6 +408,27 @@ input[type="checkbox"] {
     display: inline-flex;
   }
 
+  /* Мобильная строка задачи: текст занимает всю ширину строки, а время и
+     кнопки действий переносятся под него — иначе textarea сжимается до
+     нескольких символов (чекбокс 44px + время + 4 кнопки в один ряд). */
+  .task-line {
+    flex-wrap: wrap;
+  }
+  .task-text-wrap {
+    flex: 1 1 auto !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+  }
+  .task-text-wrap textarea {
+    flex: 1 1 100%;
+  }
+  .task-chips {
+    flex-basis: 100%;
+    justify-content: flex-end;
+    margin-left: 0 !important;
+    margin-top: 2px;
+  }
+
   .text-chip {
     min-height: 40px;
     padding: 6px 12px;
