@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef, useState } from "react";
 import type { ViewKind, VisibilityState } from "../store";
 import { ViewSwitcher } from "./ViewSwitcher";
 import { Icon } from "./Icon";
@@ -34,6 +35,28 @@ export function TopBar({
   onToggleSearch,
   visibility,
 }: Props) {
+  const barRef = useRef<HTMLDivElement>(null);
+  // Переполнение шапки (крупный масштаб/шрифт): сравниваем сумму ширин
+  // детей с шириной шапки (scrollWidth не годится — flex-wrap уже перенёс
+  // элементы, переполнения нет). При переполнении переносим переключатель
+  // вида и поиск на вторую строку, чтобы кнопка настроек осталась на первой.
+  const [crowded, setCrowded] = useState(false);
+  useLayoutEffect(() => {
+    const el = barRef.current;
+    if (!el) return;
+    const check = () => {
+      const gap = parseFloat(getComputedStyle(el).columnGap || "0") || 0;
+      const total = [...el.children].reduce(
+        (s, c) => s + c.getBoundingClientRect().width,
+        0,
+      );
+      setCrowded(total + gap * (el.children.length - 1) > el.clientWidth + 4);
+    };
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   let label: string;
   if (view === "day") {
     label = selectedDate.toLocaleDateString("ru", {
@@ -51,7 +74,7 @@ export function TopBar({
   }
 
   return (
-    <div className="top-bar">
+    <div ref={barRef} className={`top-bar${crowded ? " crowded" : ""}`}>
       {/* Стрелки/кнопка 📅 скрываются по настройкам видимости; заголовок-дата
           и кнопка настроек (gear) остаются всегда. */}
       {visibility.navArrows && (
@@ -90,7 +113,7 @@ export function TopBar({
       <ViewSwitcher view={view} onChange={onViewChanged} />
       {visibility.search && (
         <button
-          className="icon-btn"
+          className="icon-btn search-btn"
           onClick={onToggleSearch}
           title={searchActive ? "Закрыть поиск" : "Поиск задач"}
           style={searchActive ? { background: COLORS.hover } : undefined}

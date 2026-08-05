@@ -15,6 +15,7 @@ export function ViewSwitcher({ view, onChange }: Props) {
   ];
   return (
     <div
+      className="view-switcher"
       style={{
         display: "inline-flex",
         background: "var(--bg-tertiary)",
