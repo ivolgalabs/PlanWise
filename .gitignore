@@ -4,7 +4,16 @@ node_modules/
 # Build artifacts
 dist/
 src-tauri/target/
-src-tauri/gen/
+# gen/ генерируется Tauri (iOS/Android-проекты), но Android-проект трекаем —
+# там кастомные файлы виджета (Kotlin, layout, манифест), которые иначе
+# перетираются при `tauri android init`.
+src-tauri/gen/*
+!src-tauri/gen/android/
+# Сборочные артефакты Android-проекта игнорируем.
+src-tauri/gen/android/app/build/
+src-tauri/gen/android/.gradle/
+src-tauri/gen/android/build/
+src-tauri/gen/android/local.properties
 
 # Superpowers brainstorming (ephemeral)
 /.superpowers/

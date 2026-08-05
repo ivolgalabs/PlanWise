@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api } from "./api";
+import { api, isTauri } from "./api";
 import type { Task } from "./api";
 import { useStore } from "./store";
 import type { ViewKind } from "./store";
@@ -202,6 +202,42 @@ function App() {
   // все --fs-* токены Universal UI. Не трогает zoom, только текст. (Множитель
   // uiScale уже учтён выше — этот эффект убран в пользу единой формулы.)
 
+  // Настройки уведомлений → Rust-планировщик (при старте и при изменении).
+  const {
+    notifyDaySummary,
+    notifyDayHour,
+    notifyReminders,
+    notifyRemindMinutes,
+  } = useStore();
+  useEffect(() => {
+    import("@tauri-apps/api/core")
+      .then(({ invoke }) =>
+        invoke("set_notification_prefs", {
+          prefs: {
+            daySummary: notifyDaySummary,
+            daySummaryHour: notifyDayHour,
+            reminders: notifyReminders,
+            remindMinutes: notifyRemindMinutes,
+          },
+        }),
+      )
+      .catch(() => {});
+  }, [notifyDaySummary, notifyDayHour, notifyReminders, notifyRemindMinutes]);
+
+  // Разрешение на уведомления (Android 13+) — запрашиваем один раз при
+  // старте, если уведомления включены (Rust-планировщик не может запросить
+  // сам: вызов из setup блокирует приложение).
+  useEffect(() => {
+    if (!isTauri() || (!notifyDaySummary && !notifyReminders)) return;
+    import("@tauri-apps/plugin-notification")
+      .then(({ isPermissionGranted, requestPermission }) =>
+        isPermissionGranted().then((granted) => {
+          if (!granted) requestPermission();
+        }),
+      )
+      .catch(() => {});
+  }, [notifyDaySummary, notifyReminders]);
+
   // Авто-архив просроченных невыполненных задач (если включён в настройках).
   // Выполняется один раз за маунт — см. archiveRan выше.
   useEffect(() => {
@@ -238,6 +274,13 @@ function App() {
     ]);
     setTasks([...regular, ...someday]);
     setArchivedTasks(archived);
+    // Данные для Android-виджета (список задач на сегодня) — пишем при
+    // каждой перезагрузке задач, виджет читает files/widget.json.
+    if (isTauri()) {
+      import("@tauri-apps/api/core")
+        .then(({ invoke }) => invoke("write_widget_data"))
+        .catch(() => {});
+    }
   }, [setTasks, setArchivedTasks]);
 
   useEffect(() => {

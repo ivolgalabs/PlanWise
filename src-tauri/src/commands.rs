@@ -1,7 +1,7 @@
 use crate::db::Db;
 use crate::models::{ColorSet, Subtask, Task};
 use chrono::{Datelike, Utc};
-use tauri::State;
+use tauri::{Manager, State};
 use uuid::Uuid;
 
 fn now_ms() -> i64 {
@@ -339,6 +339,14 @@ pub fn delete_subtask(state: State<'_, Db>, id: String) {
 /// Экспорт всех данных в JSON-файл по пути (бэкап).
 #[tauri::command]
 pub fn export_to(state: State<'_, Db>, path: String) -> Result<(), String> {
+    let json = export_json(state)?;
+    std::fs::write(&path, json).map_err(|e| e.to_string())
+}
+
+/// Экспорт всех данных JSON-строкой (файл пишет tauri-plugin-fs — на Android
+/// системные диалоги возвращают content://, который std::fs не понимает).
+#[tauri::command]
+pub fn export_json(state: State<'_, Db>) -> Result<String, String> {
     let conn = state.0.lock().unwrap();
     let mut sets: Vec<serde_json::Value> = Vec::new();
     let mut tasks: Vec<serde_json::Value> = Vec::new();
@@ -417,15 +425,15 @@ pub fn export_to(state: State<'_, Db>, path: String) -> Result<(), String> {
         "tasks": tasks,
         "subtasks": subs,
     });
-    std::fs::write(&path, serde_json::to_string_pretty(&payload).map_err(|e| e.to_string())?)
-        .map_err(|e| e.to_string())
+    serde_json::to_string_pretty(&payload).map_err(|e| e.to_string())
 }
 
-/// Импорт данных из JSON (полная замена). Возвращает число задач.
+/// Импорт данных из JSON-строки (полная замена в транзакции: при ошибке —
+/// откат, старые данные остаются). Отсутствующие поля берутся как дефолты,
+/// лишние/неизвестные поля игнорируются.
 #[tauri::command]
-pub fn import_from(state: State<'_, Db>, path: String) -> Result<usize, String> {
-    let raw = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
-    let v: serde_json::Value = serde_json::from_str(&raw).map_err(|e| e.to_string())?;
+pub fn import_json(state: State<'_, Db>, json: String) -> Result<usize, String> {
+    let v: serde_json::Value = serde_json::from_str(&json).map_err(|e| e.to_string())?;
     // Строгая проверка версии: отсутствие поля или не-целое значение
     // (например, float 1.5) дают unwrap_or(0) → ошибка.
     let version = v.get("version").and_then(|x| x.as_i64()).unwrap_or(0);
@@ -504,4 +512,46 @@ pub fn import_from(state: State<'_, Db>, path: String) -> Result<usize, String> 
 #[tauri::command]
 pub fn exit_app(app: tauri::AppHandle) {
     app.exit(0);
+}
+
+/// Сохранить настройки уведомлений (планировщик подхватит в течение ~20с).
+#[tauri::command]
+pub fn set_notification_prefs(
+    app: tauri::AppHandle,
+    prefs: crate::notify::NotifyPrefs,
+) -> Result<(), String> {
+    crate::notify::save_prefs(&app, &prefs)
+}
+
+/// Записать данные для Android-виджета (задачи на сегодня) в files/widget.json.
+/// Вызывается фронтендом при каждой перезагрузке задач.
+#[tauri::command]
+pub fn write_widget_data(app: tauri::AppHandle, state: State<'_, Db>) -> Result<(), String> {
+    let conn = state.0.lock().unwrap();
+    let today = today_epoch_day();
+    let tasks: Vec<serde_json::Value> = {
+        let mut stmt = conn
+            .prepare("SELECT title, time_minutes, is_done FROM tasks WHERE date = ?1 AND archived = 0 AND someday = 0 ORDER BY sort_order ASC LIMIT 8")
+            .map_err(|e| e.to_string())?;
+        stmt.query_map([today], |r| {
+            Ok(serde_json::json!({
+                "title": r.get::<_, String>(0)?,
+                "timeMinutes": r.get::<_, Option<i64>>(1)?,
+                "isDone": r.get::<_, i64>(2)? != 0,
+            }))
+        })
+        .and_then(|it| it.collect::<Result<Vec<_>, _>>())
+        .unwrap_or_default()
+    };
+    let payload = serde_json::json!({
+        "date": today,
+        "tasks": tasks,
+    });
+    let dir = app
+        .path()
+        .app_data_dir()
+        .unwrap_or_else(|_| std::path::PathBuf::from("."));
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    std::fs::write(dir.join("widget.json"), serde_json::to_string(&payload).map_err(|e| e.to_string())?)
+        .map_err(|e| e.to_string())
 }

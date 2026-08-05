@@ -29,4 +29,6 @@ chrono = { version = "0.4", features = ["serde"] }
 # Общая библиотека воркспейса: fs для ensure_dir (вместо ручного std::fs).
 core_base = { path = "../../../Rust_Workspace/core_base", default-features = false, features = ["fs"] }
 tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
+tauri-plugin-notification = "2"
 

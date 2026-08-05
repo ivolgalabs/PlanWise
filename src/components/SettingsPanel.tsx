@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
+// Файловый ввод-вывод: на Android системные диалоги возвращают content://,
+// который std::fs не читает — плагин fs умеет работать с такими URI.
+import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { useStore } from "../store";
 import {
   COLORS, THEME_FAMILIES, argbToHex, hexToArgb,
@@ -99,6 +102,14 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
     setArchiveEnabled,
     setVisibility,
     setPanelGap,
+    notifyDaySummary,
+    notifyDayHour,
+    notifyReminders,
+    notifyRemindMinutes,
+    setNotifyDaySummary,
+    setNotifyDayHour,
+    setNotifyReminders,
+    setNotifyRemindMinutes,
   } = useStore();
 
   // ── Черновики категорий для редактирования (служебный cs-none скрыт).
@@ -200,7 +211,10 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
     } catch (e) { setDataError(true); setDataMsg(String(e)); return; }
     if (!path) return;
     try {
-      await invoke("export_to", { path });
+      // Данные отдаёт Rust (export_json); файл пишет плагин fs — на Android
+      // это единственный способ записать по content:// из системного диалога.
+      const json = await invoke<string>("export_json");
+      await writeTextFile(path, json);
       setDataError(false); setDataMsg("Экспортировано ✓");
     } catch (e) { setDataError(true); setDataMsg(String(e)); }
   };
@@ -217,7 +231,10 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
     if (!path || Array.isArray(path)) return;
     if (!window.confirm("Данные будут ЗАМЕНЕНЫ данными из файла. Продолжить?")) return;
     try {
-      const n = await invoke<number>("import_from", { path });
+      // Читаем файл плагином fs (content:// на Android), замену данных
+      // выполняет Rust-команда import_json в транзакции (ошибка — откат).
+      const json = await readTextFile(path);
+      const n = await invoke<number>("import_json", { json });
       setDataError(false); setDataMsg(`Импортировано задач: ${n}`);
       onSetsChanged();
       onTasksChanged();
@@ -868,6 +885,62 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
               />
               <span>Авто-архив просроченных задач</span>
             </label>
+          </section>
+
+          {/* ── Уведомления ── */}
+          <section className="settings-section">
+            <h3 className="section-title">Уведомления</h3>
+            <p className="section-hint">Приходят, пока приложение работает (в т.ч. в фоне)</p>
+            <label className="oled-toggle">
+              <input
+                type="checkbox"
+                checked={notifyDaySummary}
+                onChange={(e) => setNotifyDaySummary(e.target.checked)}
+              />
+              <span>Список задач на день — утром</span>
+            </label>
+            {notifyDaySummary && (
+              <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)", padding: "0 0 var(--sp-2)" }}>
+                <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-muted)" }}>Время:</span>
+                <select
+                  value={notifyDayHour}
+                  onChange={(e) => setNotifyDayHour(parseInt(e.target.value, 10))}
+                  style={{
+                    background: "var(--bg-tertiary)",
+                    border: "1px solid var(--border-color)",
+                    borderRadius: 6,
+                    padding: "6px 10px",
+                    color: "var(--text-primary)",
+                    fontSize: "var(--fs-xs)",
+                  }}
+                >
+                  {[6, 7, 8, 9, 10, 11].map((h) => (
+                    <option key={h} value={h}>{`${h}:00`}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <label className="oled-toggle">
+              <input
+                type="checkbox"
+                checked={notifyReminders}
+                onChange={(e) => setNotifyReminders(e.target.checked)}
+              />
+              <span>Напоминания перед задачами со временем</span>
+            </label>
+            {notifyReminders && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-2)", padding: "0 0 var(--sp-2)" }}>
+                {[15, 30, 60, 120, 1440].map((m) => (
+                  <button
+                    key={m}
+                    className={`preset-btn ${notifyRemindMinutes === m ? "active" : ""}`}
+                    onClick={() => setNotifyRemindMinutes(m)}
+                  >
+                    {m < 60 ? `${m} мин` : m === 60 ? "1 час" : m === 120 ? "2 часа" : "за день"}
+                  </button>
+                ))}
+              </div>
+            )}
           </section>
 
           {/* ── Интерфейс ── */}

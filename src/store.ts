@@ -65,6 +65,12 @@ interface PlannerState {
    *  подзадачи (promote, смена родителя) — SubtaskList перезагружается,
    *  чтобы исчезнувшая подзадача не «зависала» у старого родителя. */
   subtaskRev: number;
+  /** Уведомления: утренний список задач на день (включён, час). */
+  notifyDaySummary: boolean;
+  notifyDayHour: number;
+  /** Напоминания перед задачами со временем (включены, за сколько минут). */
+  notifyReminders: boolean;
+  notifyRemindMinutes: number;
   setSelectedDate: (d: Date) => void;
   setWeekDate: (d: Date) => void;
   setMonthDate: (d: Date) => void;
@@ -87,6 +93,10 @@ interface PlannerState {
   setVisibility: (k: keyof VisibilityState, v: boolean) => void;
   setPanelGap: (v: number) => void;
   bumpSubtasks: () => void;
+  setNotifyDaySummary: (v: boolean) => void;
+  setNotifyDayHour: (v: number) => void;
+  setNotifyReminders: (v: boolean) => void;
+  setNotifyRemindMinutes: (v: number) => void;
 }
 
 export const useStore = create<PlannerState>()(
@@ -116,6 +126,10 @@ export const useStore = create<PlannerState>()(
       visibility: DEFAULT_VISIBILITY,
       panelGap: 20,
       subtaskRev: 0,
+      notifyDaySummary: true,
+      notifyDayHour: 8,
+      notifyReminders: true,
+      notifyRemindMinutes: 60,
       setSelectedDate: (d) => set({ selectedDate: d }),
       setWeekDate: (d) => set({ weekDate: d }),
       setMonthDate: (d) => set({ monthDate: d }),
@@ -139,6 +153,10 @@ export const useStore = create<PlannerState>()(
         set((s) => ({ visibility: { ...s.visibility, [k]: v } })),
       setPanelGap: (v) => set({ panelGap: v }),
       bumpSubtasks: () => set((s) => ({ subtaskRev: s.subtaskRev + 1 })),
+      setNotifyDaySummary: (v) => set({ notifyDaySummary: v }),
+      setNotifyDayHour: (v) => set({ notifyDayHour: v }),
+      setNotifyReminders: (v) => set({ notifyReminders: v }),
+      setNotifyRemindMinutes: (v) => set({ notifyRemindMinutes: v }),
     }),
     {
       name: "todo-settings",
@@ -159,6 +177,10 @@ export const useStore = create<PlannerState>()(
         archiveEnabled: s.archiveEnabled,
         visibility: s.visibility,
         panelGap: s.panelGap,
+        notifyDaySummary: s.notifyDaySummary,
+        notifyDayHour: s.notifyDayHour,
+        notifyReminders: s.notifyReminders,
+        notifyRemindMinutes: s.notifyRemindMinutes,
       }),
       // Дефолтный shallow-merge zustand заменяет visibility целиком —
       // новые флаги (например, notes) терялись бы у старых установок.

@@ -1,6 +1,7 @@
 mod commands;
 mod db;
 mod models;
+mod notify;
 
 use db::Db;
 use tauri::Manager;
@@ -9,9 +10,15 @@ use tauri::Manager;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             let conn = db::init(&app.handle());
             app.manage(Db(conn));
+            // Планировщик уведомлений: утренний список задач на день и
+            // напоминания за N минут до задач со временем. Пересчитывает
+            // расписание при старте и при изменении настроек/задач.
+            notify::start_scheduler(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -32,7 +39,15 @@ pub fn run() {
             commands::delete_subtask,
             commands::exit_app,
             commands::export_to,
-            commands::import_from,
+
+            // Экспорт/импорт через JSON-строку: файловый ввод-вывод делает
+            // tauri-plugin-fs (на Android умеет content:// из системных
+            // диалогов, где std::fs не работает).
+            commands::export_json,
+            commands::import_json,
+            // Настройки уведомлений + ручное перепланирование.
+            commands::set_notification_prefs,
+            commands::write_widget_data,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
