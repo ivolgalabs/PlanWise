@@ -232,7 +232,9 @@ export function MonthView({ tasks, onSelectDay, onChange }: Props) {
               ))}
             </div>
 
-            {/* Форма: «Далее/Готово» на мобильной клавиатуре добавляет задачу. */}
+            {/* Форма: «Далее/Готово» на мобильной клавиатуре добавляет задачу.
+                Без autoFocus: при открытии окна клавиатура не вылезает
+                принудительно (пользователь сам тапает в поле). */}
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -240,7 +242,6 @@ export function MonthView({ tasks, onSelectDay, onChange }: Props) {
               }}
             >
               <input
-                autoFocus
                 value={addTitle}
                 onChange={(e) => setAddTitle(e.target.value)}
                 enterKeyHint="done"

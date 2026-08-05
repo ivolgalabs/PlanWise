@@ -51,13 +51,18 @@ export function WeekView({ tasks, archivedTasks, onChange }: Props) {
   return (
     // flex:1 вместо height:100% — см. DayView (zoom-совместимость).
     <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
-      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+      {/* minHeight 0 обязателен: иначе колонка растёт по контенту недели,
+          внутренний скролл не появляется и задачи не пролистать. */}
+      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", minHeight: 0 }}>
         <Toolbar
           vertical={effectiveVertical}
           canToggle={!narrow}
           onToggleOrientation={() => setWeekVertical(!weekVertical)}
         />
-        <div style={{ flex: 1, minHeight: 0 }}>
+        {/* Обёртка контента — flex-колонка: иначе блочный div растёт по
+            контенту недели (flex:1 у WeekViewVertical не работает без
+            flex-контекста) и внутренний скролл не появляется. */}
+        <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
           {effectiveVertical ? (
             <WeekViewVertical
               tasks={tasks}

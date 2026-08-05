@@ -99,6 +99,7 @@ export function SearchResults({ tasks, query, color, period, status, sort, from,
     <div
       style={{
         flex: 1,
+        minHeight: 0,
         overflowY: "auto",
         padding: "var(--sp-6) var(--sp-8)",
         minWidth: 0,

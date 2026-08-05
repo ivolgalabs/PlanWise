@@ -182,6 +182,7 @@ function DayTasksArea({
       data-day-key={dayKey}
       style={{
         flex: 1,
+        minHeight: 0,
         padding: "var(--sp-6) var(--sp-8)",
         overflowY: "auto",
         minWidth: 0,
