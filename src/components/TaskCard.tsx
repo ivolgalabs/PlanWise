@@ -52,6 +52,20 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
   // Мобильный перенос: выбор даты через DatePickerModal (drag на телефоне
   // неудобен, кнопка видна только в тач-режиме — класс task-move-btn).
   const [moveOpen, setMoveOpen] = useState(false);
+  // Подзадачи: список свёрнут/развёрнут кнопкой в ряду действий; на тач-
+  // устройствах свёрнут по умолчанию, чтобы не раздувать строку задачи.
+  const [subtasksOpen, setSubtasksOpen] = useState(
+    () => !window.matchMedia("(pointer: coarse), (max-width: 560px)").matches,
+  );
+  // Счётчик подзадач для кнопки — обновляется при изменении списка
+  // (subtaskRev бампается после promote/смены родителя в drag.tsx).
+  const subtaskRev = useStore((s) => s.subtaskRev);
+  const [subtaskCount, setSubtaskCount] = useState(0);
+  useEffect(() => {
+    api.getSubtasks(task.id)
+      .then((s) => setSubtaskCount(s.length))
+      .catch(() => {});
+  }, [task.id, subtaskRev]);
   const { colorSets, setColorSets, visibility } = useStore();
   // На тач-устройствах время и кнопки действий собираются в одну строку под
   // текстом задачи (компактно), а не в ряд с текстом.
@@ -367,6 +381,46 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
           className="task-chips"
           style={{ display: "flex", alignItems: "center", gap: "var(--sp-3)", marginLeft: "var(--sp-3)", flexShrink: 0 }}
         >
+          {/* Подзадачи — слева в ряду действий (на мобильном), раскрывают/
+              сворачивают список. Подсвечены, если подзадачи есть. */}
+          {visibility.subtasks && (
+            <button
+              className="task-subtask-btn"
+              onClick={() => setSubtasksOpen((v) => !v)}
+              title={subtasksOpen ? "Скрыть подзадачи" : "Подзадачи"}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 3,
+                minHeight: 26,
+                padding: "2px 6px",
+                borderRadius: "var(--radius-md)",
+                border: "none",
+                background: "transparent",
+                fontSize: "var(--fs-2xs)",
+                cursor: "pointer",
+                color:
+                  subtasksOpen || subtaskCount > 0
+                    ? COLORS.accent
+                    : COLORS.muted,
+                flexShrink: 0,
+              }}
+            >
+              <Icon name="list" size={13} />
+              {subtaskCount > 0 && <span>{subtaskCount}</span>}
+            </button>
+          )}
+          {/* Правая группа: заметка, перенос (и цвет/удалить на десктопе).
+              На мобильном прижата к правому краю ряда (marginLeft auto),
+              подзадача остаётся слева. */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "var(--sp-3)",
+              marginLeft: "auto",
+            }}
+          >
           {/* Заметка — кнопка рядом со временем, скрывается настройкой и в
               компактной сетке недели (не влезает). Подсвечена, если текст
               непустой. */}
@@ -413,6 +467,7 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
               </button>
             </div>
           )}
+          </div>
         </div>
       )}
       {/* Меню цвета живёт внутри блока кнопок действий — если кнопки
@@ -521,8 +576,11 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
         />
       </div>
     )}
-    {/* Подзадачи скрываются настройкой «Подзадачи». */}
-    {visibility.subtasks && <SubtaskList taskId={task.id} />}
+    {/* Подзадачи скрываются настройкой «Подзадачи»; список раскрывается
+        кнопкой подзадач в ряду действий (на мобильном свёрнут по умолчанию). */}
+    {visibility.subtasks && (
+      <SubtaskList taskId={task.id} open={subtasksOpen} />
+    )}
     {/* Модалка выбора даты для переноса (мобильный режим). */}
     {moveOpen && (
       <DatePickerModal

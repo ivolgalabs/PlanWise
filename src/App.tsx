@@ -189,10 +189,18 @@ function App() {
     applyCustomSlot(document.documentElement, isDark ? customDark : customLight, isDark);
   }, [themeMode, customLight, customDark, useOledForDarkMode]);
 
-  // Масштаб интерфейса через document.zoom (масштабирует ВЕСЬ интерфейс).
+  // Масштаб интерфейса: transform: scale на #root (не CSS zoom — он на
+  // Android не сужает layout, и правый край уезжает за экран). Ширина/высота
+  // корня сжимаются в 1/scale раз: дети пересчитываются под узкий layout,
+  // а scale растягивает рендер ровно на весь экран — всё видно, ничего не
+  // обрезается.
   useEffect(() => {
-    (document.documentElement.style as unknown as { zoom: string }).zoom =
-      String(uiScale);
+    const root = document.getElementById("root");
+    if (!root) return;
+    root.style.transform = `scale(${uiScale})`;
+    root.style.transformOrigin = "top left";
+    root.style.width = `calc(100% / ${uiScale})`;
+    root.style.height = `calc(100% / ${uiScale})`;
   }, [uiScale]);
 
   // Размер шрифта: множитель на базовый font-size <html>, от которого зависят

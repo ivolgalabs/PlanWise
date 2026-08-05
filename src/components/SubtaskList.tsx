@@ -9,6 +9,8 @@ import { subtaskDragId } from "../drag";
 
 interface Props {
   taskId: string;
+  /** Список свёрнут (кнопка подзадач в строке задачи). */
+  open?: boolean;
 }
 
 /**
@@ -16,7 +18,7 @@ interface Props {
  * список (строки draggable) и поле ввода «+ подзадача». Поле всегда на месте,
  * поэтому добавить подзадачу можно в любом виде.
  */
-export function SubtaskList({ taskId }: Props) {
+export function SubtaskList({ taskId, open = true }: Props) {
   const [items, setItems] = useState<Subtask[]>([]);
   const [newTitle, setNewTitle] = useState("");
   // Версия списков подзадач: после promote/смены родителя (drag.tsx) список
@@ -54,6 +56,7 @@ export function SubtaskList({ taskId }: Props) {
 
   // Всегда показываем блок подзадач: заголовок (если есть подзадачи) + список
   // + поле ввода. Это решает «нельзя добавить подзадачу» — поле всегда на месте.
+  if (!open) return null;
   return (
     <div className="subtasks-area">
       {items.length > 0 && (

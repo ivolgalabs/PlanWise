@@ -5,6 +5,7 @@ import { api, fromEpochDay } from "../api";
 import { weekDays, isSameDay, isToday, isPast, dayWeight } from "../date";
 import { TaskCard } from "../components/TaskCard";
 import { WeekShiftZone } from "../components/WeekShiftZone";
+import { SomedayColumn } from "../components/SomedayColumn";
 import { ArchivePanel } from "../components/ArchivePanel";
 import { COLORS, accentTint } from "../theme";
 import { useStore } from "../store";
@@ -97,25 +98,33 @@ export function WeekViewVertical({ tasks, archivedTasks, narrow, onChange }: Pro
             addTask={() => addTask(d)}
           />
         ))}
-        {/* Мобильный доступ к «Архиву»: правая панель в узком окне скрыта,
-            поэтому архив дублируется внизу недели (как в «Дне»). */}
-        {narrow &&
-          (archiveOpen ? (
-            <ArchivePanel
-              tasks={archivedTasks}
-              onClose={() => setArchiveOpen(false)}
+        {/* Мобильный доступ к «Когда-нибудь» и «Архиву»: правая панель в узком
+            окне скрыта, поэтому секции дублируются внизу недели (как в «Дне»). */}
+        {narrow && (
+          <>
+            <SomedayColumn
+              tasks={tasks.filter((t) => t.someday)}
               onChange={onChange}
+              stretch
             />
-          ) : (
-            <button
-              className="text-chip"
-              onClick={() => setArchiveOpen(true)}
-              style={{ margin: "var(--sp-3) var(--sp-1)" }}
-              title="Архив задач"
-            >
-              Архив ({archivedTasks.length})
-            </button>
-          ))}
+            {archiveOpen ? (
+              <ArchivePanel
+                tasks={archivedTasks}
+                onClose={() => setArchiveOpen(false)}
+                onChange={onChange}
+              />
+            ) : (
+              <button
+                className="text-chip"
+                onClick={() => setArchiveOpen(true)}
+                style={{ margin: "var(--sp-3) var(--sp-1)" }}
+                title="Архив задач"
+              >
+                Архив ({archivedTasks.length})
+              </button>
+            )}
+          </>
+        )}
       </div>
       <WeekShiftZone />
     </div>

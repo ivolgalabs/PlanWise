@@ -69,6 +69,7 @@ interface SetDraft {
  */
 export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetUI }: Props) {
   const {
+    view,
     mondayFirst,
     weekVertical,
     themeMode,
@@ -100,12 +101,41 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
     setPanelGap,
   } = useStore();
 
-  // Черновики категорий для редактирования (служебный cs-none скрыт).
+  // ── Черновики категорий для редактирования (служебный cs-none скрыт).
   const [drafts, setDrafts] = useState<SetDraft[]>(() =>
     colorSets
       .filter((s) => s.id !== "cs-none")
       .map((s) => ({ id: s.id, clientKey: crypto.randomUUID(), name: s.name, color: s.color })),
   );
+
+  // Доступность «десктопных» элементов сейчас, на этом экране. Пункты
+  // настроек показываем, только если соответствующая панель/кнопка реально
+  // доступна: на тач-экране нет кнопки даты и сетки недели, в узком окне —
+  // правой панели с мини-календарём, в «Месяце» мини-календаря нет.
+  const [touchUI, setTouchUI] = useState(
+    () => window.matchMedia("(pointer: coarse), (max-width: 560px)").matches,
+  );
+  const [panelNarrow, setPanelNarrow] = useState(
+    () => window.matchMedia(`(max-width: ${view === "day" ? 700 : 1000}px)`).matches,
+  );
+  const [weekNarrow, setWeekNarrow] = useState(
+    () => window.matchMedia("(max-width: 820px)").matches,
+  );
+  useEffect(() => {
+    const subs: Array<[string, (v: boolean) => void]> = [
+      ["(pointer: coarse), (max-width: 560px)", setTouchUI],
+      [`(max-width: ${view === "day" ? 700 : 1000}px)`, setPanelNarrow],
+      ["(max-width: 820px)", setWeekNarrow],
+    ];
+    const offs = subs.map(([q, set]) => {
+      const mq = window.matchMedia(q);
+      set(mq.matches);
+      const h = (e: MediaQueryListEvent) => set(e.matches);
+      mq.addEventListener("change", h);
+      return () => mq.removeEventListener("change", h);
+    });
+    return () => offs.forEach((u) => u());
+  }, [view]);
 
   // colorSets грузятся асинхронно — если панель открылась до загрузки,
   // черновики остались пустыми. Дозаполняем их, когда данные пришли
@@ -801,28 +831,30 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
               />
               <span>Начинается с понедельника</span>
             </label>
-            <p className="section-hint setting-desktop-only" style={{ margin: "var(--sp-2) 0 var(--sp-1)" }}>
-              Открывать неделю по умолчанию:
-            </p>
-            {/* На узких/тач-экранах неделя всегда списком (narrow-режим),
-                поэтому выбор «Списком/Сеткой» скрывается (класс
-                week-layout-setting + media-запрос). */}
-            <div className="week-layout-setting">
-              <div className="theme-status-modes">
-                <button
-                  className={`theme-status-mode-btn ${weekVertical ? "active" : ""}`}
-                  onClick={() => setWeekVertical(true)}
-                >
-                  Списком
-                </button>
-                <button
-                  className={`theme-status-mode-btn ${!weekVertical ? "active" : ""}`}
-                  onClick={() => setWeekVertical(false)}
-                >
-                  Сеткой
-                </button>
-              </div>
-            </div>
+            {/* На тач-экранах и в узком окне неделя всегда списком (narrow-режим),
+                поэтому выбор «Списком/Сеткой» показываем только там, где сетка
+                реально доступна. */}
+            {!touchUI && !weekNarrow && (
+              <>
+                <p className="section-hint" style={{ margin: "var(--sp-2) 0 var(--sp-1)" }}>
+                  Открывать неделю по умолчанию:
+                </p>
+                <div className="theme-status-modes">
+                  <button
+                    className={`theme-status-mode-btn ${weekVertical ? "active" : ""}`}
+                    onClick={() => setWeekVertical(true)}
+                  >
+                    Списком
+                  </button>
+                  <button
+                    className={`theme-status-mode-btn ${!weekVertical ? "active" : ""}`}
+                    onClick={() => setWeekVertical(false)}
+                  >
+                    Сеткой
+                  </button>
+                </div>
+              </>
+            )}
           </section>
 
           {/* ── Задачи ── */}
@@ -842,14 +874,26 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
           <section className="settings-section">
             <h3 className="section-title">Интерфейс</h3>
             <p className="section-hint">Скрытые элементы можно вернуть здесь же</p>
-            {/* Пункты, которых нет на мобильном (кнопка даты скрыта, правая
-                панель не показывается) — помечаем setting-desktop-only:
-                на тач-экранах они скрыты и появляются в десктопном виде. */}
+            {/* Пункты показываем, только если элемент реально есть на экране:
+                кнопка даты скрыта на тач-экранах, правая панель с мини-
+                календарём — в узком окне и в «Месяце»; сетка недели — только
+                на широких экранах. В десктопном виде на телефоне пункты
+                появляются. */}
+            {!touchUI && (
+              <label className="oled-toggle">
+                <input type="checkbox" checked={visibility.datePicker} onChange={(e) => setVisibility("datePicker", e.target.checked)} />
+                <span>Кнопка даты (заголовок-дата остаётся)</span>
+              </label>
+            )}
+            {!panelNarrow && view !== "month" && (
+              <label className="oled-toggle">
+                <input type="checkbox" checked={visibility.miniCalendar} onChange={(e) => setVisibility("miniCalendar", e.target.checked)} />
+                <span>Мини-календарь справа</span>
+              </label>
+            )}
             {([
               ["navArrows", "Стрелки навигации ‹ ›"],
               ["search", "Кнопка поиска"],
-              ["datePicker", "Кнопка даты (заголовок-дата остаётся)"],
-              ["miniCalendar", "Мини-календарь справа"],
               ["taskTime", "Время задач"],
               ["subtasks", "Подзадачи"],
               ["notes", "Заметки"],
@@ -857,37 +901,34 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
               ["taskActions", "Кнопки «цвет» и «удалить» в задачах"],
               ["archiveBanner", "Баннер «Архивировано задач»"],
             ] as [keyof VisibilityState, string][]).map(([k, label]) => (
-              <label
-                key={k}
-                className={`oled-toggle ${
-                  k === "datePicker" || k === "miniCalendar" ? "setting-desktop-only" : ""
-                }`}
-              >
+              <label key={k} className="oled-toggle">
                 <input type="checkbox" checked={visibility[k]} onChange={(e) => setVisibility(k, e.target.checked)} />
                 <span>{label}</span>
               </label>
             ))}
             {/* Расстояние между календарём и «Когда-нибудь» — сохраняется
-                между запусками; 0 = секции вплотную. На мобильном правой
-                панели нет — блок скрыт (setting-desktop-only). */}
-            <div className="setting-desktop-only">
-              <div className="section-head" style={{ marginTop: "var(--sp-3)" }}>
-                <div>
-                  <h3 className="section-title">Панель справа</h3>
-                  <p className="section-hint">Расстояние между календарём и «Когда-нибудь»</p>
+                между запусками; 0 = секции вплотную. Показываем, только если
+                правая панель реально есть на экране. */}
+            {!panelNarrow && (
+              <>
+                <div className="section-head" style={{ marginTop: "var(--sp-3)" }}>
+                  <div>
+                    <h3 className="section-title">Панель справа</h3>
+                    <p className="section-hint">Расстояние между календарём и «Когда-нибудь»</p>
+                  </div>
+                  <span className="scale-badge">{panelGap}px</span>
                 </div>
-                <span className="scale-badge">{panelGap}px</span>
-              </div>
-              <input
-                type="range"
-                min={0}
-                max={80}
-                step={2}
-                value={panelGap}
-                onChange={(e) => setPanelGap(parseInt(e.target.value, 10))}
-                className="scale-slider"
-              />
-            </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={80}
+                  step={2}
+                  value={panelGap}
+                  onChange={(e) => setPanelGap(parseInt(e.target.value, 10))}
+                  className="scale-slider"
+                />
+              </>
+            )}
             <button className="preset-btn danger" onClick={resetInterface} style={{ marginTop: "var(--sp-3)" }}>
               Сбросить настройки интерфейса
             </button>

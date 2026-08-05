@@ -22,17 +22,6 @@ interface Props {
  */
 export function MonthView({ tasks, onSelectDay, onChange }: Props) {
   const { selectedDate, monthDate, setMonthDate, mondayFirst, colorSets } = useStore();
-  // Узкий экран: ячейки-квадраты (иначе дни вытягиваются в высокие колонки,
-  // а текст задач обрезается). Квадрат = высота строки равна ширине ячейки.
-  const [narrow, setNarrow] = useState(
-    () => window.matchMedia("(max-width: 560px)").matches,
-  );
-  useEffect(() => {
-    const mq = window.matchMedia("(max-width: 560px)");
-    const handler = (e: MediaQueryListEvent) => setNarrow(e.matches);
-    mq.addEventListener("change", handler);
-    return () => mq.removeEventListener("change", handler);
-  }, []);
   // Якорь месяца: фиксируем при первом открытии вида — выбор дня в «Дне»
   // не будет двигать месяц (см. store.ts monthDate).
   useEffect(() => {
@@ -130,19 +119,8 @@ export function MonthView({ tasks, onSelectDay, onChange }: Props) {
           </div>
         ))}
       </div>
-      {/* Строки-недели с распределением высоты: текущая неделя крупнее.
-          На узком экране строки — квадратные ячейки (aspect-ratio 7/1:
-          высота = ширина одной ячейки), сетка не растягивается на весь экран. */}
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          flex: narrow ? undefined : 1,
-          minHeight: 0,
-          gap: "var(--sp-2)",
-          justifyContent: narrow ? "flex-start" : undefined,
-        }}
-      >
+      {/* Строки-недели с распределением высоты: текущая неделя крупнее. */}
+      <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, gap: "var(--sp-2)" }}>
         {weeks.map((week, wi) => {
           const isCurrent = wi === todayWeekIdx;
           // Текущая неделя забирает больше места; остальные делят остаток.
@@ -154,10 +132,7 @@ export function MonthView({ tasks, onSelectDay, onChange }: Props) {
                 display: "grid",
                 gridTemplateColumns: "repeat(7, 1fr)",
                 gap: "var(--sp-2)",
-                flex: narrow ? undefined : grow,
-                // Квадратная ячейка на мобильном: строка-неделя высотой
-                // в одну ячейку (ширина / 7).
-                aspectRatio: narrow ? "7 / 1" : undefined,
+                flex: grow,
                 minHeight: 0,
               }}
             >
@@ -168,7 +143,6 @@ export function MonthView({ tasks, onSelectDay, onChange }: Props) {
                     day={day}
                     inMonth={day.getMonth() === selectedDate.getMonth()}
                     isCurrentWeek={isCurrent}
-                    narrow={narrow}
                     dayTasks={tasksForDay(day)}
                     onClickDay={() => setMenuDay(day)}
                   />
@@ -364,15 +338,12 @@ function MonthCell({
   day,
   inMonth,
   isCurrentWeek,
-  narrow,
   dayTasks,
   onClickDay,
 }: {
   day: Date;
   inMonth: boolean;
   isCurrentWeek: boolean;
-  /** Узкий экран: компактная ячейка-квадрат, меньше превью. */
-  narrow: boolean;
   dayTasks: Task[];
   onClickDay: () => void;
 }) {
@@ -382,13 +353,11 @@ function MonthCell({
     Date.UTC(day.getFullYear(), day.getMonth(), day.getDate()) / 86_400_000,
   );
   const { setNodeRef, isOver } = useDroppable({ id: dayId(ed) });
-  // Текущая неделя показывает больше задач; прошедшие дни — меньше.
-  // На узком экране — минимум: ячейка квадратная, превью в одну строку.
-  const maxPreview = narrow
-    ? isCurrentWeek
-      ? past ? 2 : 4
-      : past ? 1 : 3
-    : isCurrentWeek ? (past ? 6 : 12) : past ? 3 : 6;
+  // Сколько превью помещается в ячейку без обрезания (высота ячейки на
+  // телефоне: текущая неделя ~230px, остальные ~105px; превью ~31px в 2 строки).
+  // Раньше maxPreview (12/6) был больше реальной высоты — задачи обрезались
+  // краем ячейки и «не были видны». Остаток показывается как «+N ещё».
+  const maxPreview = isCurrentWeek ? (past ? 3 : 5) : past ? 2 : 3;
 
   return (
     <div
@@ -403,7 +372,7 @@ function MonthCell({
           ? `inset 0 0 0 1.5px ${COLORS.accent}`
           : "none",
         borderRadius: "var(--radius-md)",
-        padding: narrow ? "2px 3px" : "var(--sp-2)",
+        padding: "var(--sp-2)",
         cursor: "pointer",
         opacity: !inMonth ? 0.35 : past ? 0.55 : 1,
         minHeight: 0,
@@ -414,16 +383,16 @@ function MonthCell({
     >
       <div
         style={{
-          fontSize: past ? "var(--fs-2xs)" : narrow ? "var(--fs-xs)" : "var(--fs-sm)",
+          fontSize: past ? "var(--fs-2xs)" : "var(--fs-sm)",
           fontWeight: 600,
           color: past ? COLORS.muted : COLORS.text,
-          marginBottom: narrow ? 0 : "var(--sp-1)",
+          marginBottom: "var(--sp-1)",
         }}
       >
         {day.getDate()}
       </div>
       {dayTasks.slice(0, maxPreview).map((t) => (
-        <MonthTaskPreview key={t.id} task={t} past={past} narrow={narrow} />
+        <MonthTaskPreview key={t.id} task={t} past={past} />
       ))}
       {dayTasks.length > maxPreview && (
         <div style={{ fontSize: "var(--fs-xs)", color: COLORS.accent, fontWeight: 600, marginTop: 1 }}>
@@ -435,7 +404,7 @@ function MonthCell({
 }
 
 /** Draggable-превью задачи в ячейке месяца. */
-function MonthTaskPreview({ task, past, narrow }: { task: Task; past: boolean; narrow: boolean }) {
+function MonthTaskPreview({ task, past }: { task: Task; past: boolean }) {
   const { colorSets } = useStore();
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: task.id,
@@ -452,7 +421,7 @@ function MonthTaskPreview({ task, past, narrow }: { task: Task; past: boolean; n
       style={{
         alignItems: "center",
         gap: 4,
-        fontSize: narrow ? "var(--fs-2xs)" : "var(--fs-xs)",
+        fontSize: "var(--fs-xs)",
         color: task.isDone ? COLORS.muted : past ? COLORS.muted : COLORS.text,
         textDecoration: task.isDone ? "line-through" : "none",
         whiteSpace: "normal",
@@ -469,8 +438,8 @@ function MonthTaskPreview({ task, past, narrow }: { task: Task; past: boolean; n
     >
       <span
         style={{
-          width: narrow ? 4 : 6,
-          height: narrow ? 4 : 6,
+          width: 6,
+          height: 6,
           borderRadius: "50%",
           flexShrink: 0,
           // Прошлые и выполненные задачи — серые, будущие — в цвете категории.
@@ -484,10 +453,8 @@ function MonthTaskPreview({ task, past, narrow }: { task: Task; past: boolean; n
         style={{
           flex: 1,
           minWidth: 0,
-          // На узком экране — одна строка (квадратная ячейка): заголовок не
-          // должен уезжать внутрь ячейки и обрезаться невидимо.
           display: "-webkit-box",
-          WebkitLineClamp: narrow ? 1 : 2,
+          WebkitLineClamp: 2,
           WebkitBoxOrient: "vertical",
           overflow: "hidden",
         }}
