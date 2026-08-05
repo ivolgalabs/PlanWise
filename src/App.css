@@ -8,6 +8,21 @@
   /* Единый полупрозрачный оверлей модалок/диалогов: цвет текста темы
    * с прозрачностью, чтобы адаптировался к светлой/тёмной теме. */
   --overlay: color-mix(in srgb, var(--text-primary) 25%, transparent);
+  /* Масштаб интерфейса (--ui-scale ставится из App.tsx): размерные токены
+   * UUI умножаются на него. Так масштаб честно увеличивает layout — без
+   * zoom/transform, которые на Android обрезали контент или ломали
+   * скролл/клики. */
+  --ui-scale: 1;
+  --sp-1: calc(2px * var(--ui-scale));
+  --sp-2: calc(4px * var(--ui-scale));
+  --sp-3: calc(6px * var(--ui-scale));
+  --sp-4: calc(8px * var(--ui-scale));
+  --sp-5: calc(10px * var(--ui-scale));
+  --sp-6: calc(12px * var(--ui-scale));
+  --sp-7: calc(14px * var(--ui-scale));
+  --sp-8: calc(16px * var(--ui-scale));
+  --control-h-sm: calc(32px * var(--ui-scale));
+  --row-h: calc(38px * var(--ui-scale));
 }
 
 /* Масштаб интерфейса: font-size на <html> задаёт 1rem, на который
@@ -388,21 +403,21 @@ input[type="checkbox"] {
   /* Тап-зона чекбоксов — компактнее, чем 44px: строка задачи не раздувается
      (пользователь жалуется на «огромные» строки). Остаётся удобной для пальца. */
   .checkbox-hit {
-    min-width: 36px;
-    min-height: 36px;
+    min-width: calc(36px * var(--ui-scale));
+    min-height: calc(36px * var(--ui-scale));
     margin-right: 4px;
   }
 
   .icon-btn {
-    min-width: 36px;
-    height: 36px;
+    min-width: calc(36px * var(--ui-scale));
+    height: calc(36px * var(--ui-scale));
   }
 
   /* Чипы действий — визуально компактные (26px), тап-зона расширена псевдо-
      элементом до ~38px, чтобы не промахиваться пальцем. */
   .chip-btn {
-    width: 26px;
-    height: 26px;
+    width: calc(26px * var(--ui-scale));
+    height: calc(26px * var(--ui-scale));
     position: relative;
   }
   .chip-btn::after {
@@ -461,21 +476,15 @@ input[type="checkbox"] {
     margin-top: 2px;
   }
 
-  /* Блок подзадач — выровнен по тексту задачи и компактнее: подзадача не
-     должна быть крупнее самой задачи. */
+  /* Блок подзадач — у левого края (отступ как на десктопе, «левее» текста),
+     компактнее: подзадача не должна быть крупнее самой задачи. */
   .subtasks-area {
-    margin-left: 85px;
     padding: var(--sp-2);
   }
   .subtasks-area .checkbox-hit {
-    min-width: 28px;
-    min-height: 28px;
+    min-width: calc(28px * var(--ui-scale));
+    min-height: calc(28px * var(--ui-scale));
     margin-right: 2px;
-  }
-
-  /* Панель заметки — тот же отступ, что у подзадач и ряда действий. */
-  .notes-panel {
-    margin-left: 85px;
   }
 
   .text-chip {
@@ -508,9 +517,12 @@ input[type="checkbox"] {
   }
 
   /* Шапка — меньше зазор и отступы, чтобы все кнопки влезали в узкий экран
-     (раньше иконка настроек уезжала за правый край). */
+     (раньше иконка настроек уезжала за правый край). При увеличении масштаба
+     (uiScale) layout сужается — кнопки переносятся на вторую строку, чтобы
+     ничего не обрезалось. */
   .top-bar {
     gap: 4px;
     padding: 6px 8px;
+    flex-wrap: wrap;
   }
 }

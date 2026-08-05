@@ -79,6 +79,7 @@ export function WeekViewVertical({ tasks, archivedTasks, narrow, onChange }: Pro
         style={{
           flex: 1,
           minWidth: 0,
+          minHeight: 0,
           overflowY: "auto",
           padding: "var(--sp-4)",
         }}

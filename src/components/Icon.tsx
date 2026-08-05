@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useStore } from "../store";
 
 /** Единый набор SVG-иконок. Размер фиксированный (px) — zoom даёт масштаб.
  *  Цвет наследуется через currentColor. */
@@ -42,9 +43,13 @@ const PATHS: Record<IconName, ReactNode> = {
 };
 
 export function Icon({ name, size = 16, title }: IconProps) {
+  // Масштаб интерфейса: иконки растут вместе с кнопками/отступами (без
+  // zoom/transform — см. --ui-scale в App.css).
+  const uiScale = useStore((s) => s.uiScale);
+  const s = Math.round(size * uiScale);
   return (
     <svg
-      width={size} height={size} viewBox="0 0 24 24" fill="none"
+      width={s} height={s} viewBox="0 0 24 24" fill="none"
       stroke="currentColor" strokeWidth={1.8} strokeLinecap="round"
       strokeLinejoin="round" aria-hidden={title ? undefined : true}
       style={{ flexShrink: 0, display: "block" }}

@@ -189,25 +189,18 @@ function App() {
     applyCustomSlot(document.documentElement, isDark ? customDark : customLight, isDark);
   }, [themeMode, customLight, customDark, useOledForDarkMode]);
 
-  // Масштаб интерфейса: transform: scale на #root (не CSS zoom — он на
-  // Android не сужает layout, и правый край уезжает за экран). Ширина/высота
-  // корня сжимаются в 1/scale раз: дети пересчитываются под узкий layout,
-  // а scale растягивает рендер ровно на весь экран — всё видно, ничего не
-  // обрезается.
+  // Масштаб интерфейса: увеличиваем сами размеры (переменная --ui-scale,
+  // на неё завязаны отступы/кнопки/иконки; шрифт — множителем к базовому
+  // font-size). Никаких zoom/transform — layout честно пересчитывается:
+  // ничего не обрезается, скролл/клики/ввод работают на любом масштабе.
   useEffect(() => {
-    const root = document.getElementById("root");
-    if (!root) return;
-    root.style.transform = `scale(${uiScale})`;
-    root.style.transformOrigin = "top left";
-    root.style.width = `calc(100% / ${uiScale})`;
-    root.style.height = `calc(100% / ${uiScale})`;
-  }, [uiScale]);
+    document.documentElement.style.setProperty("--ui-scale", String(uiScale));
+    document.documentElement.style.fontSize = `calc(clamp(13px, 1.05vw, 17px) * ${fontScale} * ${uiScale})`;
+  }, [uiScale, fontScale]);
 
   // Размер шрифта: множитель на базовый font-size <html>, от которого зависят
-  // все --fs-* токены Universal UI. Не трогает zoom, только текст.
-  useEffect(() => {
-    document.documentElement.style.fontSize = `calc(clamp(13px, 1.05vw, 17px) * ${fontScale})`;
-  }, [fontScale]);
+  // все --fs-* токены Universal UI. Не трогает zoom, только текст. (Множитель
+  // uiScale уже учтён выше — этот эффект убран в пользу единой формулы.)
 
   // Авто-архив просроченных невыполненных задач (если включён в настройках).
   // Выполняется один раз за маунт — см. archiveRan выше.
@@ -364,8 +357,10 @@ function App() {
       <TaskDndContext onChange={reload}>
         <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
           {/* Левая колонка: строка поиска над контентом — правая панель
-              не сдвигается вниз при открытии поиска. */}
-          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+              не сдвигается вниз при открытии поиска. minHeight 0 обязателен:
+              иначе flex-колонка растёт по контенту (день с задачами) и
+              внутренний скролл не появляется — контент обрезается. */}
+          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", minHeight: 0 }}>
             {searchOpen && (
               <SearchBar
                 query={searchQuery}
@@ -388,7 +383,7 @@ function App() {
                 }}
               />
             )}
-            <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+            <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", minHeight: 0 }}>
               {/* Активный поиск заменяет вид списком результатов по всем задачам. */}
               {searchActive ? (
                 <SearchResults
