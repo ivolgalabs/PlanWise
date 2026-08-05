@@ -463,17 +463,26 @@ input[type="checkbox"] {
        Растягиваем через align-items: stretch у обёртки. */
     width: auto !important;
   }
-  .task-chips {
-    /* flex-basis 100% — ряд всегда на своей строке под текстом; max-width
-       ограничивает ширину (базис не учитывает margin-left 85px, и ряд
-       вылезал за правый край). */
-    flex-basis: 100%;
-    max-width: calc(100% - 85px);
-    justify-content: flex-start;
-    /* Выравниваем ряд действий по тексту задачи (слева колонка:
-       ручка + полоска + чекбокс ≈ 85px). */
-    margin-left: 85px !important;
-    margin-top: 2px;
+
+  /* Строка под задачей: блок подзадач (обрезается по ширине — flex:1) и
+      две кнопки (заметка, перенос) справа от него, в той же строке. */
+  .task-under {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    margin: 0 var(--sp-2) var(--sp-2) calc(var(--sp-4) + 14px);
+    min-width: 0;
+  }
+  .task-under .subtasks-area {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+  }
+  .task-under-btns {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    flex-shrink: 0;
   }
 
   /* Блок подзадач — у левого края (отступ как на десктопе, «левее» текста),

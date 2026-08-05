@@ -358,30 +358,14 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
           )}
         </div>
       )}
-      {/* Кнопки действий строки: заметка, перенос (мобильный), цвет/удаление.
-          Общий контейнер с зазором, чтобы кнопки не слипались вплотную.
-          На мобильном ряд выровнен по тексту задачи (task-chips в CSS);
-          цвет/удаление на мобильном справа от текста (task-side выше). */}
-      {!compact && (
+      {/* Кнопки действий строки (десктоп): заметка, перенос, цвет/удаление.
+          На мобильном они в строке с подзадачами (task-under). */}
+      {!compact && !mobileRow && (
         <div
           className="task-chips"
           style={{ display: "flex", alignItems: "center", gap: "var(--sp-3)", marginLeft: "var(--sp-3)", flexShrink: 0 }}
         >
-          {/* Правая группа: заметка, перенос (и цвет/удалить на десктопе).
-              На мобильном прижата к правому краю ряда (marginLeft auto).
-              Подзадачи — всегда видимым списком под строкой задачи (левее,
-              у левого края), без кнопки-переключателя. */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "var(--sp-3)",
-              marginLeft: "auto",
-            }}
-          >
-          {/* Заметка — кнопка рядом со временем, скрывается настройкой и в
-              компактной сетке недели (не влезает). Подсвечена, если текст
-              непустой. */}
+          {/* Заметка — подсвечена, если текст непустой. */}
           {showTime && visibility.notes && (
             <button
               className="chip-btn"
@@ -396,8 +380,7 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
               <Icon name="note" size={13} />
             </button>
           )}
-          {/* Перенос на другой день — кнопка видна только в тач-режиме
-              (класс task-move-btn скрывает её на десктопе). */}
+          {/* Перенос на другой день — только в тач-режиме. */}
           <button
             className="chip-btn task-move-btn"
             onClick={() => setMoveOpen(true)}
@@ -406,10 +389,8 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
           >
             <Icon name="calendarCheck" size={13} />
           </button>
-          {/* Кнопки цвета/удаления — приглушены, ярче при hover; скрываются
-              настройкой «Кнопки „цвет“ и „удалить“ в задачах». На мобильном
-              они справа от текста (task-side), здесь — только на десктопе. */}
-          {!mobileRow && visibility.taskActions && (
+          {/* Кнопки цвета/удаления — скрываются настройкой. */}
+          {visibility.taskActions && (
             <div className="task-actions" style={{ display: "flex", gap: "var(--sp-3)" }}>
               <button
                 onClick={() => setColorMenu((v) => !v)}
@@ -425,7 +406,6 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
               </button>
             </div>
           )}
-          </div>
         </div>
       )}
       {/* Меню цвета живёт внутри блока кнопок действий — если кнопки
@@ -534,8 +514,40 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
         />
       </div>
     )}
-    {/* Подзадачи скрываются настройкой «Подзадачи»; список всегда виден. */}
-    {visibility.subtasks && <SubtaskList taskId={task.id} />}
+      {/* На мобильном: ряд действий (заметка, перенос) живёт в одной строке
+          с блоком подзадач — справа от него; сам блок обрезается по ширине
+          (flex:1), чтобы кнопки поместились. */}
+      {mobileRow ? (
+        <div className="task-under">
+          {visibility.subtasks && <SubtaskList taskId={task.id} />}
+          <div className="task-under-btns">
+            {showTime && visibility.notes && (
+              <button
+                className="chip-btn"
+                onClick={() => setNotesOpen((v) => !v)}
+                title="Заметка"
+                style={{
+                  opacity: task.notes ? 1 : 0.5,
+                  color: task.notes ? COLORS.accent : COLORS.muted,
+                  flexShrink: 0,
+                }}
+              >
+                <Icon name="note" size={13} />
+              </button>
+            )}
+            <button
+              className="chip-btn"
+              onClick={() => setMoveOpen(true)}
+              title="Перенести на другой день"
+              style={{ flexShrink: 0 }}
+            >
+              <Icon name="calendarCheck" size={13} />
+            </button>
+          </div>
+        </div>
+      ) : (
+        visibility.subtasks && <SubtaskList taskId={task.id} />
+      )}
     {/* Модалка выбора даты для переноса (мобильный режим). */}
     {moveOpen && (
       <DatePickerModal
