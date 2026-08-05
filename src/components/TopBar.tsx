@@ -69,6 +69,13 @@ export function TopBar({
           background: "transparent",
           cursor: "pointer",
           textTransform: "capitalize",
+          // Заголовок умеет сжиматься (многоточие) — иначе на узком экране
+          // кнопки шапки выталкиваются за правый край (настройки уезжали).
+          flex: "0 1 auto",
+          minWidth: 0,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
         }}
         title="Выбрать дату"
       >

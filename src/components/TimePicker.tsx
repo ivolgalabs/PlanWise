@@ -32,7 +32,7 @@ export function TimePicker({ value, onChange, compact = false, large = false }: 
       <button
         onClick={() => setEditing((v) => !v)}
         style={{
-          ...badgeStyle(value !== null, large),
+          ...badgeStyle(value !== null, large, compact),
           cursor: "pointer",
           border: "none",
           display: "inline-flex",
@@ -41,7 +41,16 @@ export function TimePicker({ value, onChange, compact = false, large = false }: 
         }}
         title="Изменить время"
       >
-        <Icon name="clock" size={large ? 16 : 13} /> {value !== null ? formatMinutes(value) : compact ? "" : "в течение дня"}
+        {/* В компактном режиме — только текст (иконка не влезает в правый ряд
+            задачи на мобильном). */}
+        {!compact && <Icon name="clock" size={large ? 16 : 13} />}
+        {/* В компактном режиме без времени — короткая подпись «в теч. дня»,
+            чтобы справа от задачи было видно, что время не задано. */}
+        {value !== null
+          ? formatMinutes(value)
+          : compact
+            ? "в теч. дня"
+            : "в течение дня"}
       </button>
 
       {editing && (
@@ -84,13 +93,17 @@ export function TimePicker({ value, onChange, compact = false, large = false }: 
 }
 
 const pickerStyle: React.CSSProperties = { position: "relative", display: "inline-flex" };
-function badgeStyle(hasTime: boolean, large = false): React.CSSProperties {
+function badgeStyle(hasTime: boolean, large = false, compact = false): React.CSSProperties {
   return {
     fontSize: large ? "var(--fs-sm)" : "var(--fs-2xs)",
     color: hasTime ? COLORS.accent : COLORS.muted,
     background: hasTime ? accentTint(0.1) : "transparent",
     padding: large ? "4px 10px" : "1px 6px",
     borderRadius: "var(--radius-md)",
+    // Компактный бейдж (правый ряд задачи на мобильном) — высота как у чипов
+    // действий, чтобы по нему удобно попадать пальцем.
+    minHeight: compact ? 26 : undefined,
+    alignItems: compact ? "center" : undefined,
   };
 }
 const menuStyle: React.CSSProperties = {

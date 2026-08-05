@@ -3,6 +3,7 @@ import { useDraggable } from "@dnd-kit/core";
 import type { Subtask } from "../api";
 import { api } from "../api";
 import { COLORS } from "../theme";
+import { useStore } from "../store";
 import { Icon } from "./Icon";
 import { subtaskDragId } from "../drag";
 
@@ -18,6 +19,9 @@ interface Props {
 export function SubtaskList({ taskId }: Props) {
   const [items, setItems] = useState<Subtask[]>([]);
   const [newTitle, setNewTitle] = useState("");
+  // Версия списков подзадач: после promote/смены родителя (drag.tsx) список
+  // должен перечитаться — иначе удалённая подзадача «висит» у старого родителя.
+  const subtaskRev = useStore((s) => s.subtaskRev);
 
   const load = async () => {
     setItems(await api.getSubtasks(taskId));
@@ -26,7 +30,7 @@ export function SubtaskList({ taskId }: Props) {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taskId]);
+  }, [taskId, subtaskRev]);
 
   const add = async () => {
     const t = newTitle.trim();
@@ -73,24 +77,31 @@ export function SubtaskList({ taskId }: Props) {
           onDelete={() => del(s.id)}
         />
       ))}
-      <input
-        value={newTitle}
-        onChange={(e) => setNewTitle(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") add();
+      {/* Форма: на мобильной клавиатуре кнопка «Далее/Готово» (enterKeyHint)
+          срабатывает как Enter — добавляет подзадачу. */}
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          add();
         }}
-        placeholder="+ подзадача"
-        className="inline-input"
-        style={{
-          width: "100%",
-          border: "none",
-          padding: "1px 0",
-          fontSize: "var(--fs-2xs)",
-          background: "transparent",
-          outline: "none",
-          color: COLORS.text,
-        }}
-      />
+      >
+        <input
+          value={newTitle}
+          onChange={(e) => setNewTitle(e.target.value)}
+          enterKeyHint="done"
+          placeholder="+ подзадача"
+          className="inline-input"
+          style={{
+            width: "100%",
+            border: "none",
+            padding: "1px 0",
+            fontSize: "var(--fs-2xs)",
+            background: "transparent",
+            outline: "none",
+            color: COLORS.text,
+          }}
+        />
+      </form>
     </div>
   );
 }
@@ -119,6 +130,9 @@ function SubtaskRow({
         gap: "var(--sp-2)",
         padding: "1px 0",
         opacity: isDragging ? 0.4 : undefined,
+        // Шрифт строки = шрифт текста подзадачи: чекбокс (1em) не должен
+        // вырастать больше текста (подзадача «больше самой задачи»).
+        fontSize: "var(--fs-2xs)",
       }}
       {...attributes}
     >

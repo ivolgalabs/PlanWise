@@ -415,6 +415,7 @@ function App() {
                   {view === "week" && (
                     <WeekView
                       tasks={tasks}
+                      archivedTasks={archivedTasks}
                       onChange={reload}
                     />
                   )}

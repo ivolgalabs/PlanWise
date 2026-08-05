@@ -10,6 +10,8 @@ import { useStore } from "../store";
 
 interface Props {
   tasks: Task[];
+  /** Архивные задачи — нужны для доступа к архиву на мобильном (внизу недели). */
+  archivedTasks: Task[];
   onChange: () => void;
 }
 
@@ -19,7 +21,7 @@ interface Props {
  * кнопка скрытия панели убрана по желанию пользователя.
  * Панель и drag-контекст — на уровне App; здесь только сетка дней.
  */
-export function WeekView({ tasks, onChange }: Props) {
+export function WeekView({ tasks, archivedTasks, onChange }: Props) {
   const { selectedDate, weekDate, setWeekDate, mondayFirst, weekVertical, setWeekVertical } = useStore();
   // Якорь недели: фиксируем при первом открытии вида (позже клики в «Дне»
   // не будут двигать неделю — см. store.ts weekDate).
@@ -57,7 +59,12 @@ export function WeekView({ tasks, onChange }: Props) {
         />
         <div style={{ flex: 1, minHeight: 0 }}>
           {effectiveVertical ? (
-            <WeekViewVertical tasks={tasks} onChange={onChange} />
+            <WeekViewVertical
+              tasks={tasks}
+              archivedTasks={archivedTasks}
+              narrow={narrow}
+              onChange={onChange}
+            />
           ) : (
             <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
               {/* Зона «следующая неделя» — только справа; перенос в прошлую

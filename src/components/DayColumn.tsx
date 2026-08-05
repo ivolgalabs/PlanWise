@@ -163,25 +163,31 @@ export function DayColumn({
           />
         ))}
       </div>
-      <input
-        ref={newInputRef}
-        className="inline-input"
-        value={newTitle}
-        onChange={(e) => setNewTitle(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") addTask();
+      {/* Форма: «Далее/Готово» на мобильной клавиатуре добавляет задачу. */}
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          addTask();
         }}
-        placeholder="+ добавить"
-        style={{
-          width: "100%",
-          border: "none",
-          borderTop: `1px solid ${COLORS.cardBorder}`,
-          padding: "4px 8px",
-          fontSize: 12,
-          background: "transparent",
-          outline: "none",
-        }}
-      />
+      >
+        <input
+          ref={newInputRef}
+          className="inline-input"
+          value={newTitle}
+          onChange={(e) => setNewTitle(e.target.value)}
+          enterKeyHint="done"
+          placeholder="+ добавить"
+          style={{
+            width: "100%",
+            border: "none",
+            borderTop: `1px solid ${COLORS.cardBorder}`,
+            padding: "4px 8px",
+            fontSize: 12,
+            background: "transparent",
+            outline: "none",
+          }}
+        />
+      </form>
     </div>
   );
 }

@@ -264,13 +264,14 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
       >
         <Icon name="drag" size={16} />
       </span>
-      {/* Цветная полоска слева (маркер сета) */}
+      {/* Цветная полоска слева (маркер сета) — тонкая, чтобы не раздувать
+          строку лишней «колонкой»: 2px вместо 3. */}
       <div
         style={{
-          width: "calc(var(--sp-2) - 1px)",
+          width: 2,
           alignSelf: "stretch",
           borderRadius: "var(--radius-xs)",
-          marginRight: compact ? 4 : 6,
+          marginRight: compact ? 3 : 4,
           background: task.colorSetId ? setHex : "transparent",
         }}
       />
@@ -332,19 +333,40 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
           <TimePicker value={task.timeMinutes ?? null} onChange={setTime} compact={compact} />
         )}
       </div>
+      {/* На мобильном справа от текста — время («09:00» или «в теч. дня»),
+          цвет и удаление; под текстом остаются заметка и перенос. */}
+      {mobileRow && (effectiveShowTime || visibility.taskActions) && (
+        <div className="task-side">
+          {effectiveShowTime && (
+            <TimePicker value={task.timeMinutes ?? null} onChange={setTime} compact />
+          )}
+          {visibility.taskActions && (
+            <>
+              <button
+                onClick={() => setColorMenu((v) => !v)}
+                className="chip-btn"
+                title="Цвет"
+                style={{
+                  background: task.colorSetId ? setHex : "transparent",
+                  border: task.colorSetId ? "none" : "1px solid " + COLORS.cardBorder,
+                }}
+              />
+              <button onClick={del} className="chip-btn" title="Удалить">
+                <Icon name="close" size={13} />
+              </button>
+            </>
+          )}
+        </div>
+      )}
       {/* Кнопки действий строки: заметка, перенос (мобильный), цвет/удаление.
           Общий контейнер с зазором, чтобы кнопки не слипались вплотную.
-          На мобильном (mobileRow) сюда же переезжает компактный пикер времени —
-          одна строка под текстом. */}
+          На мобильном ряд выровнен по тексту задачи (task-chips в CSS);
+          цвет/удаление на мобильном справа от текста (task-side выше). */}
       {!compact && (
         <div
           className="task-chips"
           style={{ display: "flex", alignItems: "center", gap: "var(--sp-3)", marginLeft: "var(--sp-3)", flexShrink: 0 }}
         >
-          {/* Время — компактно (иконка, «09:00»; без текста «в течение дня»). */}
-          {effectiveShowTime && mobileRow && (
-            <TimePicker value={task.timeMinutes ?? null} onChange={setTime} compact />
-          )}
           {/* Заметка — кнопка рядом со временем, скрывается настройкой и в
               компактной сетке недели (не влезает). Подсвечена, если текст
               непустой. */}
@@ -359,7 +381,7 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
                 flexShrink: 0,
               }}
             >
-              <Icon name="note" size={14} />
+              <Icon name="note" size={13} />
             </button>
           )}
           {/* Перенос на другой день — кнопка видна только в тач-режиме
@@ -370,11 +392,12 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
             title="Перенести на другой день"
             style={{ flexShrink: 0 }}
           >
-            <Icon name="calendarCheck" size={14} />
+            <Icon name="calendarCheck" size={13} />
           </button>
           {/* Кнопки цвета/удаления — приглушены, ярче при hover; скрываются
-              настройкой «Кнопки „цвет“ и „удалить“ в задачах». */}
-          {visibility.taskActions && (
+              настройкой «Кнопки „цвет“ и „удалить“ в задачах». На мобильном
+              они справа от текста (task-side), здесь — только на десктопе. */}
+          {!mobileRow && visibility.taskActions && (
             <div className="task-actions" style={{ display: "flex", gap: "var(--sp-3)" }}>
               <button
                 onClick={() => setColorMenu((v) => !v)}

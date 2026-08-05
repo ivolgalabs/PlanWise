@@ -71,23 +71,29 @@ export function SomedayColumn({ tasks, onChange, stretch = false }: Props) {
           </p>
         )}
       </div>
-      <input
-        value={newTitle}
-        onChange={(e) => setNewTitle(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") add();
+      {/* Форма: «Далее/Готово» на мобильной клавиатуре добавляет задачу. */}
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          add();
         }}
-        placeholder="+ когда-нибудь"
-        style={{
-          width: "100%",
-          border: "none",
-          padding: "4px 8px",
-          fontSize: 12,
-          background: "transparent",
-          outline: "none",
-          color: COLORS.text,
-        }}
-      />
+      >
+        <input
+          value={newTitle}
+          onChange={(e) => setNewTitle(e.target.value)}
+          enterKeyHint="done"
+          placeholder="+ когда-нибудь"
+          style={{
+            width: "100%",
+            border: "none",
+            padding: "4px 8px",
+            fontSize: 12,
+            background: "transparent",
+            outline: "none",
+            color: COLORS.text,
+          }}
+        />
+      </form>
     </div>
   );
 }

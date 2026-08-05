@@ -224,28 +224,34 @@ function DayTasksArea({
         ))}
       </div>
 
-      {/* Inline-поле ввода — крупное */}
-      <input
-        ref={newInputRef}
-        className="inline-input"
-        value={newTitle}
-        onChange={(e) => setNewTitle(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") addTask();
+      {/* Inline-поле ввода — крупное. Форма: кнопка «Далее/Готово» мобильной
+          клавиатуры (enterKeyHint) добавляет задачу, как Enter на десктопе. */}
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          addTask();
         }}
-        placeholder="+ добавить задачу"
-        style={{
-          width: "100%",
-          border: "none",
-          borderTop: `1px solid ${COLORS.cardBorder}`,
-          padding: "var(--sp-4) var(--sp-2)",
-          marginTop: "var(--sp-2)",
-          fontSize: "var(--fs-md)",
-          background: "transparent",
-          outline: "none",
-          color: COLORS.text,
-        }}
-      />
+      >
+        <input
+          ref={newInputRef}
+          className="inline-input"
+          value={newTitle}
+          onChange={(e) => setNewTitle(e.target.value)}
+          enterKeyHint="done"
+          placeholder="+ добавить задачу"
+          style={{
+            width: "100%",
+            border: "none",
+            borderTop: `1px solid ${COLORS.cardBorder}`,
+            padding: "var(--sp-4) var(--sp-2)",
+            marginTop: "var(--sp-2)",
+            fontSize: "var(--fs-md)",
+            background: "transparent",
+            outline: "none",
+            color: COLORS.text,
+          }}
+        />
+      </form>
 
       {/* Мобильный доступ к «Когда-нибудь» и «Архиву»: правая панель на узком
           экране скрыта, поэтому секции дублируются здесь, внизу дня. */}

@@ -801,7 +801,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
               />
               <span>Начинается с понедельника</span>
             </label>
-            <p className="section-hint" style={{ margin: "var(--sp-2) 0 var(--sp-1)" }}>
+            <p className="section-hint setting-desktop-only" style={{ margin: "var(--sp-2) 0 var(--sp-1)" }}>
               Открывать неделю по умолчанию:
             </p>
             {/* На узких/тач-экранах неделя всегда списком (narrow-режим),
@@ -842,6 +842,9 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
           <section className="settings-section">
             <h3 className="section-title">Интерфейс</h3>
             <p className="section-hint">Скрытые элементы можно вернуть здесь же</p>
+            {/* Пункты, которых нет на мобильном (кнопка даты скрыта, правая
+                панель не показывается) — помечаем setting-desktop-only:
+                на тач-экранах они скрыты и появляются в десктопном виде. */}
             {([
               ["navArrows", "Стрелки навигации ‹ ›"],
               ["search", "Кнопка поиска"],
@@ -854,29 +857,37 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
               ["taskActions", "Кнопки «цвет» и «удалить» в задачах"],
               ["archiveBanner", "Баннер «Архивировано задач»"],
             ] as [keyof VisibilityState, string][]).map(([k, label]) => (
-              <label key={k} className="oled-toggle">
+              <label
+                key={k}
+                className={`oled-toggle ${
+                  k === "datePicker" || k === "miniCalendar" ? "setting-desktop-only" : ""
+                }`}
+              >
                 <input type="checkbox" checked={visibility[k]} onChange={(e) => setVisibility(k, e.target.checked)} />
                 <span>{label}</span>
               </label>
             ))}
             {/* Расстояние между календарём и «Когда-нибудь» — сохраняется
-                между запусками; 0 = секции вплотную. */}
-            <div className="section-head" style={{ marginTop: "var(--sp-3)" }}>
-              <div>
-                <h3 className="section-title">Панель справа</h3>
-                <p className="section-hint">Расстояние между календарём и «Когда-нибудь»</p>
+                между запусками; 0 = секции вплотную. На мобильном правой
+                панели нет — блок скрыт (setting-desktop-only). */}
+            <div className="setting-desktop-only">
+              <div className="section-head" style={{ marginTop: "var(--sp-3)" }}>
+                <div>
+                  <h3 className="section-title">Панель справа</h3>
+                  <p className="section-hint">Расстояние между календарём и «Когда-нибудь»</p>
+                </div>
+                <span className="scale-badge">{panelGap}px</span>
               </div>
-              <span className="scale-badge">{panelGap}px</span>
+              <input
+                type="range"
+                min={0}
+                max={80}
+                step={2}
+                value={panelGap}
+                onChange={(e) => setPanelGap(parseInt(e.target.value, 10))}
+                className="scale-slider"
+              />
             </div>
-            <input
-              type="range"
-              min={0}
-              max={80}
-              step={2}
-              value={panelGap}
-              onChange={(e) => setPanelGap(parseInt(e.target.value, 10))}
-              className="scale-slider"
-            />
             <button className="preset-btn danger" onClick={resetInterface} style={{ marginTop: "var(--sp-3)" }}>
               Сбросить настройки интерфейса
             </button>

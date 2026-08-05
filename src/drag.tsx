@@ -143,10 +143,12 @@ export function TaskDndContext({ children, onChange }: TaskDndContextProps) {
   // pointer-события капризны — pointerCoordinates может быть null, и pointerWithin
   // ничего не находит. MouseSensor/TouchSensor опираются на mouse/touch events
   // напрямую, координаты всегда валидны.
+  // Touch: задержка 120мс + допуск 12px — палец успевает слегка поехать при
+  // «взятии» строки, и drag не отменяется (150/8 отменял почти каждый захват).
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
     useSensor(TouchSensor, {
-      activationConstraint: { delay: 150, tolerance: 8 },
+      activationConstraint: { delay: 120, tolerance: 12 },
     }),
   );
 
@@ -191,6 +193,9 @@ export function TaskDndContext({ children, onChange }: TaskDndContextProps) {
       if (targetTaskId) {
         if (targetTaskId === subtask.taskId) return; // тот же родитель
         await api.upsertSubtask({ ...subtask, taskId: targetTaskId });
+        // Списки подзадач обоих родителей должны перечитаться (у старого
+        // родителя подзадача исчезает, у нового — появляется).
+        useStore.getState().bumpSubtasks();
         onChange();
         return;
       }
@@ -216,6 +221,9 @@ export function TaskDndContext({ children, onChange }: TaskDndContextProps) {
       sortOrder: Date.now(),
     });
     await api.deleteSubtask(subtask.id);
+    // Перечитаем списки подзадач: у старого родителя промоутнутая подзадача
+    // не должна оставаться висеть до перезагрузки приложения.
+    useStore.getState().bumpSubtasks();
     onChange();
   };
 

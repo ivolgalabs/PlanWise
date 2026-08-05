@@ -5,12 +5,18 @@ import { api, fromEpochDay } from "../api";
 import { weekDays, isSameDay, isToday, isPast, dayWeight } from "../date";
 import { TaskCard } from "../components/TaskCard";
 import { WeekShiftZone } from "../components/WeekShiftZone";
+import { ArchivePanel } from "../components/ArchivePanel";
 import { COLORS, accentTint } from "../theme";
 import { useStore } from "../store";
 import { dayId } from "../drag";
 
 interface Props {
   tasks: Task[];
+  /** Архивные задачи — на мобильном правая панель скрыта, архив открывается
+   *  кнопкой внизу недели (как в «Дне»). */
+  archivedTasks: Task[];
+  /** Узкий экран: показывать секции «Архив» внизу. */
+  narrow: boolean;
   onChange: () => void;
 }
 
@@ -19,10 +25,12 @@ interface Props {
  * в каждом дне и расширяемыми строками. Каждый день — droppable-зона
  * для перетаскивания задач (@dnd-kit).
  */
-export function WeekViewVertical({ tasks, onChange }: Props) {
+export function WeekViewVertical({ tasks, archivedTasks, narrow, onChange }: Props) {
   const { selectedDate, mondayFirst } = useStore();
   const [titlesByDay, setTitlesByDay] = useState<Record<string, string>>({});
   const days = weekDays(selectedDate, mondayFirst);
+  // Раскрытие архива — по кнопке (как в «Дне»), чтобы не раздувать список.
+  const [archiveOpen, setArchiveOpen] = useState(false);
 
   const tasksForDay = (d: Date) =>
     tasks
@@ -89,6 +97,25 @@ export function WeekViewVertical({ tasks, onChange }: Props) {
             addTask={() => addTask(d)}
           />
         ))}
+        {/* Мобильный доступ к «Архиву»: правая панель в узком окне скрыта,
+            поэтому архив дублируется внизу недели (как в «Дне»). */}
+        {narrow &&
+          (archiveOpen ? (
+            <ArchivePanel
+              tasks={archivedTasks}
+              onClose={() => setArchiveOpen(false)}
+              onChange={onChange}
+            />
+          ) : (
+            <button
+              className="text-chip"
+              onClick={() => setArchiveOpen(true)}
+              style={{ margin: "var(--sp-3) var(--sp-1)" }}
+              title="Архив задач"
+            >
+              Архив ({archivedTasks.length})
+            </button>
+          ))}
       </div>
       <WeekShiftZone />
     </div>
@@ -196,26 +223,32 @@ function DayRow({
             onCreateNext={(id) => createNext(id, day)}
           />
         ))}
-        {/* Inline-поле ввода новой задачи */}
-        <input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") addTask();
+        {/* Inline-поле ввода новой задачи. Форма: «Далее/Готово» на мобильной
+            клавиатуре добавляет задачу, как Enter на десктопе. */}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            addTask();
           }}
-          placeholder="+ добавить"
-          className="inline-input"
-          style={{
-            width: "100%",
-            border: "none",
-            borderTop: `1px solid ${COLORS.cardBorder}`,
-            padding: "var(--sp-2) var(--sp-1)",
-            fontSize: "var(--fs-sm)",
-            background: "transparent",
-            outline: "none",
-            color: COLORS.text,
-          }}
-        />
+        >
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            enterKeyHint="done"
+            placeholder="+ добавить"
+            className="inline-input"
+            style={{
+              width: "100%",
+              border: "none",
+              borderTop: `1px solid ${COLORS.cardBorder}`,
+              padding: "var(--sp-2) var(--sp-1)",
+              fontSize: "var(--fs-sm)",
+              background: "transparent",
+              outline: "none",
+              color: COLORS.text,
+            }}
+          />
+        </form>
       </div>
     </div>
   );

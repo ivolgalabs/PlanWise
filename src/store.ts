@@ -61,6 +61,10 @@ interface PlannerState {
   visibility: VisibilityState;
   /** Зазор между мини-календарём и «Когда-нибудь» в правой панели (px). */
   panelGap: number;
+  /** Версия списков подзадач: bump после любого переноса/преобразования
+   *  подзадачи (promote, смена родителя) — SubtaskList перезагружается,
+   *  чтобы исчезнувшая подзадача не «зависала» у старого родителя. */
+  subtaskRev: number;
   setSelectedDate: (d: Date) => void;
   setWeekDate: (d: Date) => void;
   setMonthDate: (d: Date) => void;
@@ -82,6 +86,7 @@ interface PlannerState {
   setArchiveEnabled: (v: boolean) => void;
   setVisibility: (k: keyof VisibilityState, v: boolean) => void;
   setPanelGap: (v: number) => void;
+  bumpSubtasks: () => void;
 }
 
 export const useStore = create<PlannerState>()(
@@ -110,6 +115,7 @@ export const useStore = create<PlannerState>()(
       colorSets: [],
       visibility: DEFAULT_VISIBILITY,
       panelGap: 20,
+      subtaskRev: 0,
       setSelectedDate: (d) => set({ selectedDate: d }),
       setWeekDate: (d) => set({ weekDate: d }),
       setMonthDate: (d) => set({ monthDate: d }),
@@ -132,6 +138,7 @@ export const useStore = create<PlannerState>()(
       setVisibility: (k, v) =>
         set((s) => ({ visibility: { ...s.visibility, [k]: v } })),
       setPanelGap: (v) => set({ panelGap: v }),
+      bumpSubtasks: () => set((s) => ({ subtaskRev: s.subtaskRev + 1 })),
     }),
     {
       name: "todo-settings",
