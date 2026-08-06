@@ -241,7 +241,8 @@ input[type="checkbox"] {
   row-gap: 2px;
 }
 .top-bar.crowded .view-switcher,
-.top-bar.crowded .search-btn {
+.top-bar.crowded .search-btn,
+.top-bar.crowded .week-toggle-btn {
   order: 5;
 }
 
@@ -545,10 +546,14 @@ input[type="checkbox"] {
   /* Шапка — меньше зазор и отступы, чтобы все кнопки влезали в узкий экран
      (раньше иконка настроек уезжала за правый край). При увеличении масштаба
      (uiScale) layout сужается — кнопки переносятся на вторую строку, чтобы
-     ничего не обрезалось. */
+     ничего не обрезалось.
+     min-height под две строки: иконка (36px) × 2 + padding (6×2) + row-gap 2px.
+     Фиксируем высоту, чтобы при переключении видов (длина заголовка «5 августа»
+     vs «август 2026» меняет перенос) шапка не «прыгала» сверху. */
   .top-bar {
     gap: 4px;
     padding: 6px 8px;
     flex-wrap: wrap;
+    min-height: calc(36px * var(--ui-scale) * 2 + 6px * 2 + 2px);
   }
 }

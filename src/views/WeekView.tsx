@@ -5,7 +5,6 @@ import { weekDays, isSameDay } from "../date";
 import { DayColumn } from "../components/DayColumn";
 import { WeekShiftZone } from "../components/WeekShiftZone";
 import { WeekViewVertical } from "./WeekViewVertical";
-import { Icon } from "../components/Icon";
 import { useStore } from "../store";
 
 interface Props {
@@ -22,7 +21,7 @@ interface Props {
  * Панель и drag-контекст — на уровне App; здесь только сетка дней.
  */
 export function WeekView({ tasks, archivedTasks, onChange }: Props) {
-  const { selectedDate, weekDate, setWeekDate, mondayFirst, weekVertical, setWeekVertical } = useStore();
+  const { selectedDate, weekDate, setWeekDate, mondayFirst, weekVertical } = useStore();
   // Якорь недели: фиксируем при первом открытии вида (позже клики в «Дне»
   // не будут двигать неделю — см. store.ts weekDate).
   useEffect(() => {
@@ -54,11 +53,6 @@ export function WeekView({ tasks, archivedTasks, onChange }: Props) {
       {/* minHeight 0 обязателен: иначе колонка растёт по контенту недели,
           внутренний скролл не появляется и задачи не пролистать. */}
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", minHeight: 0 }}>
-        <Toolbar
-          vertical={effectiveVertical}
-          canToggle={!narrow}
-          onToggleOrientation={() => setWeekVertical(!weekVertical)}
-        />
         {/* Обёртка контента — flex-колонка: иначе блочный div растёт по
             контенту недели (flex:1 у WeekViewVertical не работает без
             flex-контекста) и внутренний скролл не появляется. */}
@@ -92,49 +86,6 @@ export function WeekView({ tasks, archivedTasks, onChange }: Props) {
           )}
         </div>
       </div>
-    </div>
-  );
-}
-
-/** Панель кнопок недели: только ориентация (список/сетка). */
-function Toolbar({
-  vertical,
-  canToggle,
-  onToggleOrientation,
-}: {
-  vertical: boolean;
-  /** false в узком окне — кнопку ориентации прячем (сетка всё равно нечитаема). */
-  canToggle: boolean;
-  onToggleOrientation: () => void;
-}) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "flex-end",
-        gap: "var(--sp-2)",
-        padding: "var(--sp-1) var(--sp-4)",
-      }}
-    >
-      {canToggle && (
-        <button
-          onClick={onToggleOrientation}
-          className="icon-btn"
-          title={vertical ? "Сетка (горизонтально)" : "Список (вертикально)"}
-          style={{
-            fontSize: "var(--fs-xs)",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "var(--sp-3)",
-          }}
-        >
-          {vertical ? (
-            <><Icon name="grid" size={14} /> сеткой</>
-          ) : (
-            <><Icon name="list" size={14} /> списком</>
-          )}
-        </button>
-      )}
     </div>
   );
 }

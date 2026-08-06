@@ -19,6 +19,13 @@ interface Props {
   onToggleSearch: () => void;
   /** Флаги видимости кнопок (настройки → «Интерфейс»). */
   visibility: VisibilityState;
+  /** Вид «Неделя»: показывать ли toggle «сеткой/списком». Показываем только
+   *  в виде недели и в достаточно широком окне (на узком сетка нечитаема,
+   *  список принудителен — кнопку не показываем, как раньше в Toolbar недели). */
+  showWeekToggle?: boolean;
+  /** Текущее состояние ориентации недели (true = вертикальный список). */
+  weekVertical?: boolean;
+  onToggleWeekOrientation?: () => void;
 }
 
 /** Шапка: навигация (стрелки), заголовок периода, switcher, кнопки настроек/даты. */
@@ -34,6 +41,9 @@ export function TopBar({
   searchActive,
   onToggleSearch,
   visibility,
+  showWeekToggle = false,
+  weekVertical = false,
+  onToggleWeekOrientation,
 }: Props) {
   const barRef = useRef<HTMLDivElement>(null);
   // Переполнение шапки (крупный масштаб/шрифт): сравниваем сумму ширин
@@ -56,7 +66,10 @@ export function TopBar({
     const ro = new ResizeObserver(check);
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+    // Пересчитываем при смене вида и видимости кнопок: длина заголовка
+    // («5 августа» vs «август 2026») и число детей меняются — иначе crowded
+    // оставался от прошлого вида и шапка «прыгала» по высоте при переключении.
+  }, [view, visibility.navArrows, visibility.search, visibility.datePicker, showWeekToggle]);
   let label: string;
   if (view === "day") {
     label = selectedDate.toLocaleDateString("ru", {
@@ -111,6 +124,26 @@ export function TopBar({
       )}
       <div style={{ flex: 1 }} />
       <ViewSwitcher view={view} onChange={onViewChanged} />
+      {showWeekToggle && onToggleWeekOrientation && (
+        <button
+          className="icon-btn week-toggle-btn"
+          onClick={onToggleWeekOrientation}
+          title={weekVertical ? "Сетка (горизонтально)" : "Список (вертикально)"}
+          aria-label={weekVertical ? "Показать неделю сеткой" : "Показать неделю списком"}
+          style={{
+            fontSize: "var(--fs-xs)",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "var(--sp-3)",
+          }}
+        >
+          {weekVertical ? (
+            <><Icon name="grid" size={14} /> сеткой</>
+          ) : (
+            <><Icon name="list" size={14} /> списком</>
+          )}
+        </button>
+      )}
       {visibility.search && (
         <button
           className="icon-btn search-btn"

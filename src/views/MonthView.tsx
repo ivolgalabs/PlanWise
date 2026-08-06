@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useDraggable, useDroppable } from "@dnd-kit/core";
+import { useDroppable } from "@dnd-kit/core";
 import type { Task } from "../api";
 import { api, fromEpochDay } from "../api";
 import { startOfWeek, firstOfMonth, isSameDay, isToday, isPast, formatMinutes } from "../date";
@@ -142,7 +142,6 @@ export function MonthView({ tasks, onSelectDay, onChange }: Props) {
                     key={day.toISOString()}
                     day={day}
                     inMonth={day.getMonth() === selectedDate.getMonth()}
-                    isCurrentWeek={isCurrent}
                     dayTasks={tasksForDay(day)}
                     onClickDay={() => setMenuDay(day)}
                   />
@@ -338,13 +337,11 @@ export function MonthView({ tasks, onSelectDay, onChange }: Props) {
 function MonthCell({
   day,
   inMonth,
-  isCurrentWeek,
   dayTasks,
   onClickDay,
 }: {
   day: Date;
   inMonth: boolean;
-  isCurrentWeek: boolean;
   dayTasks: Task[];
   onClickDay: () => void;
 }) {
@@ -354,11 +351,6 @@ function MonthCell({
     Date.UTC(day.getFullYear(), day.getMonth(), day.getDate()) / 86_400_000,
   );
   const { setNodeRef, isOver } = useDroppable({ id: dayId(ed) });
-  // Сколько превью помещается в ячейку без обрезания (высота ячейки на
-  // телефоне: текущая неделя ~230px, остальные ~105px; превью ~31px в 2 строки).
-  // Раньше maxPreview (12/6) был больше реальной высоты — задачи обрезались
-  // краем ячейки и «не были видны». Остаток показывается как «+N ещё».
-  const maxPreview = isCurrentWeek ? (past ? 3 : 5) : past ? 2 : 3;
 
   return (
     <div
@@ -392,76 +384,60 @@ function MonthCell({
       >
         {day.getDate()}
       </div>
-      {dayTasks.slice(0, maxPreview).map((t) => (
-        <MonthTaskPreview key={t.id} task={t} past={past} />
-      ))}
-      {dayTasks.length > maxPreview && (
-        <div style={{ fontSize: "var(--fs-xs)", color: COLORS.accent, fontWeight: 600, marginTop: 1 }}>
-          +{dayTasks.length - maxPreview} ещё
-        </div>
-      )}
+      <CategoryBadges tasks={dayTasks} />
     </div>
   );
 }
 
-/** Draggable-превью задачи в ячейке месяца. */
-function MonthTaskPreview({ task, past }: { task: Task; past: boolean }) {
+/** Плашки категорий дня: кружок цвета категории + число невыполненных задач
+ *  этой категории. Задачи без категории (colorSetId null/«cs-none») — серая
+ *  точка. Выполненные задачи не учитываются (плашка = «сколько ещё сделать»).
+ *  Клик по дню открывает окно с полным списком задач (см. menuDay). */
+function CategoryBadges({ tasks }: { tasks: Task[] }) {
   const { colorSets } = useStore();
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: task.id,
-    data: { task },
+  // Группируем невыполненные задачи по colorSetId; null/cs-none → «без цвета».
+  const open = tasks.filter((t) => !t.isDone);
+  if (open.length === 0) return null;
+  const counts = new Map<string, number>();
+  for (const t of open) {
+    const key = !t.colorSetId || t.colorSetId === "cs-none" ? "" : t.colorSetId;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  // «Без цвета» — последним, чтобы цветные категории были видны первыми.
+  const entries = [...counts.entries()].sort((a, b) => {
+    if (a[0] === "") return 1;
+    if (b[0] === "") return -1;
+    return b[1] - a[1];
   });
-  const style = transform
-    ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, opacity: 0.6 }
-    : undefined;
   return (
-    <div
-      ref={setNodeRef}
-      {...listeners}
-      {...attributes}
-      style={{
-        alignItems: "center",
-        gap: 4,
-        fontSize: "var(--fs-xs)",
-        color: task.isDone ? COLORS.muted : past ? COLORS.muted : COLORS.text,
-        textDecoration: task.isDone ? "line-through" : "none",
-        whiteSpace: "normal",
-        overflow: "hidden",
-        display: "flex",
-        lineHeight: 1.4,
-        padding: "1px 0",
-        cursor: "grab",
-        opacity: isDragging ? 0.3 : undefined,
-        touchAction: "none",
-        ...style,
-      }}
-      title="Перетащите на другой день"
-    >
-      <span
-        style={{
-          width: 6,
-          height: 6,
-          borderRadius: "50%",
-          flexShrink: 0,
-          // Прошлые и выполненные задачи — серые, будущие — в цвете категории.
-          background:
-            past || task.isDone || !task.colorSetId
-              ? COLORS.muted
-              : setHex(colorSets, task.colorSetId) ?? COLORS.muted,
-        }}
-      />
-      <span
-        style={{
-          flex: 1,
-          minWidth: 0,
-          display: "-webkit-box",
-          WebkitLineClamp: 2,
-          WebkitBoxOrient: "vertical",
-          overflow: "hidden",
-        }}
-      >
-        {task.title}
-      </span>
+    <div style={{ display: "flex", flexWrap: "wrap", gap: "2px 4px" }}>
+      {entries.map(([key, n]) => {
+        const hex = key === "" ? null : setHex(colorSets, key);
+        return (
+          <span
+            key={key || "_none"}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 3,
+              fontSize: "var(--fs-2xs)",
+              color: COLORS.text,
+              lineHeight: 1.2,
+            }}
+          >
+            <span
+              style={{
+                width: 7,
+                height: 7,
+                borderRadius: "50%",
+                flexShrink: 0,
+                background: hex ?? COLORS.muted,
+              }}
+            />
+            {n}
+          </span>
+        );
+      })}
     </div>
   );
 }

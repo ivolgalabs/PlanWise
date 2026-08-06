@@ -69,6 +69,8 @@ function App() {
     fontScale,
     archiveEnabled,
     visibility,
+    weekVertical,
+    setWeekVertical,
     setSelectedDate,
     setWeekDate,
     setMonthDate,
@@ -84,6 +86,19 @@ function App() {
   useEffect(() => {
     localStorage.setItem(CAL_KEY, String(calWidth));
   }, [calWidth]);
+  // Узкое окно недели (порог 820px — тот же, что в WeekView): в нём сетка из
+  // 7 колонок нечитаема, список принудителен, поэтому toggle ориентации в
+  // шапке не показываем. Дублируем matchMedia здесь, чтобы передать флаг в
+  // TopBar (WeekView спрятал свой Toolbar, кнопка переехала в шапку).
+  const [weekNarrow, setWeekNarrow] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(max-width: 820px)").matches,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 820px)");
+    const handler = (e: MediaQueryListEvent) => setWeekNarrow(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
   // Панель скрывается в узком окне; порог зависит от вида (неделя 1000,
   // день 700). Раньше у недели был порог 1200 — при дефолтном окне 1100
   // панель в неделе пропадала; 1000 — панель видна, а при 1140+ вместе
@@ -368,6 +383,9 @@ function App() {
           resetSearch();
         }}
         visibility={visibility}
+        showWeekToggle={view === "week" && !weekNarrow}
+        weekVertical={weekVertical}
+        onToggleWeekOrientation={() => setWeekVertical(!weekVertical)}
       />
       {/* Баннер архива скрывается настройками видимости. */}
       {visibility.archiveBanner && archiveCount > 0 && (
