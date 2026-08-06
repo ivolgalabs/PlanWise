@@ -122,7 +122,7 @@ export function TopBar({
           <Icon name="chevronR" size={18} />
         </button>
       )}
-      <div style={{ flex: 1 }} />
+      <div className="top-bar-spacer" />
       <ViewSwitcher view={view} onChange={onViewChanged} />
       {showWeekToggle && onToggleWeekOrientation && (
         <button
