@@ -20,6 +20,10 @@ pub struct Task {
     pub someday: bool, // «Когда-нибудь»: задача без привязки ко дню
     #[serde(default)]
     pub archived: bool, // «Архив»: задача скрыта из видов, ждёт возврата
+    #[serde(default)]
+    pub travel_time: Option<i32>, // минуты на дорогу (выехать заранее)
+    #[serde(default)]
+    pub duration_minutes: Option<i32>, // сколько длится выполнение (мин)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -930,10 +930,12 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
             </label>
             {notifyReminders && (
               <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-2)", padding: "0 0 var(--sp-2)" }}>
+                {/* Мультиселект: можно выбрать несколько интервалов сразу
+                    (например, за час И за день) — каждое уведомление придёт. */}
                 {[15, 30, 60, 120, 1440].map((m) => (
                   <button
                     key={m}
-                    className={`preset-btn ${notifyRemindMinutes === m ? "active" : ""}`}
+                    className={`preset-btn ${notifyRemindMinutes.includes(m) ? "active" : ""}`}
                     onClick={() => setNotifyRemindMinutes(m)}
                   >
                     {m < 60 ? `${m} мин` : m === 60 ? "1 час" : m === 120 ? "2 часа" : "за день"}

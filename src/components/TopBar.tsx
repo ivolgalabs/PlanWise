@@ -154,11 +154,11 @@ export function TopBar({
           <Icon name="search" />
         </button>
       )}
-      {/* Кнопка-дубль заголовка (тот тоже открывает календарь) — на мобильном
-          скрыта, чтобы шапка умещалась в узкий экран. */}
+      {/* Кнопка-дубль заголовка (тот тоже открывает календарь). На мобиле
+          шапка двухстрочная — кнопка показывается на 1-й строке рядом с ⚙. */}
       {visibility.datePicker && (
         <button
-          className="icon-btn hide-on-mobile"
+          className="icon-btn"
           onClick={onOpenDatePicker}
           title="Дата"
         >

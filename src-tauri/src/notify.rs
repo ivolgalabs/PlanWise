@@ -19,13 +19,14 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use chrono::{Local, NaiveDate, NaiveDateTime, Timelike};
+use serde::Deserialize as _;
 use tauri::Manager;
 use tauri_plugin_notification::NotificationExt;
 
 use crate::db::Db;
 
 /// Настройки уведомлений (дублируются из фронтенда через команду).
-#[derive(serde::Deserialize, serde::Serialize, Clone, Default)]
+#[derive(serde::Deserialize, serde::Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct NotifyPrefs {
   /// Утренний список задач на день.
@@ -37,9 +38,40 @@ pub struct NotifyPrefs {
   /// Напоминания перед задачами со временем.
   #[serde(default = "default_true")]
   pub reminders: bool,
-  /// За сколько минут напоминать (15/30/60/120/1440).
-  #[serde(default = "default_minutes")]
-  pub remind_minutes: i64,
+  /// За сколько минут напоминать — МАССИВ: можно выбрать несколько интервалов
+  /// сразу (например, за час И за день); каждое значение даёт своё уведомление.
+  /// Принимает и старое значение-число (60) → превращается в [60].
+  #[serde(default = "default_minutes", deserialize_with = "de_minutes")]
+  pub remind_minutes: Vec<i64>,
+}
+
+/// Двунаправленный формат remind_minutes: число (старые настройки) или массив.
+fn de_minutes<'de, D>(d: D) -> Result<Vec<i64>, D::Error>
+where
+  D: serde::Deserializer<'de>,
+{
+  #[derive(serde::Deserialize)]
+  #[serde(untagged)]
+  enum M {
+    One(i64),
+    Many(Vec<i64>),
+  }
+  Ok(match M::deserialize(d)? {
+    M::One(v) => vec![v],
+    M::Many(v) => v,
+  })
+}
+
+impl Default for NotifyPrefs {
+  /// Рабочие дефолты (не false/[] как у derive): уведомления включены.
+  fn default() -> Self {
+    NotifyPrefs {
+      day_summary: default_true(),
+      day_summary_hour: default_hour(),
+      reminders: default_true(),
+      remind_minutes: default_minutes(),
+    }
+  }
 }
 
 fn default_true() -> bool {
@@ -48,8 +80,8 @@ fn default_true() -> bool {
 fn default_hour() -> i64 {
   8
 }
-fn default_minutes() -> i64 {
-  60
+fn default_minutes() -> Vec<i64> {
+  vec![60]
 }
 
 /// Файл настроек — в app_config_dir (на Android — files-каталог приложения).
@@ -173,20 +205,29 @@ fn check_digest(app: &tauri::AppHandle, prefs: &NotifyPrefs, now: NaiveDateTime)
 /// Ключевой момент: момент напоминания (due) считается от ДАТЫ ЗАДАЧИ, а не от
 /// глобального «сегодня». Так задача на завтра с remind=1440 даст due=сегодня в
 /// то же время (ровно за сутки), а задача на сегодня с remind=15 — за 15 минут.
+/// remind_minutes — массив: для каждого выбранного интервала своё уведомление.
+/// Если у задачи задано travel_time — дополнительно «Пора выезжать» за это
+/// время до начала (в дополнение к выбранным интервалам).
 fn check_reminders(app: &tauri::AppHandle, prefs: &NotifyPrefs, now: NaiveDateTime) {
   let today = now.date();
   let today_epoch = days_from_epoch(today);
   let tomorrow_epoch = today_epoch + 1;
 
-  // (id, title, time_minutes, date_epoch) — дата нужна для расчёта due.
-  let timed: Vec<(String, String, i64, i64)> = {
+  // (id, title, time_minutes, date_epoch, travel_time) — дата и время в пути
+  // нужны для расчёта due. travel_time может отсутствовать в старых БД —
+  // query_map вернёт NULL как None.
+  let timed: Vec<(String, String, i64, i64, Option<i64>)> = {
     let db = app.state::<Db>();
     let conn = db.0.lock().unwrap();
     let mut stmt = match conn.prepare(
-      "SELECT id, title, time_minutes, date FROM tasks WHERE date IN (?1, ?2) AND time_minutes IS NOT NULL AND is_done = 0 AND archived = 0 AND someday = 0",
+      "SELECT id, title, time_minutes, date, travel_time FROM tasks WHERE date IN (?1, ?2) AND time_minutes IS NOT NULL AND is_done = 0 AND archived = 0 AND someday = 0",
     ) {
       Ok(s) => s,
-      Err(_) => return,
+      Err(e) => {
+        // travel_time ещё нет (БД до V7) — работаем без него.
+        eprintln!("[notify] prepare (no travel_time?) {:?}", e);
+        return;
+      }
     };
     let rows = stmt
       .query_map([today_epoch, tomorrow_epoch], |r| {
@@ -195,6 +236,7 @@ fn check_reminders(app: &tauri::AppHandle, prefs: &NotifyPrefs, now: NaiveDateTi
           r.get::<_, String>(1)?,
           r.get::<_, i64>(2)?,
           r.get::<_, i64>(3)?,
+          r.get::<_, Option<i64>>(4)?,
         ))
       })
       .and_then(|it| it.collect::<Result<Vec<_>, _>>())
@@ -203,7 +245,7 @@ fn check_reminders(app: &tauri::AppHandle, prefs: &NotifyPrefs, now: NaiveDateTi
   };
 
   eprintln!("[notify] reminders: {} timed tasks, now={}", timed.len(), now);
-  for (id, title, minutes, date_epoch) in timed {
+  for (id, title, minutes, date_epoch, travel_time) in timed {
     let h = (minutes / 60) as u32;
     let m = (minutes % 60) as u32;
     // Дата задачи из epoch-day (возвращает Option при выходе за диапазон).
@@ -211,35 +253,58 @@ fn check_reminders(app: &tauri::AppHandle, prefs: &NotifyPrefs, now: NaiveDateTi
       Some(d) => d,
       None => continue,
     };
-    let due = match task_date.and_hms_opt(h, m, 0) {
-      Some(d) => d - chrono::Duration::minutes(prefs.remind_minutes),
+    let start = match task_date.and_hms_opt(h, m, 0) {
+      Some(d) => d,
       None => continue,
     };
-    // Окно отправки: 2 минуты после наступления момента.
-    if now < due || now > due + chrono::Duration::minutes(2) {
-      continue;
-    }
-    let key = format!("remind|{}|{}", id, due);
-    if fired().lock().unwrap().contains_key(&key) {
-      continue;
+
+    // 1. Выбранные интервалы напоминаний (массив) — каждому своё уведомление.
+    for rm in &prefs.remind_minutes {
+      let due = start - chrono::Duration::minutes(*rm);
+      // Окно отправки: 2 минуты после наступления момента.
+      if now < due || now > due + chrono::Duration::minutes(2) {
+        continue;
+      }
+      let key = format!("remind|{}|{}|{}", id, rm, due);
+      if fired().lock().unwrap().contains_key(&key) {
+        continue;
+      }
+      let when = if *rm >= 1440 {
+        "завтра".to_string()
+      } else if *rm >= 60 {
+        format!("через {} ч", rm / 60)
+      } else {
+        format!("через {} мин", rm)
+      };
+      eprintln!("[notify] reminder fired: {}", title);
+      let _ = app
+        .notification()
+        .builder()
+        .title("Напоминание")
+        .body(format!("«{}» — {}", title, when))
+        .show();
+      fired().lock().unwrap().insert(key, String::new());
     }
 
-    let when = if prefs.remind_minutes >= 1440 {
-      "завтра".to_string()
-    } else if prefs.remind_minutes >= 60 {
-      format!("через {} ч", prefs.remind_minutes / 60)
-    } else {
-      format!("через {} мин", prefs.remind_minutes)
-    };
-    eprintln!("[notify] reminder fired: {}", title);
-    let _ = app
-      .notification()
-      .builder()
-      .title("Напоминание")
-      .body(format!("«{}» — {}", title, when))
-      .show();
-
-    fired().lock().unwrap().insert(key, String::new());
+    // 2. «Пора выезжать»: за travel_time до начала задачи (если задано).
+    if let Some(tt) = travel_time {
+      if tt > 0 {
+        let due = start - chrono::Duration::minutes(tt);
+        if now >= due && now <= due + chrono::Duration::minutes(2) {
+          let key = format!("remind|travel|{}|{}", id, due);
+          if !fired().lock().unwrap().contains_key(&key) {
+            eprintln!("[notify] travel fired: {}", title);
+            let _ = app
+              .notification()
+              .builder()
+              .title("Пора выезжать")
+              .body(format!("«{}» — в {}", title, format!("{:02}:{:02}", h, m)))
+              .show();
+            fired().lock().unwrap().insert(key, String::new());
+          }
+        }
+      }
+    }
   }
 }
 

@@ -27,7 +27,7 @@ interface Props {
  * для перетаскивания задач (@dnd-kit).
  */
 export function WeekViewVertical({ tasks, archivedTasks, narrow, onChange }: Props) {
-  const { selectedDate, mondayFirst } = useStore();
+  const { selectedDate, mondayFirst, visibility } = useStore();
   const [titlesByDay, setTitlesByDay] = useState<Record<string, string>>({});
   const days = weekDays(selectedDate, mondayFirst);
   // Раскрытие архива — по кнопке (как в «Дне»), чтобы не раздувать список.
@@ -100,14 +100,17 @@ export function WeekViewVertical({ tasks, archivedTasks, narrow, onChange }: Pro
           />
         ))}
         {/* Мобильный доступ к «Когда-нибудь» и «Архиву»: правая панель в узком
-            окне скрыта, поэтому секции дублируются внизу недели (как в «Дне»). */}
+            окне скрыта, поэтому секции дублируются внизу недели (как в «Дне»).
+            «Когда-нибудь» — по настройке видимости. */}
         {narrow && (
           <>
-            <SomedayColumn
-              tasks={tasks.filter((t) => t.someday)}
-              onChange={onChange}
-              stretch
-            />
+            {visibility.someday && (
+              <SomedayColumn
+                tasks={tasks.filter((t) => t.someday)}
+                onChange={onChange}
+                stretch
+              />
+            )}
             {archiveOpen ? (
               <ArchivePanel
                 tasks={archivedTasks}

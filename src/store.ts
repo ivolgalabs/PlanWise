@@ -68,9 +68,10 @@ interface PlannerState {
   /** Уведомления: утренний список задач на день (включён, час). */
   notifyDaySummary: boolean;
   notifyDayHour: number;
-  /** Напоминания перед задачами со временем (включены, за сколько минут). */
+  /** Напоминания перед задачами со временем (включены, за сколько минут —
+   *  массив: можно выбрать сразу несколько интервалов). */
   notifyReminders: boolean;
-  notifyRemindMinutes: number;
+  notifyRemindMinutes: number[];
   setSelectedDate: (d: Date) => void;
   setWeekDate: (d: Date) => void;
   setMonthDate: (d: Date) => void;
@@ -96,6 +97,7 @@ interface PlannerState {
   setNotifyDaySummary: (v: boolean) => void;
   setNotifyDayHour: (v: number) => void;
   setNotifyReminders: (v: boolean) => void;
+  /** Переключить интервал напоминания (добавить/убрать из массива). */
   setNotifyRemindMinutes: (v: number) => void;
 }
 
@@ -129,7 +131,7 @@ export const useStore = create<PlannerState>()(
       notifyDaySummary: true,
       notifyDayHour: 8,
       notifyReminders: true,
-      notifyRemindMinutes: 60,
+      notifyRemindMinutes: [60],
       setSelectedDate: (d) => set({ selectedDate: d }),
       setWeekDate: (d) => set({ weekDate: d }),
       setMonthDate: (d) => set({ monthDate: d }),
@@ -156,7 +158,12 @@ export const useStore = create<PlannerState>()(
       setNotifyDaySummary: (v) => set({ notifyDaySummary: v }),
       setNotifyDayHour: (v) => set({ notifyDayHour: v }),
       setNotifyReminders: (v) => set({ notifyReminders: v }),
-      setNotifyRemindMinutes: (v) => set({ notifyRemindMinutes: v }),
+      setNotifyRemindMinutes: (v) =>
+        set((s) => ({
+          notifyRemindMinutes: s.notifyRemindMinutes.includes(v)
+            ? s.notifyRemindMinutes.filter((x) => x !== v)
+            : [...s.notifyRemindMinutes, v],
+        })),
     }),
     {
       name: "todo-settings",

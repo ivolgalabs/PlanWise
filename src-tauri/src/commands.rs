@@ -20,7 +20,7 @@ pub fn get_tasks(state: State<'_, Db>, start_day: i64, end_day: i64) -> Vec<Task
     let conn = state.0.lock().unwrap();
     let mut stmt = conn
         .prepare(
-            "SELECT id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes, someday, archived
+            "SELECT id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes, someday, archived, travel_time, duration_minutes
              FROM tasks WHERE date BETWEEN ?1 AND ?2 AND someday = 0 AND archived = 0
              ORDER BY sort_order ASC",
         )
@@ -40,6 +40,8 @@ pub fn get_tasks(state: State<'_, Db>, start_day: i64, end_day: i64) -> Vec<Task
             notes: row.get(10)?,
             someday: row.get::<_, i64>(11)? != 0,
             archived: row.get::<_, i64>(12)? != 0,
+            travel_time: row.get(13)?,
+            duration_minutes: row.get(14)?,
         })
     })
     .expect("query get_tasks")
@@ -58,14 +60,15 @@ pub fn upsert_task(state: State<'_, Db>, mut task: Task) -> Task {
     }
     task.updated_at = now_ms();
     conn.execute(
-        "INSERT INTO tasks (id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes, someday, archived)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
+        "INSERT INTO tasks (id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes, someday, archived, travel_time, duration_minutes)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
          ON CONFLICT(id) DO UPDATE SET
            title=excluded.title, date=excluded.date, is_done=excluded.is_done,
            color_set_id=excluded.color_set_id, sort_order=excluded.sort_order,
            updated_at=excluded.updated_at, device_id=excluded.device_id,
            time_minutes=excluded.time_minutes, notes=excluded.notes,
-           someday=excluded.someday, archived=excluded.archived",
+           someday=excluded.someday, archived=excluded.archived,
+           travel_time=excluded.travel_time, duration_minutes=excluded.duration_minutes",
         rusqlite::params![
             task.id,
             task.title,
@@ -80,6 +83,8 @@ pub fn upsert_task(state: State<'_, Db>, mut task: Task) -> Task {
             task.notes,
             task.someday as i64,
             task.archived as i64,
+            task.travel_time,
+            task.duration_minutes,
         ],
     )
     .expect("upsert_task execute");
@@ -116,7 +121,7 @@ pub fn get_someday_tasks(state: State<'_, Db>) -> Vec<Task> {
     let conn = state.0.lock().unwrap();
     let mut stmt = conn
         .prepare(
-            "SELECT id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes, someday, archived
+            "SELECT id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes, someday, archived, travel_time, duration_minutes
              FROM tasks WHERE someday = 1 AND archived = 0 ORDER BY sort_order ASC, created_at ASC",
         )
         .expect("prepare get_someday_tasks");
@@ -135,6 +140,8 @@ pub fn get_someday_tasks(state: State<'_, Db>) -> Vec<Task> {
             notes: row.get(10)?,
             someday: row.get::<_, i64>(11)? != 0,
             archived: row.get::<_, i64>(12)? != 0,
+            travel_time: row.get(13)?,
+            duration_minutes: row.get(14)?,
         })
     })
     .expect("query get_someday_tasks")
@@ -237,7 +244,7 @@ pub fn get_archived_tasks(state: State<'_, Db>) -> Vec<Task> {
     let conn = state.0.lock().unwrap();
     let mut stmt = conn
         .prepare(
-            "SELECT id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes, someday, archived
+            "SELECT id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes, someday, archived, travel_time, duration_minutes
              FROM tasks WHERE archived = 1 ORDER BY date DESC, updated_at DESC",
         )
         .expect("prepare get_archived_tasks");
@@ -256,6 +263,8 @@ pub fn get_archived_tasks(state: State<'_, Db>) -> Vec<Task> {
             notes: row.get(10)?,
             someday: row.get::<_, i64>(11)? != 0,
             archived: row.get::<_, i64>(12)? != 0,
+            travel_time: row.get(13)?,
+            duration_minutes: row.get(14)?,
         })
     })
     .expect("query get_archived_tasks")
@@ -372,7 +381,7 @@ pub fn export_json(state: State<'_, Db>) -> Result<String, String> {
     }
     {
         let mut stmt = conn
-            .prepare("SELECT id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes, someday, archived FROM tasks ORDER BY sort_order ASC")
+            .prepare("SELECT id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes, someday, archived, travel_time, duration_minutes FROM tasks ORDER BY sort_order ASC")
             .map_err(|e| e.to_string())?;
         let rows = stmt
             .query_map([], |r| {
@@ -390,6 +399,8 @@ pub fn export_json(state: State<'_, Db>) -> Result<String, String> {
                     "notes": r.get::<_, String>(10)?,
                     "someday": r.get::<_, i64>(11)? != 0,
                     "archived": r.get::<_, i64>(12)? != 0,
+                    "travelTime": r.get::<_, Option<i64>>(13)?,
+                    "durationMinutes": r.get::<_, Option<i64>>(14)?,
                 }))
             })
             .map_err(|e| e.to_string())?;
@@ -469,8 +480,8 @@ pub fn import_json(state: State<'_, Db>, json: String) -> Result<usize, String> 
     }
     for t in tasks {
         tx.execute(
-            "INSERT INTO tasks (id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes, someday, archived)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+            "INSERT INTO tasks (id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes, someday, archived, travel_time, duration_minutes)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
             rusqlite::params![
                 t.get("id").and_then(|x| x.as_str()).unwrap_or(""),
                 t.get("title").and_then(|x| x.as_str()).unwrap_or(""),
@@ -485,6 +496,8 @@ pub fn import_json(state: State<'_, Db>, json: String) -> Result<usize, String> 
                 t.get("notes").and_then(|x| x.as_str()).unwrap_or(""),
                 t.get("someday").and_then(|x| x.as_bool()).unwrap_or(false) as i64,
                 t.get("archived").and_then(|x| x.as_bool()).unwrap_or(false) as i64,
+                t.get("travelTime").and_then(|x| x.as_i64()),
+                t.get("durationMinutes").and_then(|x| x.as_i64()),
             ],
         )
         .map_err(|e| e.to_string())?;

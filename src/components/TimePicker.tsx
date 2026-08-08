@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { COLORS, accentTint } from "../theme";
-import { formatMinutes, parseTimeToMinutes } from "../date";
+import { formatMinutes } from "../date";
 import { Icon } from "./Icon";
 
 interface Props {
@@ -12,12 +12,41 @@ interface Props {
   compact?: boolean;
   /** Крупный режим (модалка месяца): заметный чип, как остальные поля. */
   large?: boolean;
+  /** Время в пути (мин) — «выехать заранее», уведомление «Пора выезжать». */
+  travelTime?: number | null;
+  onChangeTravel?: (m: number | null) => void;
+  /** Длительность выполнения (мин) — показ «09:00–10:30». */
+  durationMinutes?: number | null;
+  onChangeDuration?: (m: number | null) => void;
 }
 
-/** Компактный time-picker: «в течение дня» / ввод ЧЧ:ММ / быстрые пресеты. */
-export function TimePicker({ value, onChange, compact = false, large = false }: Props) {
-  const [custom, setCustom] = useState("");
+const HOURS = Array.from({ length: 24 }, (_, i) => i);
+const MINUTES = Array.from({ length: 12 }, (_, i) => i * 5);
+
+/** Компактный time-picker: «в течение дня» / колёсики ЧЧ:ММ / пресеты.
+ *  Вместо текстового ввода — два прокручиваемых списка (колёсика): часы
+ *  и минуты, удобно пальцем на мобильном, без клавиатуры. */
+export function TimePicker({
+  value,
+  onChange,
+  compact = false,
+  large = false,
+  travelTime,
+  onChangeTravel,
+  durationMinutes,
+  onChangeDuration,
+}: Props) {
   const [editing, setEditing] = useState(false);
+  // Колёсики: текущие выбранные час/минуты (из value или ближайшие к сейчас).
+  const curH = value !== null ? Math.floor(value / 60) : new Date().getHours();
+  const curM = value !== null ? value % 60 : new Date().getMinutes();
+  const [h, setH] = useState(curH);
+  const [m, setM] = useState(curM);
+  // Синхронизируем колёсики при открытии/смене внешнего value.
+  useEffect(() => {
+    setH(value !== null ? Math.floor(value / 60) : new Date().getHours());
+    setM(value !== null ? value % 60 : new Date().getMinutes());
+  }, [value, editing]);
 
   const presets = [
     { label: "09:00", m: 9 * 60 },
@@ -26,6 +55,20 @@ export function TimePicker({ value, onChange, compact = false, large = false }: 
     { label: "18:00", m: 18 * 60 },
     { label: "21:00", m: 21 * 60 },
   ];
+
+  // Применяем время сразу при выборе значения в колёсике (а не по «ок»):
+  // иначе при быстрых кликах state h/m ещё не обновился, и «ок» применил бы
+  // старые значения. «ок» просто закрывает меню.
+  const pickHour = (hh: number) => {
+    const mm = m;
+    setH(hh);
+    onChange(hh * 60 + mm);
+  };
+  const pickMinute = (mm: number) => {
+    const hh = h;
+    setM(mm);
+    onChange(hh * 60 + mm);
+  };
 
   return (
     <div style={pickerStyle}>
@@ -65,29 +108,138 @@ export function TimePicker({ value, onChange, compact = false, large = false }: 
               </button>
             ))}
           </div>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              const m = parseTimeToMinutes(custom);
-              if (m !== null) {
-                onChange(m);
-                setEditing(false);
-                setCustom("");
-              }
-            }}
-            style={{ display: "flex", gap: "var(--sp-2)" }}
-          >
-            <input
-              autoFocus
-              value={custom}
-              onChange={(e) => setCustom(e.target.value)}
-              placeholder="16:32"
-              style={inputStyle}
+          {/* Колёсики часов и минут: прокручиваемые списки, активное значение
+              подсвечено; тап по значению выбирает. */}
+          <div style={{ display: "flex", gap: "var(--sp-2)", marginTop: "var(--sp-2)" }}>
+            <Wheel
+              values={HOURS}
+              format={(v) => String(v).padStart(2, "0")}
+              selected={h}
+              onSelect={pickHour}
             />
-            <button type="submit" style={submitStyle}>ок</button>
-          </form>
+            <span style={{ alignSelf: "center", fontSize: "var(--fs-lg)", color: COLORS.muted }}>:</span>
+            <Wheel
+              values={MINUTES}
+              format={(v) => String(v).padStart(2, "0")}
+              selected={Math.floor(m / 5) * 5}
+              onSelect={pickMinute}
+            />
+            <button
+              onClick={() => setEditing(false)}
+              style={submitStyle}
+              title="Закрыть"
+            >
+              ок
+            </button>
+          </div>
+          {/* Выезд заранее (время в пути) и длительность — только когда
+              коллбэки переданы (в карточке задачи). Пресеты — кнопки. */}
+          {onChangeTravel && (
+            <div style={{ marginTop: "var(--sp-3)" }}>
+              <div style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted, marginBottom: "var(--sp-1)" }}>
+                Выехать заранее
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-1)" }}>
+                {[null, 15, 30, 45, 60, 90].map((v) => (
+                  <button
+                    key={v ?? 0}
+                    onClick={() => onChangeTravel?.(v)}
+                    style={presetBtn(travelTime === v)}
+                  >
+                    {v === null ? "—" : `${v} мин`}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {onChangeDuration && (
+            <div style={{ marginTop: "var(--sp-3)" }}>
+              <div style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted, marginBottom: "var(--sp-1)" }}>
+                Длительность
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-1)" }}>
+                {[null, 30, 60, 90, 120, 180].map((v) => (
+                  <button
+                    key={v ?? 0}
+                    onClick={() => onChangeDuration?.(v)}
+                    style={presetBtn(durationMinutes === v)}
+                  >
+                    {v === null
+                      ? "—"
+                      : v < 60
+                        ? `${v} мин`
+                        : v === 90
+                          ? "1.5 ч"
+                          : `${v / 60} ч`}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
+    </div>
+  );
+}
+
+/** Прокручиваемое колёсико выбора: список значений, активное — подсвечено. */
+function Wheel({
+  values,
+  format,
+  selected,
+  onSelect,
+}: {
+  values: number[];
+  format: (v: number) => string;
+  selected: number;
+  onSelect: (v: number) => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  // При открытии/смене выбора прокручиваем к активному значению.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const idx = values.indexOf(selected);
+    if (idx < 0) return;
+    const item = el.children[idx] as HTMLElement | undefined;
+    if (item) el.scrollTop = item.offsetTop - el.clientHeight / 2 + item.clientHeight / 2;
+  }, [selected, values]);
+  return (
+    <div
+      ref={ref}
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        overflowY: "auto",
+        maxHeight: 150,
+        scrollbarWidth: "none",
+        border: `1px solid ${COLORS.cardBorder}`,
+        borderRadius: "var(--radius-md)",
+        padding: "0 2px",
+      }}
+    >
+      {values.map((v) => {
+        const active = v === selected;
+        return (
+          <button
+            key={v}
+            onClick={() => onSelect(v)}
+            style={{
+              border: "none",
+              background: active ? accentTint(0.15) : "transparent",
+              color: active ? COLORS.accent : COLORS.text,
+              fontWeight: active ? 700 : 400,
+              fontSize: "var(--fs-md)",
+              padding: "8px 10px",
+              cursor: "pointer",
+              borderRadius: "var(--radius-sm)",
+              minWidth: 44,
+            }}
+          >
+            {format(v)}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -120,13 +272,8 @@ function presetBtn(active: boolean): React.CSSProperties {
     color: active ? COLORS.accent : COLORS.text, borderRadius: "var(--radius-sm)",
   };
 }
-const inputStyle: React.CSSProperties = {
-  width: 60, fontSize: "var(--fs-xs)", border: `1px solid ${COLORS.cardBorder}`,
-  borderRadius: "var(--radius-sm)", padding: "2px 4px", background: "transparent",
-  color: COLORS.text,
-};
 const submitStyle: React.CSSProperties = {
-  fontSize: "var(--fs-2xs)", padding: "2px 6px", cursor: "pointer",
+  alignSelf: "center", fontSize: "var(--fs-xs)", padding: "6px 10px", cursor: "pointer",
   border: `1px solid ${COLORS.accent}`, background: COLORS.accent, color: "#fff",
-  borderRadius: "var(--radius-sm)",
+  borderRadius: "var(--radius-md)",
 };

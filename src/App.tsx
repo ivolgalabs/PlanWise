@@ -354,8 +354,37 @@ function App() {
     }
   };
 
+  // Свайпы для переключения вида (День/Неделя/Месяц): свайп влево = следующий
+  // режим, вправо = предыдущий, циклически. Игнорируем свайпы, начавшиеся на
+  // инпутах, draggable-элементах (задачи @dnd-kit) и на колёсиках TimePicker
+  // (у них свой скролл) — иначе переключение мешает работе с контентом.
+  const swipeRef = useRef<{ x: number; y: number } | null>(null);
+  const ORDER: ViewKind[] = ["day", "week", "month"];
+  const onTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    swipeRef.current = { x: t.clientX, y: t.clientY };
+  };
+  const onTouchEnd = (e: React.TouchEvent) => {
+    const start = swipeRef.current;
+    swipeRef.current = null;
+    if (!start) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - start.x;
+    const dy = t.clientY - start.y;
+    // Порог: 60px по горизонтали, вертикаль не больше 40px (иначе это скролл).
+    if (Math.abs(dx) < 60 || Math.abs(dy) > 40) return;
+    const el = e.target as HTMLElement;
+    // Не мешаем вводу/драгу: инпут, draggable @dnd-kit, скролл-колёсики.
+    if (el.closest("input, textarea, select, [data-dnd-kit], .time-wheel, [role=button][draggable]")) return;
+    const idx = ORDER.indexOf(view);
+    if (dx < 0) setView(ORDER[(idx + 1) % ORDER.length]); // влево — следующий
+    else setView(ORDER[(idx - 1 + ORDER.length) % ORDER.length]); // вправо — предыдущий
+  };
+
   return (
     <div
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
       style={{
         background: COLORS.paper,
         // height:100% вместо 100vh: vh не масштабируется CSS zoom (uiScale>1),

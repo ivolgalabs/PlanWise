@@ -7,6 +7,7 @@ import { useStore } from "../store";
 import { TimePicker } from "./TimePicker";
 import { SubtaskList } from "./SubtaskList";
 import { DatePickerModal } from "./DatePickerModal";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { Icon } from "./Icon";
 import { taskIdZone } from "../drag";
 
@@ -52,6 +53,8 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
   // Мобильный перенос: выбор даты через DatePickerModal (drag на телефоне
   // неудобен, кнопка видна только в тач-режиме — класс task-move-btn).
   const [moveOpen, setMoveOpen] = useState(false);
+  // Подтверждение удаления: по кнопке «Удалить» показываем диалог.
+  const [confirmDel, setConfirmDel] = useState(false);
   const { colorSets, setColorSets, visibility } = useStore();
   // На тач-устройствах время и кнопки действий собираются в одну строку под
   // текстом задачи (компактно), а не в ряд с текстом.
@@ -164,6 +167,7 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
   };
 
   const del = async () => {
+    setConfirmDel(false);
     await api.deleteTask(task.id);
     onChange();
   };
@@ -206,6 +210,34 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
     await api.upsertTask({ ...task, timeMinutes: m });
     onChange();
   };
+  // Актуальные travel/duration — в ref: при быстрых кликах (выезд + длительность
+  // подряд) task из пропсов ещё не обновился, и второй upsert затирал бы
+  // значение первого. Мержим с ref-значениями.
+  const metaRef = useRef({ travel: task.travelTime ?? null, duration: task.durationMinutes ?? null });
+  metaRef.current = { travel: task.travelTime ?? null, duration: task.durationMinutes ?? null };
+  const setTravel = async (m: number | null) => {
+    metaRef.current = { ...metaRef.current, travel: m };
+    await api.upsertTask({ ...task, travelTime: m, durationMinutes: metaRef.current.duration });
+    onChange();
+  };
+  const setDuration = async (m: number | null) => {
+    metaRef.current = { ...metaRef.current, duration: m };
+    await api.upsertTask({ ...task, durationMinutes: m, travelTime: metaRef.current.travel });
+    onChange();
+  };
+
+  // Доп. время: «09:00 – 10:30» (длительность) и «выезд в 08:15» (в пути).
+  const fmt = (m: number) =>
+    `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+  const timeMeta: string[] = [];
+  if (task.timeMinutes != null && task.durationMinutes) {
+    const end = (task.timeMinutes + task.durationMinutes) % (24 * 60);
+    timeMeta.push(`${fmt(task.timeMinutes)}–${fmt(end)}`);
+  }
+  if (task.timeMinutes != null && task.travelTime) {
+    const dep = (task.timeMinutes - task.travelTime + 24 * 60) % (24 * 60);
+    timeMeta.push(`выезд в ${fmt(dep)}`);
+  }
 
   const saveNotes = async () => {
     if (notesValue !== task.notes) {
@@ -330,7 +362,31 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
           }}
         />
         {effectiveShowTime && !mobileRow && (!compact || task.timeMinutes != null) && (
-          <TimePicker value={task.timeMinutes ?? null} onChange={setTime} compact={compact} />
+          <>
+            <TimePicker
+              value={task.timeMinutes ?? null}
+              onChange={setTime}
+              compact={compact}
+              travelTime={task.travelTime ?? null}
+              onChangeTravel={setTravel}
+              durationMinutes={task.durationMinutes ?? null}
+              onChangeDuration={setDuration}
+            />
+            {/* Диапазон «09:00–10:30» / «выезд в 08:15» — мелкой подписью под
+                временем (длительность и время в пути). */}
+            {timeMeta.length > 0 && !compact && (
+              <span
+                style={{
+                  fontSize: "var(--fs-2xs)",
+                  color: COLORS.muted,
+                  lineHeight: 1.2,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {timeMeta.join(" · ")}
+              </span>
+            )}
+          </>
         )}
       </div>
       {/* На мобильном справа от текста — время («09:00» или «в теч. дня»),
@@ -338,7 +394,32 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
       {mobileRow && (effectiveShowTime || visibility.taskActions) && (
         <div className="task-side">
           {effectiveShowTime && (
-            <TimePicker value={task.timeMinutes ?? null} onChange={setTime} compact />
+            <>
+              <TimePicker
+              value={task.timeMinutes ?? null}
+              onChange={setTime}
+              compact
+              travelTime={task.travelTime ?? null}
+              onChangeTravel={setTravel}
+              durationMinutes={task.durationMinutes ?? null}
+              onChangeDuration={setDuration}
+            />
+              {/* Диапазон «09:00–10:30» и «выезд в 08:15» — мелкими подписью
+                  под временем, если заданы длительность/время в пути. */}
+              {timeMeta.length > 0 && (
+                <span
+                  style={{
+                    fontSize: "var(--fs-2xs)",
+                    color: COLORS.muted,
+                    lineHeight: 1.2,
+                    textAlign: "right",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {timeMeta.join(" · ")}
+                </span>
+              )}
+            </>
           )}
           {visibility.taskActions && (
             <>
@@ -351,7 +432,7 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
                   border: task.colorSetId ? "none" : "1px solid " + COLORS.cardBorder,
                 }}
               />
-              <button onClick={del} className="chip-btn" title="Удалить">
+              <button onClick={() => setConfirmDel(true)} className="chip-btn" title="Удалить">
                 <Icon name="close" size={13} />
               </button>
             </>
@@ -401,7 +482,7 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
                   border: task.colorSetId ? "none" : "1px solid " + COLORS.cardBorder,
                 }}
               />
-              <button onClick={del} className="chip-btn" title="Удалить">
+              <button onClick={() => setConfirmDel(true)} className="chip-btn" title="Удалить">
                 <Icon name="close" size={14} />
               </button>
             </div>
@@ -558,6 +639,15 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
           onChange();
         }}
         onClose={() => setMoveOpen(false)}
+      />
+    )}
+    {/* Подтверждение удаления задачи. */}
+    {confirmDel && (
+      <ConfirmDialog
+        title={`Удалить задачу?`}
+        confirmLabel="Удалить"
+        onConfirm={del}
+        onCancel={() => setConfirmDel(false)}
       />
     )}
     </div>

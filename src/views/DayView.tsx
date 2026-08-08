@@ -8,6 +8,7 @@ import { ArchivePanel } from "../components/ArchivePanel";
 import { COLORS, accentTint } from "../theme";
 import { dayId } from "../drag";
 import { isToday } from "../date";
+import { useStore } from "../store";
 
 interface Props {
   day: Date;
@@ -176,6 +177,7 @@ function DayTasksArea({
   const dayKey = `${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`;
   // На мобильном правая панель скрыта — «Когда-нибудь» и «Архив» показываем
   // здесь, внизу дня (раскрытие архива — по кнопке, чтобы не раздувать день).
+  const { visibility } = useStore();
   const [archiveOpen, setArchiveOpen] = useState(false);
   return (
     <div
@@ -255,14 +257,17 @@ function DayTasksArea({
       </form>
 
       {/* Мобильный доступ к «Когда-нибудь» и «Архиву»: правая панель на узком
-          экране скрыта, поэтому секции дублируются здесь, внизу дня. */}
+          экране скрыта, поэтому секции дублируются здесь, внизу дня.
+          «Когда-нибудь» — по настройке видимости. */}
       {tiny && (
         <div style={{ marginTop: "var(--sp-6)" }}>
-          <SomedayColumn
-            tasks={allTasks.filter((t) => t.someday)}
-            onChange={onChange}
-            stretch
-          />
+          {visibility.someday && (
+            <SomedayColumn
+              tasks={allTasks.filter((t) => t.someday)}
+              onChange={onChange}
+              stretch
+            />
+          )}
           {archiveOpen ? (
             <ArchivePanel
               tasks={archivedTasks}

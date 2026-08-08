@@ -15,6 +15,10 @@ export interface Task {
   notes: string; // заметка, '' = нет
   someday: boolean; // «Когда-нибудь»: задача без привязки ко дню
   archived: boolean; // «Архив»: скрыта из видов, ждёт возврата
+  /** Минуты на дорогу — уведомление «Пора выезжать» за это время до начала. */
+  travelTime?: number | null;
+  /** Длительность выполнения в минутах (показ «09:00–10:30»). */
+  durationMinutes?: number | null;
 }
 
 export interface ColorSet {
@@ -66,6 +70,8 @@ export const api = {
       notes: task.notes ?? "",
       someday: task.someday ?? false,
       archived: task.archived ?? false,
+      travelTime: task.travelTime ?? null,
+      durationMinutes: task.durationMinutes ?? null,
     };
     return isTauri() ? invoke<Task>("upsert_task", { task: t }) : browserApi.upsertTask(t);
   },
