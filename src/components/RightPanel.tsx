@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Task } from "../api";
 import { MiniCalendar } from "./MiniCalendar";
 import { SomedayColumn } from "./SomedayColumn";
@@ -23,6 +23,18 @@ interface Props {
 export function RightPanel({ tasks, width, onSelect, onChange, fill = false }: Props) {
   const { visibility, archivedTasks, view, panelGap } = useStore();
   const [archiveOpen, setArchiveOpen] = useState(false);
+  // Низкое окно (горизонтальный режим телефона): крупный календарь не
+  // влезает по высоте и обрезается — рендерим компактный вариант, чтобы
+  // панелька была видна полностью (обёртка всё равно скроллится).
+  const [low, setLow] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(max-height: 520px)").matches,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia("(max-height: 520px)");
+    const handler = (e: MediaQueryListEvent) => setLow(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
   // Календарь виден не везде: в «Месяце» его нет, и настройкой его можно
   // скрыть. Тогда «Когда-нибудь» растягивается на всю панель (stretch),
   // чтобы под ней не оставалось мёртвого пространства.
@@ -56,7 +68,7 @@ export function RightPanel({ tasks, width, onSelect, onChange, fill = false }: P
             // под ней не оставалось мёртвого пространства. В «Месяце»
             // календарь не показываем — сетка месяца и так видна.
             <div style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", padding: "var(--sp-4) var(--sp-4) 0", minWidth: 0 }}>
-              <MiniCalendar tasks={tasks} large onSelect={onSelect} fill />
+              <MiniCalendar tasks={tasks} large={!low} onSelect={onSelect} fill={!low} />
             </div>
           )}
           {calVisible && (

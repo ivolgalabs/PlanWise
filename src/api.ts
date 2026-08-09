@@ -21,6 +21,9 @@ export interface Task {
   durationMinutes?: number | null;
   /** Сложность («класс» задачи): 0=не задана, 1=лёгкая, 2=средняя, 3=сложная. */
   difficulty?: number;
+  /** Своё уведомление задачи: null=по умолчанию (из настроек), 0=не уведомлять,
+   *  N=напомнить за N минут до начала. */
+  notifyMinutes?: number | null;
 }
 
 export interface ColorSet {
@@ -75,6 +78,7 @@ export const api = {
       travelTime: task.travelTime ?? null,
       durationMinutes: task.durationMinutes ?? null,
       difficulty: task.difficulty ?? 0,
+      notifyMinutes: task.notifyMinutes ?? null,
     };
     return isTauri() ? invoke<Task>("upsert_task", { task: t }) : browserApi.upsertTask(t);
   },

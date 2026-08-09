@@ -1243,6 +1243,11 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
                 ))}
               </div>
             )}
+            <p className="section-hint" style={{ marginTop: "var(--sp-2)" }}>
+              Для отдельной задачи можно задать своё напоминание: нажмите на задачу
+              и выберите «Уведомить» (по умолчанию / не уведомлять / за N минут).
+              Подзадачи напоминают вместе со своей задачей.
+            </p>
           </section>
 
           {/* ── Интерфейс ── */}

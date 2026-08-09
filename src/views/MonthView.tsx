@@ -72,6 +72,23 @@ export function MonthView({ tasks, onSelectDay, onChange }: Props) {
     onSelectDay(d);
   };
 
+  // Доп. время задачи: «09:00–10:30» (длительность) и «выезд в 08:15» —
+  // мелкими подписями справа от названия (в списке задач дня).
+  const fmt = (m: number) =>
+    `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+  const timeMetaOf = (t: Task): string[] => {
+    const meta: string[] = [];
+    if (t.timeMinutes != null && t.durationMinutes) {
+      const end = (t.timeMinutes + t.durationMinutes) % (24 * 60);
+      meta.push(`${fmt(t.timeMinutes)}–${fmt(end)}`);
+    }
+    if (t.timeMinutes != null && t.travelTime) {
+      const dep = (t.timeMinutes - t.travelTime + 24 * 60) % (24 * 60);
+      meta.push(`выезд в ${fmt(dep)}`);
+    }
+    return meta;
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, padding: "var(--sp-4)" }}>
       <div style={{ display: "flex" }}>
@@ -199,6 +216,21 @@ export function MonthView({ tasks, onSelectDay, onChange }: Props) {
                   <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
                     {t.title}
                   </span>
+                  {/* Справа от задачи — время выполнения и выезд (если заданы):
+                      карточка широкая, место для всей информации есть. */}
+                  {timeMetaOf(t).length > 0 && (
+                    <span
+                      style={{
+                        marginLeft: "auto",
+                        flexShrink: 0,
+                        fontSize: "var(--fs-2xs)",
+                        color: COLORS.muted,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {timeMetaOf(t).join(" · ")}
+                    </span>
+                  )}
                 </button>
               ))}
             </div>
@@ -214,10 +246,17 @@ export function MonthView({ tasks, onSelectDay, onChange }: Props) {
               }}
               onCancel={() => setMenuDay(null)}
             />
+            {/* Отдельная кнопка во всю ширину — не сливается с «Добавить/Отмена»
+                формы (раньше три flex-кнопки в одном ряду наслаивались). */}
             <button
               className="modal-action-btn"
               onClick={() => openDay(menuDay)}
-              style={btnStyle(true)}
+              style={{
+                ...btnStyle(true),
+                width: "100%",
+                marginTop: "var(--sp-3)",
+                flex: "none",
+              }}
             >
               Перейти к дню
             </button>

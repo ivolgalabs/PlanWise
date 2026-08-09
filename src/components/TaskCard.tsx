@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import type { Task } from "../api";
-import { api } from "../api";
+import { api, fromEpochDay } from "../api";
 import { COLORS, accentTint, argbToHex, hexToArgb } from "../theme";
 import { useStore } from "../store";
 import { TimePicker } from "./TimePicker";
 import { SubtaskList } from "./SubtaskList";
 import { DatePickerModal } from "./DatePickerModal";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { AddTaskModal } from "./AddTaskModal";
 import { Icon } from "./Icon";
 import { taskIdZone } from "../drag";
 
@@ -55,6 +56,13 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
   const [moveOpen, setMoveOpen] = useState(false);
   // Подтверждение удаления: по кнопке «Удалить» показываем диалог.
   const [confirmDel, setConfirmDel] = useState(false);
+  // Карточка задачи (окно с полными настройками) — открывается по нажатию
+  // на задачу (текст/строку); у пустой строки-заглушки тап по-прежнему
+  // просто ставит курсор (быстрое добавление текстом).
+  const [cardOpen, setCardOpen] = useState(false);
+  const openCard = () => {
+    if (task.title.trim()) setCardOpen(true);
+  };
   const { colorSets, setColorSets, visibility, tasks: allTasks, autoDonePastTime } = useStore();
   // На тач-устройствах время и кнопки действий собираются в одну строку под
   // текстом задачи (компактно), а не в ряд с текстом.
@@ -378,6 +386,14 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
         ...dragStyle,
       }}
       title={timeConflict ? "Время пересекается с другой задачей" : undefined}
+      onClick={(e) => {
+        // Клик по элементам управления (кнопки, чекбокс, время, ручка, поле
+        // текста) — их собственные обработчики; открываем карточку по клику
+        // на любом другом месте строки.
+        const t = e.target as HTMLElement;
+        if (t.closest("input, button, label, select, textarea, .task-drag-hint")) return;
+        openCard();
+      }}
       {...attributes}
     >
       {/* Ручка перетаскивания: ТОЛЬКО на ней listeners, чтобы клики по
@@ -446,6 +462,14 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
           }}
           onKeyDown={onKeyDown}
           onInput={(e) => growTitle(e.currentTarget)}
+          onPointerDown={(e) => {
+            // Тап по тексту существующей задачи открывает карточку (окно
+            // с полными настройками); пустая строка — обычный ввод текста.
+            if (task.title.trim()) {
+              e.preventDefault();
+              setCardOpen(true);
+            }
+          }}
           rows={1}
           data-task-id={task.id}
           title={title || undefined}
@@ -494,14 +518,20 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
             )}
           </>
         )}
-      </div>
-      {/* На мобильном справа от текста — время («09:00» или «в теч. дня»),
-          цвет и удаление; под текстом остаются заметка и перенос. */}
-      {mobileRow && (effectiveShowTime || visibility.taskActions) && (
-        <div className="task-side">
-          {effectiveShowTime && (
-            <>
-              <TimePicker
+        {/* На мобильном время («09:00» или «в теч. дня») и мета
+            «09:00–10:30 · выезд в 08:15» — НИЖЕ текста задачи (как в сетке
+            недели), чтобы строка с длинным текстом не раздувалась в ряд. */}
+        {mobileRow && effectiveShowTime && (
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              gap: "var(--sp-2)",
+              margin: "1px 0 2px",
+            }}
+          >
+            <TimePicker
               value={task.timeMinutes ?? null}
               onChange={setTime}
               compact
@@ -510,23 +540,25 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
               durationMinutes={task.durationMinutes ?? null}
               onChangeDuration={setDuration}
             />
-              {/* Диапазон «09:00–10:30» и «выезд в 08:15» — мелкими подписью
-                  под временем, если заданы длительность/время в пути. */}
-              {timeMeta.length > 0 && (
-                <span
-                  style={{
-                    fontSize: "var(--fs-2xs)",
-                    color: COLORS.muted,
-                    lineHeight: 1.2,
-                    textAlign: "right",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {timeMeta.join(" · ")}
-                </span>
-              )}
-            </>
-          )}
+            {timeMeta.length > 0 && (
+              <span
+                style={{
+                  fontSize: "var(--fs-2xs)",
+                  color: COLORS.muted,
+                  lineHeight: 1.2,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {timeMeta.join(" · ")}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+      {/* На мобильном справа от текста — приоритет, цвет и удаление;
+          время под текстом, а заметка/перенос — в ряду под строкой. */}
+      {mobileRow && visibility.taskActions && (
+        <div className="task-side">
           {visibility.taskActions && (
             <>
               {/* Приоритет задачи: клик циклично меняет уровень. */}
@@ -873,6 +905,17 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
           )}
         </div>
       </div>
+    )}
+    {/* Карточка задачи: окно с полными настройками (время, приоритет,
+        длительность, выезд, уведомление, категория, заметка) — открывается
+        по нажатию на задачу. */}
+    {cardOpen && (
+      <AddTaskModal
+        day={fromEpochDay(task.date)}
+        initial={task}
+        onChange={onChange}
+        onClose={() => setCardOpen(false)}
+      />
     )}
     </div>
   );

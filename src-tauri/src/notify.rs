@@ -213,21 +213,23 @@ fn check_digest(app: &tauri::AppHandle, prefs: &NotifyPrefs, now: NaiveDateTime)
 /// глобального «сегодня». Так задача на завтра с remind=1440 даст due=сегодня в
 /// то же время (ровно за сутки), а задача на сегодня с remind=15 — за 15 минут.
 /// remind_minutes — массив: для каждого выбранного интервала своё уведомление.
-/// Если у задачи задано travel_time — дополнительно «Пора выезжать» за это
-/// время до начала (в дополнение к выбранным интервалам).
+/// У задачи может быть СВОЁ время уведомления (notify_minutes): NULL = глобальные
+/// интервалы из настроек, 0 = не уведомлять, N = напомнить за N минут (одно
+/// уведомление вместо всех глобальных). Если задано travel_time — дополнительно
+/// «Пора выезжать» за это время до начала.
 fn check_reminders(app: &tauri::AppHandle, prefs: &NotifyPrefs, now: NaiveDateTime) {
     let today = now.date();
     let today_epoch = days_from_epoch(today);
     let tomorrow_epoch = today_epoch + 1;
 
-    // (id, title, time_minutes, date_epoch, travel_time) — дата и время в пути
-    // нужны для расчёта due. travel_time может отсутствовать в старых БД —
-    // query_map вернёт NULL как None.
-    let timed: Vec<(String, String, i64, i64, Option<i64>)> = {
+    // (id, title, time_minutes, date_epoch, travel_time, notify_minutes) — дата,
+    // время в пути и своё уведомление нужны для расчёта due. travel_time может
+    // отсутствовать в старых БД — query_map вернёт NULL как None.
+    let timed: Vec<(String, String, i64, i64, Option<i64>, Option<i64>)> = {
         let db = app.state::<Db>();
         let conn = db.0.lock().unwrap();
         let mut stmt = match conn.prepare(
-      "SELECT id, title, time_minutes, date, travel_time FROM tasks WHERE date IN (?1, ?2) AND time_minutes IS NOT NULL AND is_done = 0 AND archived = 0 AND someday = 0",
+      "SELECT id, title, time_minutes, date, travel_time, notify_minutes FROM tasks WHERE date IN (?1, ?2) AND time_minutes IS NOT NULL AND is_done = 0 AND archived = 0 AND someday = 0",
     ) {
       Ok(s) => s,
       Err(e) => {
@@ -244,6 +246,7 @@ fn check_reminders(app: &tauri::AppHandle, prefs: &NotifyPrefs, now: NaiveDateTi
                     r.get::<_, i64>(2)?,
                     r.get::<_, i64>(3)?,
                     r.get::<_, Option<i64>>(4)?,
+                    r.get::<_, Option<i64>>(5)?,
                 ))
             })
             .and_then(|it| it.collect::<Result<Vec<_>, _>>())
@@ -256,7 +259,11 @@ fn check_reminders(app: &tauri::AppHandle, prefs: &NotifyPrefs, now: NaiveDateTi
         timed.len(),
         now
     );
-    for (id, title, minutes, date_epoch, travel_time) in timed {
+    for (id, title, minutes, date_epoch, travel_time, notify_minutes) in timed {
+        // Своё «не уведомлять» (0) — пропускаем задачу целиком, включая выезд.
+        if notify_minutes == Some(0) {
+            continue;
+        }
         let h = (minutes / 60) as u32;
         let m = (minutes % 60) as u32;
         // Дата задачи из epoch-day (возвращает Option при выходе за диапазон).
@@ -269,9 +276,16 @@ fn check_reminders(app: &tauri::AppHandle, prefs: &NotifyPrefs, now: NaiveDateTi
             None => continue,
         };
 
-        // 1. Выбранные интервалы напоминаний (массив) — каждому своё уведомление.
-        for rm in &prefs.remind_minutes {
-            let due = start - chrono::Duration::minutes(*rm);
+        // Своё время уведомления задачи (одно значение) вместо глобальных
+        // интервалов, если задано.
+        let intervals: Vec<i64> = match notify_minutes {
+            Some(n) if n > 0 => vec![n],
+            _ => prefs.remind_minutes.clone(),
+        };
+
+        // 1. Выбранные интервалы напоминаний — каждому своё уведомление.
+        for rm in intervals {
+            let due = start - chrono::Duration::minutes(rm);
             // Окно отправки: 2 минуты после наступления момента.
             if now < due || now > due + chrono::Duration::minutes(2) {
                 continue;
@@ -280,9 +294,9 @@ fn check_reminders(app: &tauri::AppHandle, prefs: &NotifyPrefs, now: NaiveDateTi
             if fired().lock().unwrap().contains_key(&key) {
                 continue;
             }
-            let when = if *rm >= 1440 {
+            let when = if rm >= 1440 {
                 "завтра".to_string()
-            } else if *rm >= 60 {
+            } else if rm >= 60 {
                 format!("через {} ч", rm / 60)
             } else {
                 format!("через {} мин", rm)

@@ -60,22 +60,61 @@ export function TimePicker({
     const [hh, mm] = t.split(":").map(Number);
     if (Number.isFinite(hh) && Number.isFinite(mm)) onChange(hh * 60 + mm);
   };
-  // Длительность/выезд системными часами: "ЧЧ:ММ" трактуется как длительность
-  // (01:30 = 90 минут); пустое поле = снять значение (null).
-  const applyMinutes = (t: string, apply: ((m: number | null) => void) | undefined) => {
-    if (!apply) return;
-    if (!t) return apply(null);
-    const [hh, mm] = t.split(":").map(Number);
-    if (Number.isFinite(hh) && Number.isFinite(mm) && hh * 60 + mm <= 1440) {
-      apply(hh * 60 + mm);
-    }
+  // Длительность/выезд — своё значение ЧЕРЕЗ КОЛИЧЕСТВО (не время суток):
+  // системные селекты «часы» и «минуты» (на Android открывают системный
+  // барабан выбора). 0 часов 0 минут = снять значение (null).
+  const durationSel = (
+    value: number | null,
+    apply: ((m: number | null) => void) | undefined,
+    maxHours: number,
+  ) => {
+    if (!apply) return null;
+    const h = value != null ? Math.floor(value / 60) : 0;
+    const m = value != null ? value % 60 : 0;
+    const set = (nh: number, nm: number) => {
+      apply(nh === 0 && nm === 0 ? null : nh * 60 + nm);
+    };
+    return (
+      <div
+        style={{ display: "inline-flex", alignItems: "center", gap: 3 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <select
+          value={h}
+          onChange={(e) => set(Number(e.target.value), m)}
+          style={selStyle}
+          title="Часы"
+        >
+          {Array.from({ length: maxHours + 1 }, (_, i) => (
+            <option key={i} value={i}>
+              {i} ч
+            </option>
+          ))}
+        </select>
+        <select
+          value={m}
+          onChange={(e) => set(h, Number(e.target.value))}
+          style={selStyle}
+          title="Минуты"
+        >
+          {Array.from({ length: 12 }, (_, i) => i * 5).map((v) => (
+            <option key={v} value={v}>
+              {v === 0 ? "0 мин" : `${v} мин`}
+            </option>
+          ))}
+        </select>
+      </div>
+    );
   };
 
   // Меню (общее для модалки и popup). На мобиле кнопка «Готово» закрывает —
-  // значения применяются сразу при выборе, как и раньше.
+  // значения применяются сразу при выборе, как и раньше. Все кнопки с
+  // type="button": меню живёт внутри <form> (окно «Новая задача»), иначе
+  // клик по пресету сохранял бы форму (карточка «сохранялась» сама).
   const menu = (
     <>
       <button
+        type="button"
         style={presetBtn(value === null)}
         onClick={() => { onChange(null); setEditing(false); }}
         title="Без привязки ко времени"
@@ -87,6 +126,7 @@ export function TimePicker({
           {timePresets.map((m) => (
             <button
               key={m}
+              type="button"
               style={presetBtn(value === m)}
               onClick={() => { onChange(m); setEditing(false); }}
             >
@@ -106,8 +146,8 @@ export function TimePicker({
           title="Выбрать время системными часами"
         />
       </div>
-      {/* Выезд заранее (время в пути): пресеты + своё значение системными
-          часами (интерпретируется как длительность: 01:30 = 90 минут). */}
+      {/* Выезд заранее (время в пути): пресеты + своё значение часами и
+          минутами (системные селекты — количество, не время суток). */}
       {onChangeTravel && (
         <div style={{ marginTop: "var(--sp-3)" }}>
           <div style={labelStyle}>Выехать заранее</div>
@@ -115,23 +155,18 @@ export function TimePicker({
             {[null, 15, 30, 45, 60, 90].map((v) => (
               <button
                 key={v ?? 0}
+                type="button"
                 onClick={() => onChangeTravel(v)}
                 style={presetBtn(travelTime === v)}
               >
                 {v === null ? "—" : `${v} мин`}
               </button>
             ))}
-            <input
-              type="time"
-              value={travelTime != null && travelTime > 0 ? toHHMM(travelTime) : ""}
-              onChange={(e) => applyMinutes(e.target.value, onChangeTravel)}
-              style={numInputStyle}
-              title="Своё значение — системные часы (01:30 = 90 мин)"
-            />
+            {durationSel(travelTime ?? null, onChangeTravel, 12)}
           </div>
         </div>
       )}
-      {/* Длительность выполнения: пресеты + своё значение системными часами. */}
+      {/* Длительность выполнения: пресеты + своё значение часами/минутами. */}
       {onChangeDuration && (
         <div style={{ marginTop: "var(--sp-3)" }}>
           <div style={labelStyle}>Длительность</div>
@@ -139,24 +174,20 @@ export function TimePicker({
             {[null, 30, 60, 90, 120, 180].map((v) => (
               <button
                 key={v ?? 0}
+                type="button"
                 onClick={() => onChangeDuration(v)}
                 style={presetBtn(durationMinutes === v)}
               >
                 {v === null ? "—" : fmtDur(v)}
               </button>
             ))}
-            <input
-              type="time"
-              value={durationMinutes != null && durationMinutes > 0 ? toHHMM(durationMinutes) : ""}
-              onChange={(e) => applyMinutes(e.target.value, onChangeDuration)}
-              style={numInputStyle}
-              title="Своё значение — системные часы (01:30 = 90 мин)"
-            />
+            {durationSel(durationMinutes ?? null, onChangeDuration, 12)}
           </div>
         </div>
       )}
       {isTouch && (
         <button
+          type="button"
           onClick={() => setEditing(false)}
           style={submitStyle}
           title="Закрыть"
@@ -170,6 +201,7 @@ export function TimePicker({
   return (
     <div style={pickerStyle}>
       <button
+        type="button"
         onClick={() => setEditing((v) => !v)}
         style={{
           ...badgeStyle(value !== null, large, compact),
@@ -265,10 +297,11 @@ const timeInputStyle: React.CSSProperties = {
   border: `1px solid ${COLORS.cardBorder}`, borderRadius: "var(--radius-sm)",
   background: "transparent", color: COLORS.text, outline: "none",
 };
-const numInputStyle: React.CSSProperties = {
-  width: 84, fontSize: "var(--fs-2xs)", padding: "3px 6px",
+const selStyle: React.CSSProperties = {
+  fontSize: "var(--fs-2xs)", padding: "3px 4px",
   border: `1px solid ${COLORS.cardBorder}`, borderRadius: "var(--radius-sm)",
   background: "transparent", color: COLORS.text, outline: "none",
+  maxWidth: 84,
 };
 const submitStyle: React.CSSProperties = {
   display: "block", width: "100%", marginTop: "var(--sp-3)",

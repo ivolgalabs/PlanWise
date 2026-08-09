@@ -26,6 +26,8 @@ pub struct Task {
     pub duration_minutes: Option<i32>, // сколько длится выполнение (мин)
     #[serde(default)]
     pub difficulty: i32, // «класс» задачи: 0=не задана, 1=лёгкая, 2=средняя, 3=сложная
+    #[serde(default)]
+    pub notify_minutes: Option<i32>, // своё уведомление: NULL=по умолчанию, 0=нет, N=за N мин
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

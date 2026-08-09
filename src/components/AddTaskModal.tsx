@@ -1,9 +1,11 @@
 import { useState } from "react";
+import type { Task } from "../api";
 import { api, toEpochDay } from "../api";
 import { useStore } from "../store";
 import { COLORS, argbToHex } from "../theme";
 import { TimePicker } from "./TimePicker";
 import { Icon } from "./Icon";
+import { ConfirmDialog } from "./ConfirmDialog";
 
 /** Уровни приоритета: 0 = не задан, 1 = низкий, 2 = средний, 3 = высокий. */
 const PRIO = [
@@ -13,30 +15,62 @@ const PRIO = [
   { v: 3, label: "высокий", color: "#e05252" },
 ];
 
+/** Варианты «Уведомить»: по умолчанию (глобальные интервалы настроек),
+ *  не уведомлять или своё значение за N минут до начала. */
+const NOTIFY_OPTS: { v: number | null; label: string }[] = [
+  { v: null, label: "По умолчанию (из настроек)" },
+  { v: 0, label: "Не уведомлять" },
+  { v: 5, label: "За 5 минут" },
+  { v: 15, label: "За 15 минут" },
+  { v: 30, label: "За 30 минут" },
+  { v: 60, label: "За 1 час" },
+  { v: 120, label: "За 2 часа" },
+  { v: 180, label: "За 3 часа" },
+  { v: 1440, label: "За 1 день" },
+];
+
 interface FieldsProps {
-  /** День, на который добавляется задача. */
+  /** День, на который добавляется задача (для создания) или день задачи. */
   day: Date;
-  /** Вызывается после успешного добавления (родитель решает — закрыть). */
+  /** Вызывается после успешного сохранения (родитель решает — закрыть). */
   onAdded: () => void;
   onCancel: () => void;
   /** Автофокус на поле названия (в модалке дня удобно, в месяце — нет). */
   autoFocus?: boolean;
+  /** Редактирование существующей задачи: поля заполняются из неё,
+   *  «Добавить» становится «Сохранить», появляется «Удалить». */
+  initial?: Task;
+  /** Перечитать список задач после сохранения/удаления. */
+  onChange?: () => void;
 }
 
 /**
  * Поля формы «Новая задача» (без оверлея): название, время (системные часы +
- * пресеты), приоритет, длительность/выезд (системные часы), категория.
- * Ошибка «время занято» от Rust показывается в форме, окно не закрывается.
- * Переиспользуется в модалке дня/недели и в окне месяца (там своя карточка).
+ * пресеты), приоритет, длительность/выезд (системные селекты ч/мин),
+ * уведомление, категория, заметка. Ошибка «время занято» от Rust показывается
+ * в форме, окно не закрывается. Переиспользуется в модалке дня/недели,
+ * в окне месяца и в карточке задачи (initial — редактирование).
  */
-export function TaskFormFields({ day, onAdded, onCancel, autoFocus = false }: FieldsProps) {
-  const [title, setTitle] = useState("");
-  const [time, setTime] = useState<number | null>(null);
-  const [priority, setPriority] = useState(0);
-  const [duration, setDuration] = useState<number | null>(null);
-  const [travel, setTravel] = useState<number | null>(null);
-  const [color, setColor] = useState<string | null>(null);
+export function TaskFormFields({
+  day,
+  onAdded,
+  onCancel,
+  autoFocus = false,
+  initial,
+  onChange,
+}: FieldsProps) {
+  const editing = initial !== undefined;
+  const [title, setTitle] = useState(initial?.title ?? "");
+  const [time, setTime] = useState<number | null>(initial?.timeMinutes ?? null);
+  const [priority, setPriority] = useState(initial?.difficulty ?? 0);
+  const [duration, setDuration] = useState<number | null>(initial?.durationMinutes ?? null);
+  const [travel, setTravel] = useState<number | null>(initial?.travelTime ?? null);
+  const [color, setColor] = useState<string | null>(initial?.colorSetId ?? null);
+  const [notes, setNotes] = useState(initial?.notes ?? "");
+  // null = по умолчанию (из настроек); select хранит -1 вместо null.
+  const [notify, setNotify] = useState<number | null>(initial?.notifyMinutes ?? null);
   const [error, setError] = useState("");
+  const [confirmDel, setConfirmDel] = useState(false);
   const { colorSets } = useStore();
   const sets = colorSets.filter((s) => s.id !== "cs-none");
 
@@ -45,22 +79,37 @@ export function TaskFormFields({ day, onAdded, onCancel, autoFocus = false }: Fi
     const t = title.trim();
     if (!t) return;
     setError("");
+    const payload = {
+      title: t,
+      timeMinutes: time,
+      difficulty: priority,
+      durationMinutes: duration,
+      travelTime: travel,
+      colorSetId: color,
+      notes,
+      notifyMinutes: notify,
+    };
     try {
-      await api.upsertTask({
-        title: t,
-        date: toEpochDay(day),
-        timeMinutes: time,
-        difficulty: priority,
-        durationMinutes: duration,
-        travelTime: travel,
-        colorSetId: color,
-      });
+      if (editing && initial) {
+        await api.upsertTask({ ...initial, ...payload });
+        onChange?.();
+      } else {
+        await api.upsertTask({ ...payload, date: toEpochDay(day) });
+      }
       onAdded();
     } catch (err) {
       // Rust не дал сохранить (время занято другой задачей) — показываем
       // сообщение, форма остаётся открытой.
-      setError(typeof err === "string" ? err : "Не удалось добавить задачу");
+      setError(typeof err === "string" ? err : "Не удалось сохранить задачу");
     }
+  };
+
+  const del = async () => {
+    if (!initial) return;
+    setConfirmDel(false);
+    await api.deleteTask(initial.id);
+    onChange?.();
+    onAdded();
   };
 
   const fieldRow: React.CSSProperties = {
@@ -97,7 +146,7 @@ export function TaskFormFields({ day, onAdded, onCancel, autoFocus = false }: Fi
         }}
       />
 
-      {/* Время + длительность + выезд — одним пикером (системные часы). */}
+      {/* Время + длительность + выезд — одним пикером (системные часы/селекты). */}
       <div style={fieldRow}>
         <span style={labelStyle}>Время</span>
         <TimePicker
@@ -147,6 +196,35 @@ export function TaskFormFields({ day, onAdded, onCancel, autoFocus = false }: Fi
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Своё уведомление задачи: по умолчанию / не уведомлять / за N минут.
+          Подзадачи наследуют уведомление своей задачи. */}
+      <div style={fieldRow}>
+        <span style={labelStyle}>Уведомить</span>
+        <select
+          value={notify ?? -1}
+          onChange={(e) => {
+            const v = Number(e.target.value);
+            setNotify(v < 0 ? null : v);
+          }}
+          style={{
+            fontSize: "var(--fs-sm)",
+            padding: "6px 8px",
+            border: `1px solid ${COLORS.cardBorder}`,
+            borderRadius: "var(--radius-md)",
+            background: "transparent",
+            color: COLORS.text,
+            outline: "none",
+            maxWidth: "100%",
+          }}
+        >
+          {NOTIFY_OPTS.map((o) => (
+            <option key={o.v ?? -1} value={o.v ?? -1}>
+              {o.label}
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* Категория — свотчи с подписями (как в месяце). */}
@@ -213,6 +291,29 @@ export function TaskFormFields({ day, onAdded, onCancel, autoFocus = false }: Fi
         ))}
       </div>
 
+      {/* Заметка к задаче (сворачивается; автосохранение при сохранении). */}
+      <div style={fieldRow}>
+        <span style={labelStyle}>Заметка</span>
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="Заметка…"
+          rows={2}
+          style={{
+            flex: 1,
+            minWidth: 180,
+            fontSize: "var(--fs-sm)",
+            border: `1px solid ${COLORS.cardBorder}`,
+            borderRadius: "var(--radius-md)",
+            padding: "6px 10px",
+            background: "transparent",
+            color: COLORS.text,
+            outline: "none",
+            resize: "vertical",
+          }}
+        />
+      </div>
+
       {error && (
         <div
           style={{
@@ -226,6 +327,26 @@ export function TaskFormFields({ day, onAdded, onCancel, autoFocus = false }: Fi
       )}
 
       <div style={{ display: "flex", gap: "var(--sp-2)" }}>
+        {editing && (
+          <button
+            type="button"
+            className="modal-action-btn"
+            onClick={() => setConfirmDel(true)}
+            title="Удалить задачу"
+            style={{
+              flexShrink: 0,
+              padding: "var(--sp-3) var(--sp-4)",
+              cursor: "pointer",
+              fontSize: "var(--fs-sm)",
+              borderRadius: "var(--radius-md)",
+              border: `1px solid rgba(224,82,82,0.6)`,
+              background: "transparent",
+              color: "#e05252",
+            }}
+          >
+            <Icon name="close" size={13} /> Удалить
+          </button>
+        )}
         <button
           type="submit"
           className="modal-action-btn"
@@ -240,7 +361,7 @@ export function TaskFormFields({ day, onAdded, onCancel, autoFocus = false }: Fi
             color: "#fff",
           }}
         >
-          Добавить
+          {editing ? "Сохранить" : "Добавить"}
         </button>
         <button
           type="button"
@@ -260,20 +381,34 @@ export function TaskFormFields({ day, onAdded, onCancel, autoFocus = false }: Fi
           Отмена
         </button>
       </div>
+
+      {confirmDel && (
+        <ConfirmDialog
+          title={`Удалить задачу «${title.trim() || "без названия"}»?`}
+          confirmLabel="Удалить"
+          onConfirm={del}
+          onCancel={() => setConfirmDel(false)}
+        />
+      )}
     </form>
   );
 }
 
-/** Модалка «Новая задача» — оверлей + форма (день/неделя). */
+/** Модалка «Новая задача» — оверлей + форма (день/неделя). При initial —
+ *  карточка задачи (редактирование): открывается по нажатию на задачу. */
 export function AddTaskModal({
   day,
   onClose,
   onChange,
+  initial,
 }: {
   day: Date;
   onClose: () => void;
   onChange: () => void;
+  /** Редактирование существующей задачи (карточка). */
+  initial?: Task;
 }) {
+  const editing = initial !== undefined;
   return (
     <div
       onClick={onClose}
@@ -312,15 +447,23 @@ export function AddTaskModal({
             textTransform: "capitalize",
           }}
         >
-          {day.toLocaleDateString("ru", {
-            day: "numeric",
-            month: "long",
-            weekday: "long",
-          })}
+          {editing
+            ? day.toLocaleDateString("ru", {
+                day: "numeric",
+                month: "long",
+                weekday: "long",
+              })
+            : day.toLocaleDateString("ru", {
+                day: "numeric",
+                month: "long",
+                weekday: "long",
+              })}
         </div>
         <TaskFormFields
           day={day}
-          autoFocus
+          initial={initial}
+          autoFocus={!editing}
+          onChange={onChange}
           onAdded={() => {
             onChange();
             onClose();
