@@ -19,6 +19,8 @@ export interface Task {
   travelTime?: number | null;
   /** Длительность выполнения в минутах (показ «09:00–10:30»). */
   durationMinutes?: number | null;
+  /** Сложность («класс» задачи): 0=не задана, 1=лёгкая, 2=средняя, 3=сложная. */
+  difficulty?: number;
 }
 
 export interface ColorSet {
@@ -72,6 +74,7 @@ export const api = {
       archived: task.archived ?? false,
       travelTime: task.travelTime ?? null,
       durationMinutes: task.durationMinutes ?? null,
+      difficulty: task.difficulty ?? 0,
     };
     return isTauri() ? invoke<Task>("upsert_task", { task: t }) : browserApi.upsertTask(t);
   },
@@ -110,4 +113,10 @@ export const api = {
     return isTauri() ? invoke<Subtask>("upsert_subtask", { sub: s }) : browserApi.upsertSubtask(s);
   },
   deleteSubtask: (id: string) => (isTauri() ? invoke<void>("delete_subtask", { id }) : browserApi.deleteSubtask(id)),
+  /** Настройка приложения из таблицы settings (key/value в SQLite). */
+  getSetting: (key: string) =>
+    isTauri() ? invoke<string | null>("get_setting", { key }) : browserApi.getSetting(key),
+  /** Сохранить настройку приложения в таблицу settings. */
+  setSetting: (key: string, value: string) =>
+    isTauri() ? invoke<void>("set_setting", { key, value }) : browserApi.setSetting(key, value),
 };

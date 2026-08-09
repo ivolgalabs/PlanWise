@@ -24,6 +24,8 @@ pub struct Task {
     pub travel_time: Option<i32>, // минуты на дорогу (выехать заранее)
     #[serde(default)]
     pub duration_minutes: Option<i32>, // сколько длится выполнение (мин)
+    #[serde(default)]
+    pub difficulty: i32, // «класс» задачи: 0=не задана, 1=лёгкая, 2=средняя, 3=сложная
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -7,8 +7,8 @@ import { SomedayColumn } from "../components/SomedayColumn";
 import { ArchivePanel } from "../components/ArchivePanel";
 import { COLORS, accentTint } from "../theme";
 import { dayId } from "../drag";
-import { isToday } from "../date";
-import { useStore } from "../store";
+import { isToday, sortTasksByMode, formatMinutes } from "../date";
+import { useStore, type TaskPattern } from "../store";
 
 interface Props {
   day: Date;
@@ -38,19 +38,18 @@ export function DayView({ day, tasks, archivedTasks, onChange }: Props) {
     return () => mq.removeEventListener("change", handler);
   }, []);
 
-  const dayTasks = tasks
-    .filter((t) => {
+  const { sortMode } = useStore();
+  const dayTasks = sortTasksByMode(
+    tasks.filter((t) => {
       const d = fromEpochDay(t.date);
       return (
         d.getFullYear() === day.getFullYear() &&
         d.getMonth() === day.getMonth() &&
         d.getDate() === day.getDate()
       );
-    })
-    .sort((a, b) => {
-      // Порядок — только ручной (sortOrder); время не сортирует.
-      return a.sortOrder - b.sortOrder;
-    });
+    }),
+    sortMode,
+  );
 
   const epochDay = Math.floor(
     Date.UTC(day.getFullYear(), day.getMonth(), day.getDate()) / 86_400_000,
@@ -177,8 +176,22 @@ function DayTasksArea({
   const dayKey = `${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`;
   // На мобильном правая панель скрыта — «Когда-нибудь» и «Архив» показываем
   // здесь, внизу дня (раскрытие архива — по кнопке, чтобы не раздувать день).
-  const { visibility } = useStore();
+  const { visibility, taskPatterns } = useStore();
   const [archiveOpen, setArchiveOpen] = useState(false);
+  // Шаблон задач: кнопка создаёт задачу на этот день с параметрами шаблона.
+  const addPattern = async (p: TaskPattern) => {
+    const ed = Math.floor(
+      Date.UTC(day.getFullYear(), day.getMonth(), day.getDate()) / 86_400_000,
+    );
+    await api.upsertTask({
+      title: p.title,
+      date: ed,
+      timeMinutes: p.timeMinutes,
+      difficulty: p.difficulty,
+      durationMinutes: p.durationMinutes,
+    });
+    onChange();
+  };
   return (
     <div
       data-day-key={dayKey}
@@ -255,6 +268,30 @@ function DayTasksArea({
           }}
         />
       </form>
+
+      {/* Быстрые шаблоны задач (настраиваются в настройках) — кнопка создаёт
+          задачу с готовыми временем/сложностью/длительностью. */}
+      {taskPatterns.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-2)", padding: "var(--sp-1) var(--sp-2)" }}>
+          <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted, alignSelf: "center" }}>
+            + Шаблон
+          </span>
+          {taskPatterns.map((p) => (
+            <button
+              key={p.id}
+              className="text-chip"
+              onClick={() => addPattern(p)}
+              title={
+                p.timeMinutes != null
+                  ? `${formatMinutes(p.timeMinutes)} · ${p.durationMinutes ? `${p.durationMinutes} мин` : "без длительности"}`
+                  : "в течение дня"
+              }
+            >
+              {p.title}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Мобильный доступ к «Когда-нибудь» и «Архиву»: правая панель на узком
           экране скрыта, поэтому секции дублируются здесь, внизу дня.

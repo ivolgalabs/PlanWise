@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Task } from "../api";
 import { fromEpochDay } from "../api";
-import { weekDays, isSameDay } from "../date";
+import { weekDays, isSameDay, sortTasksByMode } from "../date";
 import { DayColumn } from "../components/DayColumn";
 import { WeekShiftZone } from "../components/WeekShiftZone";
 import { WeekViewVertical } from "./WeekViewVertical";
@@ -21,7 +21,7 @@ interface Props {
  * Панель и drag-контекст — на уровне App; здесь только сетка дней.
  */
 export function WeekView({ tasks, archivedTasks, onChange }: Props) {
-  const { selectedDate, weekDate, setWeekDate, mondayFirst, weekVertical } = useStore();
+  const { selectedDate, weekDate, setWeekDate, mondayFirst, weekVertical, sortMode } = useStore();
   // Якорь недели: фиксируем при первом открытии вида (позже клики в «Дне»
   // не будут двигать неделю — см. store.ts weekDate).
   useEffect(() => {
@@ -45,7 +45,7 @@ export function WeekView({ tasks, archivedTasks, onChange }: Props) {
   const effectiveVertical = weekVertical || narrow;
 
   const tasksForDay = (d: Date) =>
-    tasks.filter((t) => isSameDay(fromEpochDay(t.date), d));
+    sortTasksByMode(tasks.filter((t) => isSameDay(fromEpochDay(t.date), d)), sortMode);
 
   return (
     // flex:1 вместо height:100% — см. DayView (zoom-совместимость).

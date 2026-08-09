@@ -5,6 +5,19 @@ import type { CustomSlot, ThemePreset } from "./theme";
 
 export type ViewKind = "day" | "week" | "month";
 export type ThemeMode = "light" | "dark" | "system";
+/** Режим сортировки задач внутри дня/недели/месяца. */
+export type SortMode = "time" | "manual" | "difficulty";
+
+/** Шаблон быстрой задачи: кнопка «+ Шаблон» в дне/неделе создаёт задачу
+ *  с этими параметрами. Хранится в настройках (persist). */
+export interface TaskPattern {
+  id: string;
+  title: string;
+  timeMinutes: number | null;
+  /** Сложность: 0=не задана, 1=лёгкая, 2=средняя, 3=сложная. */
+  difficulty: number;
+  durationMinutes: number | null;
+}
 
 /** Флаги видимости элементов интерфейса (настройки → «Интерфейс»). */
 export interface VisibilityState {
@@ -72,6 +85,17 @@ interface PlannerState {
    *  массив: можно выбрать сразу несколько интервалов). */
   notifyReminders: boolean;
   notifyRemindMinutes: number[];
+  /** Быстрые пресеты времени (минуты с 00:00) — кнопки в выборе времени.
+   *  Пользователь настраивает свой список в настройках. */
+  timePresets: number[];
+  /** Шаблоны быстрых задач — кнопки «+ Шаблон» в дне/неделе. */
+  taskPatterns: TaskPattern[];
+  /** Сортировка задач в дне/неделе/месяце: time — по времени, manual —
+   *  ручной порядок (sortOrder), difficulty — лёгкие сначала. */
+  sortMode: SortMode;
+  /** Запрещать создание задачи на время, занятое другой задачей
+   *  (настройка хранится в БД, см. get_settings/set_settings). */
+  preventOverlaps: boolean;
   setSelectedDate: (d: Date) => void;
   setWeekDate: (d: Date) => void;
   setMonthDate: (d: Date) => void;
@@ -99,6 +123,12 @@ interface PlannerState {
   setNotifyReminders: (v: boolean) => void;
   /** Переключить интервал напоминания (добавить/убрать из массива). */
   setNotifyRemindMinutes: (v: number) => void;
+  /** Добавить/убрать быстрый пресет времени (минуты). */
+  toggleTimePreset: (m: number) => void;
+  /** Заменить весь список шаблонов задач. */
+  setTaskPatterns: (p: TaskPattern[]) => void;
+  setSortMode: (m: SortMode) => void;
+  setPreventOverlaps: (v: boolean) => void;
 }
 
 export const useStore = create<PlannerState>()(
@@ -132,6 +162,10 @@ export const useStore = create<PlannerState>()(
       notifyDayHour: 8,
       notifyReminders: true,
       notifyRemindMinutes: [60],
+      timePresets: [9 * 60, 12 * 60, 15 * 60, 18 * 60, 21 * 60],
+      taskPatterns: [],
+      sortMode: "time",
+      preventOverlaps: true,
       setSelectedDate: (d) => set({ selectedDate: d }),
       setWeekDate: (d) => set({ weekDate: d }),
       setMonthDate: (d) => set({ monthDate: d }),
@@ -164,6 +198,15 @@ export const useStore = create<PlannerState>()(
             ? s.notifyRemindMinutes.filter((x) => x !== v)
             : [...s.notifyRemindMinutes, v],
         })),
+      toggleTimePreset: (m) =>
+        set((s) => ({
+          timePresets: s.timePresets.includes(m)
+            ? s.timePresets.filter((x) => x !== m)
+            : [...s.timePresets, m].sort((a, b) => a - b),
+        })),
+      setTaskPatterns: (p) => set({ taskPatterns: p }),
+      setSortMode: (m) => set({ sortMode: m }),
+      setPreventOverlaps: (v) => set({ preventOverlaps: v }),
     }),
     {
       name: "todo-settings",
@@ -188,18 +231,38 @@ export const useStore = create<PlannerState>()(
         notifyDayHour: s.notifyDayHour,
         notifyReminders: s.notifyReminders,
         notifyRemindMinutes: s.notifyRemindMinutes,
+        timePresets: s.timePresets,
+        taskPatterns: s.taskPatterns,
+        sortMode: s.sortMode,
       }),
       // Дефолтный shallow-merge zustand заменяет visibility целиком —
       // новые флаги (например, notes) терялись бы у старых установок.
-      // Мёржим visibility поверх дефолта.
-      merge: (persisted, current) => ({
-        ...current,
-        ...(persisted as Partial<PlannerState>),
-        visibility: {
-          ...current.visibility,
-          ...((persisted as Partial<PlannerState>)?.visibility ?? {}),
-        },
-      }),
+      // Мёржим visibility поверх дефолта + нормализуем старые форматы.
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Partial<PlannerState>;
+        // Старые настройки хранили notifyRemindMinutes ЧИСЛОМ (одно значение);
+        // теперь это массив — превращаем, иначе рендер настроек падает
+        // (T.includes is not a function → белый экран при открытии).
+        const rmm = Array.isArray(p.notifyRemindMinutes)
+          ? p.notifyRemindMinutes
+          : typeof p.notifyRemindMinutes === "number"
+            ? [p.notifyRemindMinutes]
+            : current.notifyRemindMinutes;
+        // Аналогично: время-пресеты и шаблоны должны быть массивами.
+        const tp = Array.isArray(p.timePresets) ? p.timePresets : current.timePresets;
+        const pats = Array.isArray(p.taskPatterns) ? p.taskPatterns : current.taskPatterns;
+        return {
+          ...current,
+          ...p,
+          notifyRemindMinutes: rmm,
+          timePresets: tp,
+          taskPatterns: pats,
+          visibility: {
+            ...current.visibility,
+            ...((p.visibility ?? {}) as Partial<VisibilityState>),
+          },
+        };
+      },
     },
   ),
 );

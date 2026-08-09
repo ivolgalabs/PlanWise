@@ -13,7 +13,7 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_notification::init())
         .setup(|app| {
-            let conn = db::init(&app.handle());
+            let conn = db::init(app.handle());
             app.manage(Db(conn));
             // Планировщик уведомлений: утренний список задач на день и
             // напоминания за N минут до задач со временем. Пересчитывает
@@ -39,7 +39,6 @@ pub fn run() {
             commands::delete_subtask,
             commands::exit_app,
             commands::export_to,
-
             // Экспорт/импорт через JSON-строку: файловый ввод-вывод делает
             // tauri-plugin-fs (на Android умеет content:// из системных
             // диалогов, где std::fs не работает).
@@ -48,6 +47,9 @@ pub fn run() {
             // Настройки уведомлений + ручное перепланирование.
             commands::set_notification_prefs,
             commands::write_widget_data,
+            // Настройки приложения (key/value) — в т.ч. запрет наложений.
+            commands::get_setting,
+            commands::set_setting,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

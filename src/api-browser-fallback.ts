@@ -117,4 +117,10 @@ export const browserApi = {
   async deleteSubtask(id: string): Promise<void> {
     save(K.subs, load<Subtask>(K.subs).filter((s) => s.id !== id));
   },
+  async getSetting(key: string): Promise<string | null> {
+    return localStorage.getItem(`fb:setting:${key}`);
+  },
+  async setSetting(key: string, value: string): Promise<void> {
+    localStorage.setItem(`fb:setting:${key}`, value);
+  },
 };

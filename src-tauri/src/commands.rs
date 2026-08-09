@@ -20,7 +20,7 @@ pub fn get_tasks(state: State<'_, Db>, start_day: i64, end_day: i64) -> Vec<Task
     let conn = state.0.lock().unwrap();
     let mut stmt = conn
         .prepare(
-            "SELECT id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes, someday, archived, travel_time, duration_minutes
+            "SELECT id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes, someday, archived, travel_time, duration_minutes, difficulty
              FROM tasks WHERE date BETWEEN ?1 AND ?2 AND someday = 0 AND archived = 0
              ORDER BY sort_order ASC",
         )
@@ -42,6 +42,7 @@ pub fn get_tasks(state: State<'_, Db>, start_day: i64, end_day: i64) -> Vec<Task
             archived: row.get::<_, i64>(12)? != 0,
             travel_time: row.get(13)?,
             duration_minutes: row.get(14)?,
+            difficulty: row.get(15)?,
         })
     })
     .expect("query get_tasks")
@@ -50,7 +51,38 @@ pub fn get_tasks(state: State<'_, Db>, start_day: i64, end_day: i64) -> Vec<Task
 }
 
 #[tauri::command]
-pub fn upsert_task(state: State<'_, Db>, mut task: Task) -> Task {
+pub fn upsert_task(state: State<'_, Db>, mut task: Task) -> Result<Task, String> {
+    {
+        let conn = state.0.lock().unwrap();
+        // Правка текста/заметки существующей задачи — время не меняется:
+        // такое пересохранение не проверяем (иначе старые конфликты не дали
+        // бы редактировать текст, а свои же конфликтные задачи не исправить).
+        let same_as_db: bool = conn
+            .query_row(
+                "SELECT time_minutes, duration_minutes, date FROM tasks WHERE id = ?1",
+                [&task.id],
+                |r| {
+                    Ok((
+                        r.get::<_, Option<i64>>(0)?,
+                        r.get::<_, Option<i64>>(1)?,
+                        r.get::<_, i64>(2)?,
+                    ))
+                },
+            )
+            .map(|(tm, dur, date)| {
+                tm == task.time_minutes.map(|v| v as i64)
+                    && dur == task.duration_minutes.map(|v| v as i64)
+                    && date == task.date
+            })
+            .unwrap_or(false); // id нет в БД — это новая задача, проверяем
+        if !same_as_db {
+            // Запрет наложений: если настройка включена, не даём сохранить
+            // задачу на время, пересекающееся с другой задачей того же дня.
+            // Проверка на сервере — все пути сохранения (ввод, шаблоны,
+            // импорт) проходят сюда.
+            check_time_overlap(&conn, &task)?;
+        }
+    }
     let conn = state.0.lock().unwrap();
     if task.id.is_empty() {
         task.id = Uuid::new_v4().to_string();
@@ -60,15 +92,16 @@ pub fn upsert_task(state: State<'_, Db>, mut task: Task) -> Task {
     }
     task.updated_at = now_ms();
     conn.execute(
-        "INSERT INTO tasks (id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes, someday, archived, travel_time, duration_minutes)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
+        "INSERT INTO tasks (id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes, someday, archived, travel_time, duration_minutes, difficulty)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)
          ON CONFLICT(id) DO UPDATE SET
            title=excluded.title, date=excluded.date, is_done=excluded.is_done,
            color_set_id=excluded.color_set_id, sort_order=excluded.sort_order,
            updated_at=excluded.updated_at, device_id=excluded.device_id,
            time_minutes=excluded.time_minutes, notes=excluded.notes,
            someday=excluded.someday, archived=excluded.archived,
-           travel_time=excluded.travel_time, duration_minutes=excluded.duration_minutes",
+           travel_time=excluded.travel_time, duration_minutes=excluded.duration_minutes,
+           difficulty=excluded.difficulty",
         rusqlite::params![
             task.id,
             task.title,
@@ -85,10 +118,71 @@ pub fn upsert_task(state: State<'_, Db>, mut task: Task) -> Task {
             task.archived as i64,
             task.travel_time,
             task.duration_minutes,
+            task.difficulty,
         ],
     )
-    .expect("upsert_task execute");
-    task
+    .map_err(|e| e.to_string())?;
+    Ok(task)
+}
+
+/// Проверка пересечения времени с другими задачами дня (настройка
+/// «запрещать наложения» в таблице settings, ключ prevent_overlaps).
+/// Интервал задачи — [start, start+duration); без длительности занимает
+/// одну минуту (мгновение) — две задачи «в одно время» конфликтуют,
+/// а «встык» (12:00–13:00 и 13:00–14:00) — нет.
+fn check_time_overlap(conn: &rusqlite::Connection, task: &Task) -> Result<(), String> {
+    let Some(start) = task.time_minutes else {
+        return Ok(()); // «в течение дня» — конфликтов не бывает
+    };
+    if task.someday || task.archived || task.is_done {
+        return Ok(());
+    }
+    let prevent: bool = conn
+        .query_row(
+            "SELECT value FROM settings WHERE key = 'prevent_overlaps'",
+            [],
+            |r| r.get::<_, String>(0),
+        )
+        .map(|v| v == "1")
+        .unwrap_or(true); // дефолт — запрещать
+    if !prevent {
+        return Ok(());
+    }
+    let start = start as i64;
+    let end = start + (task.duration_minutes.unwrap_or(0).max(1)) as i64;
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, title, time_minutes, duration_minutes FROM tasks
+             WHERE date = ?1 AND id != ?2 AND is_done = 0 AND archived = 0
+               AND someday = 0 AND time_minutes IS NOT NULL",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(rusqlite::params![task.date, task.id], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, i64>(2)?,
+                r.get::<_, Option<i64>>(3)?,
+            ))
+        })
+        .map_err(|e| e.to_string())?;
+    for row in rows {
+        let (_id, title, s2, d2) = row.map_err(|e| e.to_string())?;
+        let e2 = s2 + d2.unwrap_or(0).max(1);
+        if start < e2 && s2 < end {
+            // Пересечение — понятное сообщение с диапазоном занятой задачи.
+            let mut span = format!("{:02}:{:02}", s2 / 60, s2 % 60);
+            if let Some(d) = d2 {
+                if d > 0 {
+                    let e2m = (s2 + d) % (24 * 60);
+                    span.push_str(&format!("–{:02}:{:02}", e2m / 60, e2m % 60));
+                }
+            }
+            return Err(format!("Время занято задачей «{}» ({})", title, span));
+        }
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -121,7 +215,7 @@ pub fn get_someday_tasks(state: State<'_, Db>) -> Vec<Task> {
     let conn = state.0.lock().unwrap();
     let mut stmt = conn
         .prepare(
-            "SELECT id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes, someday, archived, travel_time, duration_minutes
+            "SELECT id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes, someday, archived, travel_time, duration_minutes, difficulty
              FROM tasks WHERE someday = 1 AND archived = 0 ORDER BY sort_order ASC, created_at ASC",
         )
         .expect("prepare get_someday_tasks");
@@ -142,6 +236,7 @@ pub fn get_someday_tasks(state: State<'_, Db>) -> Vec<Task> {
             archived: row.get::<_, i64>(12)? != 0,
             travel_time: row.get(13)?,
             duration_minutes: row.get(14)?,
+            difficulty: row.get(15)?,
         })
     })
     .expect("query get_someday_tasks")
@@ -244,7 +339,7 @@ pub fn get_archived_tasks(state: State<'_, Db>) -> Vec<Task> {
     let conn = state.0.lock().unwrap();
     let mut stmt = conn
         .prepare(
-            "SELECT id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes, someday, archived, travel_time, duration_minutes
+            "SELECT id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes, someday, archived, travel_time, duration_minutes, difficulty
              FROM tasks WHERE archived = 1 ORDER BY date DESC, updated_at DESC",
         )
         .expect("prepare get_archived_tasks");
@@ -265,6 +360,7 @@ pub fn get_archived_tasks(state: State<'_, Db>) -> Vec<Task> {
             archived: row.get::<_, i64>(12)? != 0,
             travel_time: row.get(13)?,
             duration_minutes: row.get(14)?,
+            difficulty: row.get(15)?,
         })
     })
     .expect("query get_archived_tasks")
@@ -331,7 +427,12 @@ pub fn upsert_subtask(state: State<'_, Db>, mut sub: Subtask) -> Subtask {
          ON CONFLICT(id) DO UPDATE SET
            title=excluded.title, is_done=excluded.is_done, sort_order=excluded.sort_order",
         rusqlite::params![
-            sub.id, sub.task_id, sub.title, sub.is_done as i64, sub.sort_order, sub.created_at,
+            sub.id,
+            sub.task_id,
+            sub.title,
+            sub.is_done as i64,
+            sub.sort_order,
+            sub.created_at,
         ],
     )
     .expect("upsert_subtask execute");
@@ -381,7 +482,7 @@ pub fn export_json(state: State<'_, Db>) -> Result<String, String> {
     }
     {
         let mut stmt = conn
-            .prepare("SELECT id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes, someday, archived, travel_time, duration_minutes FROM tasks ORDER BY sort_order ASC")
+            .prepare("SELECT id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes, someday, archived, travel_time, duration_minutes, difficulty FROM tasks ORDER BY sort_order ASC")
             .map_err(|e| e.to_string())?;
         let rows = stmt
             .query_map([], |r| {
@@ -401,6 +502,7 @@ pub fn export_json(state: State<'_, Db>) -> Result<String, String> {
                     "archived": r.get::<_, i64>(12)? != 0,
                     "travelTime": r.get::<_, Option<i64>>(13)?,
                     "durationMinutes": r.get::<_, Option<i64>>(14)?,
+                    "difficulty": r.get::<_, i64>(15)?,
                 }))
             })
             .map_err(|e| e.to_string())?;
@@ -451,20 +553,32 @@ pub fn import_json(state: State<'_, Db>, json: String) -> Result<usize, String> 
     if version != 1 {
         return Err("Неподдерживаемая версия бэкапа".to_string());
     }
-    let tasks = v.get("tasks").and_then(|t| t.as_array()).ok_or("Нет массива tasks")?;
+    let tasks = v
+        .get("tasks")
+        .and_then(|t| t.as_array())
+        .ok_or("Нет массива tasks")?;
     // Клонируем в собственные векторы: &Vec::new() не живёт дольше выражения.
-    let sets: Vec<serde_json::Value> =
-        v.get("colorSets").and_then(|t| t.as_array()).cloned().unwrap_or_default();
-    let subs: Vec<serde_json::Value> =
-        v.get("subtasks").and_then(|t| t.as_array()).cloned().unwrap_or_default();
+    let sets: Vec<serde_json::Value> = v
+        .get("colorSets")
+        .and_then(|t| t.as_array())
+        .cloned()
+        .unwrap_or_default();
+    let subs: Vec<serde_json::Value> = v
+        .get("subtasks")
+        .and_then(|t| t.as_array())
+        .cloned()
+        .unwrap_or_default();
 
     // conn — MutexGuard<Connection>, поэтому обычная transaction()
     // (unchecked_transaction не нужен: активных prepared-стейтментов нет).
     let mut conn = state.0.lock().unwrap();
     let tx = conn.transaction().map_err(|e| e.to_string())?;
-    tx.execute("DELETE FROM subtasks", []).map_err(|e| e.to_string())?;
-    tx.execute("DELETE FROM tasks", []).map_err(|e| e.to_string())?;
-    tx.execute("DELETE FROM color_sets", []).map_err(|e| e.to_string())?;
+    tx.execute("DELETE FROM subtasks", [])
+        .map_err(|e| e.to_string())?;
+    tx.execute("DELETE FROM tasks", [])
+        .map_err(|e| e.to_string())?;
+    tx.execute("DELETE FROM color_sets", [])
+        .map_err(|e| e.to_string())?;
 
     for s in sets {
         tx.execute(
@@ -480,8 +594,8 @@ pub fn import_json(state: State<'_, Db>, json: String) -> Result<usize, String> 
     }
     for t in tasks {
         tx.execute(
-            "INSERT INTO tasks (id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes, someday, archived, travel_time, duration_minutes)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
+            "INSERT INTO tasks (id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes, someday, archived, travel_time, duration_minutes, difficulty)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
             rusqlite::params![
                 t.get("id").and_then(|x| x.as_str()).unwrap_or(""),
                 t.get("title").and_then(|x| x.as_str()).unwrap_or(""),
@@ -498,6 +612,7 @@ pub fn import_json(state: State<'_, Db>, json: String) -> Result<usize, String> 
                 t.get("archived").and_then(|x| x.as_bool()).unwrap_or(false) as i64,
                 t.get("travelTime").and_then(|x| x.as_i64()),
                 t.get("durationMinutes").and_then(|x| x.as_i64()),
+                t.get("difficulty").and_then(|x| x.as_i64()).unwrap_or(0),
             ],
         )
         .map_err(|e| e.to_string())?;
@@ -536,10 +651,40 @@ pub fn set_notification_prefs(
     crate::notify::save_prefs(&app, &prefs)
 }
 
+/// Значение настройки приложения из таблицы settings (key/value).
+/// Возвращает None, если ключа нет (фронт применяет свой дефолт).
+#[tauri::command]
+pub fn get_setting(state: State<'_, Db>, key: String) -> Option<String> {
+    let conn = state.0.lock().unwrap();
+    conn.query_row("SELECT value FROM settings WHERE key = ?1", [key], |r| {
+        r.get(0)
+    })
+    .ok()
+}
+
+/// Сохранить настройку приложения в таблицу settings (upsert по ключу).
+#[tauri::command]
+pub fn set_setting(state: State<'_, Db>, key: String, value: String) -> Result<(), String> {
+    let conn = state.0.lock().unwrap();
+    conn.execute(
+        "INSERT INTO settings (key, value) VALUES (?1, ?2)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        rusqlite::params![key, value],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// Записать данные для Android-виджета (задачи на сегодня) в files/widget.json.
-/// Вызывается фронтендом при каждой перезагрузке задач.
+/// Вызывается фронтендом при перезагрузке задач И планировщиком каждый тик —
+/// виджет всегда получает свежие данные, даже если приложение не открывали.
 #[tauri::command]
 pub fn write_widget_data(app: tauri::AppHandle, state: State<'_, Db>) -> Result<(), String> {
+    refresh_widget(&app, &state)
+}
+
+/// Общая логика записи виджет-данных (без State — для вызова из планировщика).
+pub fn refresh_widget(app: &tauri::AppHandle, state: &State<'_, Db>) -> Result<(), String> {
     let conn = state.0.lock().unwrap();
     let today = today_epoch_day();
     let tasks: Vec<serde_json::Value> = {
@@ -560,11 +705,23 @@ pub fn write_widget_data(app: tauri::AppHandle, state: State<'_, Db>) -> Result<
         "date": today,
         "tasks": tasks,
     });
-    let dir = app
+    // На Android каталог data-файлов — data/files; на десктопе dir не меняется.
+    #[cfg_attr(not(target_os = "android"), allow(unused_mut))]
+    let mut dir = app
         .path()
         .app_data_dir()
         .unwrap_or_else(|_| std::path::PathBuf::from("."));
+    // На Android app_data_dir — корень data-каталога, а Kotlin-виджет читает
+    // context.filesDir (= data/files). Пишем туда же, иначе виджет не видит
+    // данные (старый баг «виджет пустой» — пути не совпадали).
+    #[cfg(target_os = "android")]
+    {
+        dir = dir.join("files");
+    }
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    std::fs::write(dir.join("widget.json"), serde_json::to_string(&payload).map_err(|e| e.to_string())?)
-        .map_err(|e| e.to_string())
+    std::fs::write(
+        dir.join("widget.json"),
+        serde_json::to_string(&payload).map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| e.to_string())
 }

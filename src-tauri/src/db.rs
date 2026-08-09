@@ -51,7 +51,10 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("query pragma_table_info");
-        assert!(has_notes, "после миграций у tasks должна быть колонка notes");
+        assert!(
+            has_notes,
+            "после миграций у tasks должна быть колонка notes"
+        );
 
         conn.execute(
             "INSERT INTO tasks (id, title, date, created_at, updated_at, device_id)
@@ -60,7 +63,9 @@ mod tests {
         )
         .expect("insert task");
         let notes: String = conn
-            .query_row("SELECT notes FROM tasks WHERE id = 't1'", [], |row| row.get(0))
+            .query_row("SELECT notes FROM tasks WHERE id = 't1'", [], |row| {
+                row.get(0)
+            })
             .expect("select notes");
         assert_eq!(notes, "", "default notes — пустая строка");
     }
@@ -78,11 +83,9 @@ mod tests {
             .expect("pragma someday");
         assert!(has, "после миграций у tasks должна быть колонка someday");
         let default: i64 = conn
-            .query_row(
-                "SELECT someday FROM tasks WHERE id = 'x'",
-                [],
-                |row| row.get(0),
-            )
+            .query_row("SELECT someday FROM tasks WHERE id = 'x'", [], |row| {
+                row.get(0)
+            })
             .unwrap_or(0);
         assert_eq!(default, 0);
     }
@@ -100,11 +103,9 @@ mod tests {
             .expect("pragma archived");
         assert!(has, "после миграций у tasks должна быть колонка archived");
         let default: i64 = conn
-            .query_row(
-                "SELECT archived FROM tasks WHERE id = 'x'",
-                [],
-                |row| row.get(0),
-            )
+            .query_row("SELECT archived FROM tasks WHERE id = 'x'", [], |row| {
+                row.get(0)
+            })
             .unwrap_or(0);
         assert_eq!(default, 0);
     }

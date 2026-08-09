@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import type { Task } from "../api";
 import { api } from "../api";
@@ -55,7 +55,7 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
   const [moveOpen, setMoveOpen] = useState(false);
   // Подтверждение удаления: по кнопке «Удалить» показываем диалог.
   const [confirmDel, setConfirmDel] = useState(false);
-  const { colorSets, setColorSets, visibility } = useStore();
+  const { colorSets, setColorSets, visibility, tasks: allTasks } = useStore();
   // На тач-устройствах время и кнопки действий собираются в одну строку под
   // текстом задачи (компактно), а не в ряд с текстом.
   const [isTouch, setTouch] = useState(
@@ -131,9 +131,13 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
       return task;
     }
     if (t !== task.title) {
-      const updated = await api.upsertTask({ ...task, title: t });
-      onChange();
-      return updated;
+      try {
+        const updated = await api.upsertTask({ ...task, title: t });
+        onChange();
+        return updated;
+      } catch {
+        return task; // время не меняется — конфликт невозможен; тихо
+      }
     }
     return task;
   };
@@ -206,8 +210,72 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
   // «Время задач» включена.
   const effectiveShowTime = showTime && visibility.taskTime;
 
+  // ── Пересечения по времени ────────────────────────────────────────
+  // Задача «занимает» интервал [start, start+duration); без длительности —
+  // одну минуту (мгновение). Одинаковое время двух задач = наложение.
+  const intervalsOverlap = (m1: number, d1: number, m2: number, d2: number) =>
+    m1 < m2 + Math.max(d2, 1) && m2 < m1 + Math.max(d1, 1);
+  /** Другая задача того же дня, пересекающаяся с временем m (или undefined).
+   *  dur — длительность для проверки (по умолчанию — текущая у задачи). */
+  const findOverlap = (m: number | null, dur?: number | null): Task | undefined => {
+    if (m == null) return undefined;
+    const d1 = dur ?? task.durationMinutes ?? 0;
+    return allTasks.find(
+      (t) =>
+        t.id !== task.id &&
+        !t.isDone &&
+        !t.archived &&
+        !t.someday &&
+        t.date === task.date &&
+        t.timeMinutes != null &&
+        intervalsOverlap(m, d1, t.timeMinutes, t.durationMinutes ?? 0),
+    );
+  };
+  // Подсветка наложений: задача, чьё время пересекается с другой (видны
+  // и старые конфликты, независимо от настройки «запрещать наложения»).
+  const timeConflict =
+    task.timeMinutes != null && !task.isDone && findOverlap(task.timeMinutes) !== undefined;
+  // Диалог «время занято»: Rust-команда вернула ошибку, показываем
+  // конфликтующую задачу и предлагаем добавить текущую как подзадачу.
+  const [conflictDlg, setConflictDlg] = useState<{ task: Task; time: number } | null>(null);
+
+  // ── Сложность («класс» задачи) ────────────────────────────────────
+  const DIFF = useMemo(
+    () => [
+      { label: "", color: "" },
+      { label: "лёгкая", color: "#4caf50" },
+      { label: "средняя", color: "#ffb300" },
+      { label: "сложная", color: "#e05252" },
+    ],
+    [],
+  );
+  const diff = task.difficulty ?? 0;
+  const diffMeta = DIFF[diff] ?? DIFF[0];
+  const cycleDifficulty = async () => {
+    const next = diff >= 3 ? 0 : diff + 1;
+    await api.upsertTask({ ...task, difficulty: next });
+    onChange();
+  };
+
   const setTime = async (m: number | null) => {
-    await api.upsertTask({ ...task, timeMinutes: m });
+    try {
+      await api.upsertTask({ ...task, timeMinutes: m });
+      onChange();
+    } catch {
+      // Rust-команда не дала сохранить: время занято другой задачей
+      // (настройка «запрещать наложения» включена) — показываем диалог.
+      const hit = findOverlap(m);
+      if (hit) setConflictDlg({ task: hit, time: m ?? 0 });
+    }
+  };
+  // «Добавить подзадачей»: подзадача с текущим текстом у конфликтующей
+  // задачи; время у текущей не сохраняется (остаётся «в течение дня»).
+  const addAsSubtask = async () => {
+    if (!conflictDlg) return;
+    const t = title.trim();
+    if (!t) return;
+    await api.upsertSubtask({ taskId: conflictDlg.task.id, title: t });
+    setConflictDlg(null);
     onChange();
   };
   // Актуальные travel/duration — в ref: при быстрых кликах (выезд + длительность
@@ -217,18 +285,39 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
   metaRef.current = { travel: task.travelTime ?? null, duration: task.durationMinutes ?? null };
   const setTravel = async (m: number | null) => {
     metaRef.current = { ...metaRef.current, travel: m };
-    await api.upsertTask({ ...task, travelTime: m, durationMinutes: metaRef.current.duration });
-    onChange();
+    try {
+      await api.upsertTask({ ...task, travelTime: m, durationMinutes: metaRef.current.duration });
+      onChange();
+    } catch {
+      /* время/длительность не меняются — конфликт невозможен; тихо */
+    }
   };
   const setDuration = async (m: number | null) => {
     metaRef.current = { ...metaRef.current, duration: m };
-    await api.upsertTask({ ...task, durationMinutes: m, travelTime: metaRef.current.travel });
-    onChange();
+    try {
+      await api.upsertTask({ ...task, durationMinutes: m, travelTime: metaRef.current.travel });
+      onChange();
+    } catch {
+      // Новый интервал пересекается с другой задачей — показываем диалог.
+      if (task.timeMinutes != null) {
+        const hit = findOverlap(task.timeMinutes, m);
+        if (hit) setConflictDlg({ task: hit, time: task.timeMinutes });
+      }
+    }
   };
 
   // Доп. время: «09:00 – 10:30» (длительность) и «выезд в 08:15» (в пути).
   const fmt = (m: number) =>
     `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+  // Диапазон «12:00–13:00» задачи (для текста конфликт-диалога).
+  const spanOf = (t: Task) => {
+    const s = t.timeMinutes ?? 0;
+    let out = fmt(s);
+    if (t.durationMinutes) {
+      out += `–${fmt((s + t.durationMinutes) % (24 * 60))}`;
+    }
+    return out;
+  };
   const timeMeta: string[] = [];
   if (task.timeMinutes != null && task.durationMinutes) {
     const end = (task.timeMinutes + task.durationMinutes) % (24 * 60);
@@ -270,8 +359,11 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
         alignItems: "center",
         background: "transparent",
         borderRadius: "var(--radius-sm)",
+        // Наложение по времени — красный маркер слева (видно в дне/неделе).
+        boxShadow: timeConflict ? "inset 4px 0 0 0 rgba(224,82,82,0.75)" : undefined,
         ...dragStyle,
       }}
+      title={timeConflict ? "Время пересекается с другой задачей" : undefined}
       {...attributes}
     >
       {/* Ручка перетаскивания: ТОЛЬКО на ней listeners, чтобы клики по
@@ -423,6 +515,25 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
           )}
           {visibility.taskActions && (
             <>
+              {/* Сложность (класс) задачи: клик циклично меняет уровень. */}
+              <button
+                onClick={cycleDifficulty}
+                className="chip-btn"
+                title={
+                  diff
+                    ? `Сложность: ${diffMeta.label}. Нажмите, чтобы изменить`
+                    : "Сложность не задана. Нажмите, чтобы выбрать"
+                }
+                style={{
+                  background: diff ? diffMeta.color : "transparent",
+                  border: diff ? "none" : "1px solid " + COLORS.cardBorder,
+                  color: diff ? "#fff" : COLORS.muted,
+                  minWidth: 22,
+                  fontSize: "var(--fs-2xs)",
+                }}
+              >
+                {diff ? diffMeta.label.charAt(0) : "⌀"}
+              </button>
               <button
                 onClick={() => setColorMenu((v) => !v)}
                 className="chip-btn"
@@ -473,6 +584,34 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
           {/* Кнопки цвета/удаления — скрываются настройкой. */}
           {visibility.taskActions && (
             <div className="task-actions" style={{ display: "flex", gap: "var(--sp-3)" }}>
+              {/* Сложность (класс) задачи: клик циклично меняет уровень. */}
+              <button
+                onClick={cycleDifficulty}
+                className="chip-btn"
+                title={
+                  diff
+                    ? `Сложность: ${diffMeta.label}. Нажмите, чтобы изменить`
+                    : "Сложность не задана. Нажмите, чтобы выбрать"
+                }
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "var(--sp-2)",
+                  color: diff ? diffMeta.color : COLORS.muted,
+                  flexShrink: 0,
+                }}
+              >
+                <span
+                  style={{
+                    width: 9,
+                    height: 9,
+                    borderRadius: "50%",
+                    background: diff ? diffMeta.color : COLORS.muted,
+                    display: "inline-block",
+                  }}
+                />
+                {diff ? diffMeta.label : "класс"}
+              </button>
               <button
                 onClick={() => setColorMenu((v) => !v)}
                 className="chip-btn"
@@ -649,6 +788,77 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
         onConfirm={del}
         onCancel={() => setConfirmDel(false)}
       />
+    )}
+    {/* Диалог «время занято»: запрет наложений не дал сохранить время —
+        предлагаем добавить текущую задачу как подзадачу к конфликтующей. */}
+    {conflictDlg && (
+      <div
+        onClick={() => setConflictDlg(null)}
+        style={{
+          position: "fixed", inset: 0, background: "var(--overlay)", zIndex: 200,
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}
+      >
+        <div
+          onClick={(e) => e.stopPropagation()}
+          role="dialog"
+          aria-modal="true"
+          style={{
+            background: COLORS.card, border: `1px solid ${COLORS.cardBorder}`,
+            borderRadius: "var(--radius-md)", padding: "var(--sp-6)",
+            width: 340, maxWidth: "88vw", boxShadow: "var(--shadow-xl)",
+          }}
+        >
+          <div style={{ fontSize: "var(--fs-md)", fontWeight: 600, color: COLORS.text, marginBottom: "var(--sp-3)" }}>
+            Время {fmt(conflictDlg.time)} занято
+          </div>
+          <div style={{ fontSize: "var(--fs-sm)", color: COLORS.secondary, marginBottom: "var(--sp-5)" }}>
+            Задача «{conflictDlg.task.title}» ({spanOf(conflictDlg.task)}) уже стоит на
+            этом времени. Добавить текущую как подзадачу к ней?
+          </div>
+          {title.trim() ? (
+            <div style={{ display: "flex", gap: "var(--sp-2)" }}>
+              <button
+                className="modal-action-btn"
+                onClick={addAsSubtask}
+                autoFocus
+                style={{
+                  flex: 1, padding: "var(--sp-3) var(--sp-4)", cursor: "pointer",
+                  fontSize: "var(--fs-sm)", borderRadius: "var(--radius-md)",
+                  border: "none", background: COLORS.accent, color: "#fff",
+                }}
+              >
+                Добавить подзадачей
+              </button>
+              <button
+                className="modal-action-btn"
+                onClick={() => setConflictDlg(null)}
+                style={{
+                  flex: 1, padding: "var(--sp-3) var(--sp-4)", cursor: "pointer",
+                  fontSize: "var(--fs-sm)", borderRadius: "var(--radius-md)",
+                  border: `1px solid ${COLORS.cardBorder}`, background: "transparent",
+                  color: COLORS.text,
+                }}
+              >
+                Отмена
+              </button>
+            </div>
+          ) : (
+            <button
+              className="modal-action-btn"
+              onClick={() => setConflictDlg(null)}
+              style={{
+                width: "100%", padding: "var(--sp-3) var(--sp-4)", cursor: "pointer",
+                fontSize: "var(--fs-sm)", borderRadius: "var(--radius-md)",
+                border: `1px solid ${COLORS.cardBorder}`, background: "transparent",
+                color: COLORS.text,
+              }}
+            >
+              Отмена
+            </button>
+          )}
+        </div>
+      </div>
     )}
     </div>
   );

@@ -2,13 +2,13 @@ import { useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import type { Task } from "../api";
 import { api, fromEpochDay } from "../api";
-import { weekDays, isSameDay, isToday, isPast, dayWeight } from "../date";
+import { weekDays, isSameDay, isToday, isPast, dayWeight, sortTasksByMode, formatMinutes } from "../date";
 import { TaskCard } from "../components/TaskCard";
 import { WeekShiftZone } from "../components/WeekShiftZone";
 import { SomedayColumn } from "../components/SomedayColumn";
 import { ArchivePanel } from "../components/ArchivePanel";
 import { COLORS, accentTint } from "../theme";
-import { useStore } from "../store";
+import { useStore, type TaskPattern } from "../store";
 import { dayId } from "../drag";
 
 interface Props {
@@ -27,19 +27,17 @@ interface Props {
  * для перетаскивания задач (@dnd-kit).
  */
 export function WeekViewVertical({ tasks, archivedTasks, narrow, onChange }: Props) {
-  const { selectedDate, mondayFirst, visibility } = useStore();
+  const { selectedDate, mondayFirst, visibility, sortMode } = useStore();
   const [titlesByDay, setTitlesByDay] = useState<Record<string, string>>({});
   const days = weekDays(selectedDate, mondayFirst);
   // Раскрытие архива — по кнопке (как в «Дне»), чтобы не раздувать список.
   const [archiveOpen, setArchiveOpen] = useState(false);
 
   const tasksForDay = (d: Date) =>
-    tasks
-      .filter((t) => isSameDay(fromEpochDay(t.date), d))
-      .sort((a, b) => {
-        // Порядок — только ручной (sortOrder); время не сортирует.
-        return a.sortOrder - b.sortOrder;
-      });
+    sortTasksByMode(
+      tasks.filter((t) => isSameDay(fromEpochDay(t.date), d)),
+      sortMode,
+    );
 
   const dayKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
   const epochDay = (d: Date) =>
@@ -162,7 +160,20 @@ function DayRow({
     Date.UTC(day.getFullYear(), day.getMonth(), day.getDate()) / 86_400_000,
   );
   const { setNodeRef, isOver } = useDroppable({ id: dayId(ed) });
+  const { taskPatterns } = useStore();
   const weekday = day.toLocaleDateString("ru", { weekday: "short" });
+
+  // Шаблон задач: кнопка создаёт задачу на этот день с параметрами шаблона.
+  const addPattern = async (p: TaskPattern) => {
+    await api.upsertTask({
+      title: p.title,
+      date: ed,
+      timeMinutes: p.timeMinutes,
+      difficulty: p.difficulty,
+      durationMinutes: p.durationMinutes,
+    });
+    onChange();
+  };
 
   // Иерархия: past — бледный/компактный, today/tomorrow — крупные.
   const dim = weight === "past" ? 0.4 : weight === "future" ? 0.75 : 1;
@@ -261,8 +272,30 @@ function DayRow({
               color: COLORS.text,
             }}
           />
-        </form>
-      </div>
+          </form>
+          {/* Быстрые шаблоны задач — кнопка создаёт задачу на этот день. */}
+          {taskPatterns.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-1)", padding: "var(--sp-1) var(--sp-1) 0" }}>
+              <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted, alignSelf: "center" }}>
+                + Шаблон
+              </span>
+              {taskPatterns.map((p) => (
+                <button
+                  key={p.id}
+                  className="text-chip"
+                  onClick={() => addPattern(p)}
+                  title={
+                    p.timeMinutes != null
+                      ? `${formatMinutes(p.timeMinutes)} · ${p.durationMinutes ? `${p.durationMinutes} мин` : "без длительности"}`
+                      : "в течение дня"
+                  }
+                >
+                  {p.title}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
     </div>
   );
 }

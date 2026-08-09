@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import type { Task } from "../api";
 import { api, fromEpochDay } from "../api";
-import { startOfWeek, firstOfMonth, isSameDay, isToday, isPast, formatMinutes } from "../date";
+import { startOfWeek, firstOfMonth, isSameDay, isToday, isPast, formatMinutes, sortTasksByMode } from "../date";
 import { COLORS, accentTint, setHex, argbToHex } from "../theme";
 import { useStore } from "../store";
 import { dayId } from "../drag";
@@ -21,7 +21,7 @@ interface Props {
  * Drag задач между днями — через @dnd-kit.
  */
 export function MonthView({ tasks, onSelectDay, onChange }: Props) {
-  const { selectedDate, monthDate, setMonthDate, mondayFirst, colorSets } = useStore();
+  const { selectedDate, monthDate, setMonthDate, mondayFirst, colorSets, sortMode } = useStore();
   // Якорь месяца: фиксируем при первом открытии вида — выбор дня в «Дне»
   // не будет двигать месяц (см. store.ts monthDate).
   useEffect(() => {
@@ -70,7 +70,7 @@ export function MonthView({ tasks, onSelectDay, onChange }: Props) {
   );
 
   const tasksForDay = (d: Date) =>
-    tasks.filter((t) => isSameDay(fromEpochDay(t.date), d));
+    sortTasksByMode(tasks.filter((t) => isSameDay(fromEpochDay(t.date), d)), sortMode);
 
   const weekdays = mondayFirst
     ? ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]

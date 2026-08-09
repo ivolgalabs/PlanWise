@@ -5,6 +5,8 @@ import { api } from "../api";
 import { COLORS, accentTint } from "../theme";
 import { TaskCard } from "./TaskCard";
 import { somedayZoneId } from "../drag";
+import { useStore } from "../store";
+import { sortTasksByMode } from "../date";
 
 interface Props {
   tasks: Task[];
@@ -20,6 +22,11 @@ interface Props {
 export function SomedayColumn({ tasks, onChange, stretch = false }: Props) {
   const [newTitle, setNewTitle] = useState("");
   const { setNodeRef, isOver } = useDroppable({ id: somedayZoneId });
+  const { sortMode } = useStore();
+  // Сортировка «Когда-нибудь» — по тому же режиму, что и дни (время/сложность/
+  // ручной порядок); время здесь обычно не задано, поэтому в основном работает
+  // сортировка по сложности и ручной порядок.
+  const sorted = sortTasksByMode(tasks, sortMode);
 
   const add = async () => {
     const t = newTitle.trim();
@@ -62,7 +69,7 @@ export function SomedayColumn({ tasks, onChange, stretch = false }: Props) {
         </span>
       </div>
       <div style={{ flex: 1, overflowY: "auto", minHeight: 0, padding: 4 }}>
-        {tasks.map((t) => (
+        {sorted.map((t) => (
           <TaskCard key={t.id} task={t} onChange={onChange} showTime={false} />
         ))}
         {tasks.length === 0 && (

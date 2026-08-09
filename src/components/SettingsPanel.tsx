@@ -11,8 +11,9 @@ import {
   applyCustomSlot,
 } from "../theme";
 import type { CustomSlot, ThemePreset } from "../theme";
-import type { ThemeMode, VisibilityState } from "../store";
+import type { ThemeMode, VisibilityState, SortMode, TaskPattern } from "../store";
 import { DEFAULT_VISIBILITY } from "../store";
+import { parseTimeToMinutes, formatMinutes } from "../date";
 import { api, isTauri } from "../api";
 import { Icon, type IconName } from "./Icon";
 import "./SettingsPanel.css";
@@ -110,6 +111,14 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
     setNotifyDayHour,
     setNotifyReminders,
     setNotifyRemindMinutes,
+    timePresets,
+    toggleTimePreset,
+    taskPatterns,
+    setTaskPatterns,
+    sortMode,
+    setSortMode,
+    preventOverlaps,
+    setPreventOverlaps,
   } = useStore();
 
   // ── Черновики категорий для редактирования (служебный cs-none скрыт).
@@ -118,6 +127,69 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
       .filter((s) => s.id !== "cs-none")
       .map((s) => ({ id: s.id, clientKey: crypto.randomUUID(), name: s.name, color: s.color })),
   );
+
+  // ── Черновики шаблонов задач (clientKey — как у категорий: у несохранённых
+  //     id пустой, React-ключ и патчи идут по clientKey).
+  const [patternDrafts, setPatternDrafts] = useState<(TaskPattern & { clientKey: string })[]>(
+    () => taskPatterns.map((p) => ({ ...p, clientKey: crypto.randomUUID() })),
+  );
+  useEffect(() => {
+    // Дозаполняем черновики, если шаблоны пришли позже загрузки настроек.
+    if (patternDrafts.length === 0 && taskPatterns.length > 0) {
+      setPatternDrafts(taskPatterns.map((p) => ({ ...p, clientKey: crypto.randomUUID() })));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taskPatterns]);
+
+  const patchPattern = (clientKey: string, patch: Partial<TaskPattern>) =>
+    setPatternDrafts((ds) =>
+      ds.map((d) => (d.clientKey === clientKey ? { ...d, ...patch } : d)),
+    );
+
+  const addPatternDraft = () =>
+    setPatternDrafts((ds) => [
+      ...ds,
+      { id: "", clientKey: crypto.randomUUID(), title: "Новый шаблон", timeMinutes: null, difficulty: 0, durationMinutes: null },
+    ]);
+
+  const savePatternDraft = (d: TaskPattern & { clientKey: string }) => {
+    const pat: TaskPattern = {
+      id: d.id || crypto.randomUUID(),
+      title: d.title.trim() || "Без названия",
+      timeMinutes: d.timeMinutes,
+      difficulty: d.difficulty,
+      durationMinutes: d.durationMinutes,
+    };
+    setTaskPatterns([...taskPatterns.filter((p) => p.id !== pat.id), pat]);
+    setPatternDrafts((ds) =>
+      ds.map((x) => (x.clientKey === d.clientKey ? { ...x, id: pat.id, title: pat.title } : x)),
+    );
+  };
+
+  const removePatternDraft = (d: TaskPattern & { clientKey: string }) => {
+    setTaskPatterns(taskPatterns.filter((p) => p.id !== d.id));
+    setPatternDrafts((ds) => ds.filter((x) => x.clientKey !== d.clientKey));
+  };
+
+  // Быстрое время: новый пресет из системного input type=time.
+  const [newPreset, setNewPreset] = useState("");
+  const addPreset = () => {
+    const m = parseTimeToMinutes(newPreset);
+    if (m == null) return;
+    toggleTimePreset(m);
+    setNewPreset("");
+  };
+
+  // Запрет наложений хранится в БД (таблица settings) — сервер проверяет
+  // пересечения при каждом сохранении; фронт только переключает настройку.
+  const setPrevent = async (v: boolean) => {
+    setPreventOverlaps(v);
+    try {
+      await api.setSetting("prevent_overlaps", v ? "1" : "0");
+    } catch {
+      /* настройка остаётся в store; сервер вернётся к дефолту (запрещать) */
+    }
+  };
 
   // Доступность «десктопных» элементов сейчас, на этом экране. Пункты
   // настроек показываем, только если соответствующая панель/кнопка реально
@@ -885,6 +957,183 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
               />
               <span>Авто-архив просроченных задач</span>
             </label>
+            <label className="oled-toggle">
+              <input
+                type="checkbox"
+                checked={preventOverlaps}
+                onChange={(e) => setPrevent(e.target.checked)}
+              />
+              <span>Запрещать задачи на одно время</span>
+            </label>
+            <p className="section-hint">
+              Не даёт поставить задачу на время, занятое другой (можно добавить
+              как подзадачу). Наложения у старых задач подсвечиваются красным.
+            </p>
+            <p className="section-hint" style={{ margin: "var(--sp-2) 0 var(--sp-1)" }}>
+              Сортировка задач в дне/неделе/месяце:
+            </p>
+            <div className="theme-status-modes">
+              {(
+                [
+                  ["time", "По времени"],
+                  ["manual", "Вручную"],
+                  ["difficulty", "По сложности"],
+                ] as [SortMode, string][]
+              ).map(([m, label]) => (
+                <button
+                  key={m}
+                  className={`theme-status-mode-btn ${sortMode === m ? "active" : ""}`}
+                  onClick={() => setSortMode(m)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p className="section-hint">«По сложности» — лёгкие задачи сначала</p>
+          </section>
+
+          {/* ── Быстрое время ── */}
+          <section className="settings-section">
+            <div className="section-head">
+              <div>
+                <h3 className="section-title">Быстрое время</h3>
+                <p className="section-hint">
+                  Кнопки быстрого выбора времени в карточке задачи (свой список)
+                </p>
+              </div>
+            </div>
+            {timePresets.length > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-2)", marginBottom: "var(--sp-2)" }}>
+                {timePresets.map((m) => (
+                  <span key={m} className="preset-chip">
+                    {formatMinutes(m)}
+                    <button
+                      className="preset-chip-x"
+                      onClick={() => toggleTimePreset(m)}
+                      title="Убрать"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            {timePresets.length === 0 && (
+              <p className="section-hint">Список пуст — добавьте свои варианты времени.</p>
+            )}
+            <div style={{ display: "flex", gap: "var(--sp-2)", alignItems: "center" }}>
+              <input
+                type="time"
+                value={newPreset}
+                onChange={(e) => setNewPreset(e.target.value)}
+                style={{
+                  background: "var(--bg-tertiary)",
+                  border: "1px solid var(--border-color)",
+                  borderRadius: 6,
+                  padding: "6px 10px",
+                  color: "var(--text-primary)",
+                  fontSize: "var(--fs-xs)",
+                }}
+                title="Свое время — системные часы"
+              />
+              <button className="preset-btn" onClick={addPreset} title="Добавить время">
+                Добавить
+              </button>
+            </div>
+          </section>
+
+          {/* ── Шаблоны задач ── */}
+          <section className="settings-section">
+            <div className="section-head">
+              <div>
+                <h3 className="section-title">Шаблоны задач</h3>
+                <p className="section-hint">
+                  Кнопка «+ Шаблон» в дне/неделе создаёт задачу с этими параметрами
+                </p>
+              </div>
+              <button
+                className="preset-btn"
+                onClick={addPatternDraft}
+                style={{ display: "inline-flex", alignItems: "center", gap: "var(--sp-3)" }}
+              >
+                <Icon name="plus" size={14} /> Добавить
+              </button>
+            </div>
+            <div className="set-list">
+              {patternDrafts.map((d) => (
+                <div key={d.clientKey} className="set-row" style={{ flexWrap: "wrap" }}>
+                  <input
+                    type="text"
+                    value={d.title}
+                    onChange={(e) => patchPattern(d.clientKey, { title: e.target.value })}
+                    placeholder="Название задачи"
+                    className="set-name"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") savePatternDraft(d);
+                    }}
+                  />
+                  <input
+                    type="time"
+                    value={d.timeMinutes != null ? formatMinutes(d.timeMinutes) ?? "" : ""}
+                    onChange={(e) =>
+                      patchPattern(d.clientKey, { timeMinutes: parseTimeToMinutes(e.target.value) })
+                    }
+                    className="set-name"
+                    style={{ maxWidth: 110 }}
+                    title="Время начала (можно своё, системные часы)"
+                  />
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    max={1440}
+                    step={5}
+                    value={d.durationMinutes ?? ""}
+                    onChange={(e) => {
+                      const n = parseInt(e.target.value, 10);
+                      patchPattern(d.clientKey, {
+                        durationMinutes: Number.isFinite(n) && n > 0 ? n : null,
+                      });
+                    }}
+                    placeholder="мин"
+                    className="set-name"
+                    style={{ maxWidth: 70 }}
+                    title="Длительность, минуты"
+                  />
+                  <select
+                    value={d.difficulty}
+                    onChange={(e) => patchPattern(d.clientKey, { difficulty: parseInt(e.target.value, 10) })}
+                    className="set-name"
+                    style={{ maxWidth: 130, background: "var(--bg-tertiary)" }}
+                    title="Сложность"
+                  >
+                    <option value={0}>Сложность —</option>
+                    <option value={1}>лёгкая</option>
+                    <option value={2}>средняя</option>
+                    <option value={3}>сложная</option>
+                  </select>
+                  <button
+                    className="preset-btn"
+                    onClick={() => savePatternDraft(d)}
+                    title="Сохранить шаблон"
+                    style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                  >
+                    <Icon name="save" size={14} />
+                  </button>
+                  <button
+                    className="preset-btn danger"
+                    onClick={() => removePatternDraft(d)}
+                    title="Удалить шаблон"
+                    style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                  >
+                    <Icon name="close" size={14} />
+                  </button>
+                </div>
+              ))}
+              {patternDrafts.length === 0 && (
+                <p className="section-hint">Шаблонов пока нет — добавьте первый.</p>
+              )}
+            </div>
           </section>
 
           {/* ── Уведомления ── */}

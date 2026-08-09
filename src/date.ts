@@ -88,3 +88,27 @@ export const parseTimeToMinutes = (s: string): number | null => {
   if (h > 23 || min > 59) return null;
   return h * 60 + min;
 };
+
+/** Сортировка задач внутри дня (по выбранному режиму из настроек):
+ *  - "time"       — по времени начала (задачи без времени — вниз);
+ *  - "difficulty" — лёгкие сначала, внутри — по времени;
+ *  - "manual"     — ручной порядок (sortOrder, перетаскиванием).
+ *  Стабильная: при равенстве ключей сохраняется ручной порядок. */
+export const sortTasksByMode = <T extends { timeMinutes?: number | null; difficulty?: number; sortOrder: number }>(
+  tasks: T[],
+  mode: "time" | "manual" | "difficulty",
+): T[] => {
+  const arr = [...tasks];
+  if (mode === "manual") {
+    return arr.sort((a, b) => a.sortOrder - b.sortOrder);
+  }
+  const key = (t: T) => {
+    const time = t.timeMinutes ?? Number.MAX_SAFE_INTEGER;
+    const diff = t.difficulty ?? 0;
+    return mode === "difficulty" ? diff * 1_000_000 + time : time;
+  };
+  return arr.sort((a, b) => {
+    const ka = key(a), kb = key(b);
+    return ka - kb || a.sortOrder - b.sortOrder;
+  });
+};

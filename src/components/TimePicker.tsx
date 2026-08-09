@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { COLORS, accentTint } from "../theme";
 import { formatMinutes } from "../date";
+import { useStore } from "../store";
 import { Icon } from "./Icon";
 
 interface Props {
@@ -20,12 +21,17 @@ interface Props {
   onChangeDuration?: (m: number | null) => void;
 }
 
-const HOURS = Array.from({ length: 24 }, (_, i) => i);
-const MINUTES = Array.from({ length: 12 }, (_, i) => i * 5);
-
-/** Компактный time-picker: «в течение дня» / колёсики ЧЧ:ММ / пресеты.
- *  Вместо текстового ввода — два прокручиваемых списка (колёсика): часы
- *  и минуты, удобно пальцем на мобильном, без клавиатуры. */
+/**
+ * Выбор времени — системными окнами вместо самодельных колёсиков:
+ *  - Время начала: нативный <input type="time"> (на Android открывает системные
+ *    часы, на десктопе — стандартное поле), плюс быстрые пресеты-кнопки.
+ *  - «Выехать заранее» / «Длительность»: нативный <input type="number"> —
+ *    можно ввести ЛЮБОЕ своё значение (минуты), пресеты остаются как быстрые.
+ *  - Список быстрых пресетов времени — пользовательский, из настроек
+ *    (store.timePresets).
+ * На мобильном меню открывается модалкой по центру экрана (в неделе/поиске не
+ * вылезает за края), на десктопе — popup-меню с ограничением по высоте.
+ */
 export function TimePicker({
   value,
   onChange,
@@ -37,38 +43,150 @@ export function TimePicker({
   onChangeDuration,
 }: Props) {
   const [editing, setEditing] = useState(false);
-  // Колёсики: текущие выбранные час/минуты (из value или ближайшие к сейчас).
-  const curH = value !== null ? Math.floor(value / 60) : new Date().getHours();
-  const curM = value !== null ? value % 60 : new Date().getMinutes();
-  const [h, setH] = useState(curH);
-  const [m, setM] = useState(curM);
-  // Синхронизируем колёсики при открытии/смене внешнего value.
+  const { timePresets } = useStore();
+  const [isTouch, setTouch] = useState(
+    () => window.matchMedia("(pointer: coarse), (max-width: 560px)").matches,
+  );
   useEffect(() => {
-    setH(value !== null ? Math.floor(value / 60) : new Date().getHours());
-    setM(value !== null ? value % 60 : new Date().getMinutes());
-  }, [value, editing]);
+    const mq = window.matchMedia("(pointer: coarse), (max-width: 560px)");
+    const handler = (e: MediaQueryListEvent) => setTouch(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+  // Черновики числовых полей (выезд/длительность): применяются по blur/Enter,
+  // чтобы не слать upsert на каждый символ ввода с клавиатуры.
+  const [travelDraft, setTravelDraft] = useState(travelTime?.toString() ?? "");
+  const [durDraft, setDurDraft] = useState(durationMinutes?.toString() ?? "");
+  useEffect(() => {
+    setTravelDraft(travelTime?.toString() ?? "");
+    setDurDraft(durationMinutes?.toString() ?? "");
+  }, [editing, travelTime, durationMinutes]);
 
-  const presets = [
-    { label: "09:00", m: 9 * 60 },
-    { label: "12:00", m: 12 * 60 },
-    { label: "15:00", m: 15 * 60 },
-    { label: "18:00", m: 18 * 60 },
-    { label: "21:00", m: 21 * 60 },
-  ];
+  // «Своё время» из системных часов: "HH:MM" → минуты, применяем сразу.
+  const pickTime = (t: string) => {
+    if (!t) return;
+    const [hh, mm] = t.split(":").map(Number);
+    if (Number.isFinite(hh) && Number.isFinite(mm)) onChange(hh * 60 + mm);
+  };
+  // Числовое поле (минуты): применяем значение по blur/Enter; пустое = убрать.
+  const applyMinutes = (raw: string, apply: ((m: number | null) => void) | undefined) => {
+    if (!apply) return;
+    const n = parseInt(raw, 10);
+    apply(Number.isFinite(n) && n >= 0 && n <= 1440 ? n : null);
+  };
 
-  // Применяем время сразу при выборе значения в колёсике (а не по «ок»):
-  // иначе при быстрых кликах state h/m ещё не обновился, и «ок» применил бы
-  // старые значения. «ок» просто закрывает меню.
-  const pickHour = (hh: number) => {
-    const mm = m;
-    setH(hh);
-    onChange(hh * 60 + mm);
-  };
-  const pickMinute = (mm: number) => {
-    const hh = h;
-    setM(mm);
-    onChange(hh * 60 + mm);
-  };
+  // Меню (общее для модалки и popup). На мобиле кнопка «Готово» закрывает —
+  // значения применяются сразу при выборе, как и раньше.
+  const menu = (
+    <>
+      <button
+        style={presetBtn(value === null)}
+        onClick={() => { onChange(null); setEditing(false); }}
+        title="Без привязки ко времени"
+      >
+        в течение дня
+      </button>
+      {timePresets.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-2)", margin: "var(--sp-2) 0" }}>
+          {timePresets.map((m) => (
+            <button
+              key={m}
+              style={presetBtn(value === m)}
+              onClick={() => { onChange(m); setEditing(false); }}
+            >
+              {formatMinutes(m)}
+            </button>
+          ))}
+        </div>
+      )}
+      {/* Нативное системное окно выбора времени (Android — системные часы). */}
+      <div style={{ marginTop: "var(--sp-2)" }}>
+        <div style={labelStyle}>Своё время</div>
+        <input
+          type="time"
+          value={value !== null ? toHHMM(value) : ""}
+          onChange={(e) => pickTime(e.target.value)}
+          style={timeInputStyle}
+          title="Выбрать время системными часами"
+        />
+      </div>
+      {/* Выезд заранее (время в пути): пресеты + своё значение минутами. */}
+      {onChangeTravel && (
+        <div style={{ marginTop: "var(--sp-3)" }}>
+          <div style={labelStyle}>Выехать заранее</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-1)" }}>
+            {[null, 15, 30, 45, 60, 90].map((v) => (
+              <button
+                key={v ?? 0}
+                onClick={() => onChangeTravel(v)}
+                style={presetBtn(travelTime === v)}
+              >
+                {v === null ? "—" : `${v} мин`}
+              </button>
+            ))}
+            <input
+              type="number"
+              inputMode="numeric"
+              min={0}
+              max={1440}
+              step={5}
+              placeholder="своё"
+              value={travelDraft}
+              onChange={(e) => setTravelDraft(e.target.value)}
+              onBlur={() => applyMinutes(travelDraft, onChangeTravel)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") applyMinutes(travelDraft, onChangeTravel);
+              }}
+              style={numInputStyle}
+              title="Своё значение в минутах"
+            />
+          </div>
+        </div>
+      )}
+      {/* Длительность выполнения: пресеты + своё значение минутами. */}
+      {onChangeDuration && (
+        <div style={{ marginTop: "var(--sp-3)" }}>
+          <div style={labelStyle}>Длительность</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-1)" }}>
+            {[null, 30, 60, 90, 120, 180].map((v) => (
+              <button
+                key={v ?? 0}
+                onClick={() => onChangeDuration(v)}
+                style={presetBtn(durationMinutes === v)}
+              >
+                {v === null ? "—" : fmtDur(v)}
+              </button>
+            ))}
+            <input
+              type="number"
+              inputMode="numeric"
+              min={0}
+              max={1440}
+              step={5}
+              placeholder="своё"
+              value={durDraft}
+              onChange={(e) => setDurDraft(e.target.value)}
+              onBlur={() => applyMinutes(durDraft, onChangeDuration)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") applyMinutes(durDraft, onChangeDuration);
+              }}
+              style={numInputStyle}
+              title="Своё значение в минутах"
+            />
+          </div>
+        </div>
+      )}
+      {isTouch && (
+        <button
+          onClick={() => setEditing(false)}
+          style={submitStyle}
+          title="Закрыть"
+        >
+          Готово
+        </button>
+      )}
+    </>
+  );
 
   return (
     <div style={pickerStyle}>
@@ -84,11 +202,7 @@ export function TimePicker({
         }}
         title="Изменить время"
       >
-        {/* В компактном режиме — только текст (иконка не влезает в правый ряд
-            задачи на мобильном). */}
         {!compact && <Icon name="clock" size={large ? 16 : 13} />}
-        {/* В компактном режиме без времени — короткая подпись «в теч. дня»,
-            чтобы справа от задачи было видно, что время не задано. */}
         {value !== null
           ? formatMinutes(value)
           : compact
@@ -96,152 +210,32 @@ export function TimePicker({
             : "в течение дня"}
       </button>
 
-      {editing && (
-        <div style={menuStyle}>
-          <button style={presetBtn(value === null)} onClick={() => { onChange(null); setEditing(false); }}>
-            в течение дня
-          </button>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-2)", margin: "var(--sp-2) 0" }}>
-            {presets.map((p) => (
-              <button key={p.m} style={presetBtn(value === p.m)} onClick={() => { onChange(p.m); setEditing(false); }}>
-                {p.label}
-              </button>
-            ))}
-          </div>
-          {/* Колёсики часов и минут: прокручиваемые списки, активное значение
-              подсвечено; тап по значению выбирает. */}
-          <div style={{ display: "flex", gap: "var(--sp-2)", marginTop: "var(--sp-2)" }}>
-            <Wheel
-              values={HOURS}
-              format={(v) => String(v).padStart(2, "0")}
-              selected={h}
-              onSelect={pickHour}
-            />
-            <span style={{ alignSelf: "center", fontSize: "var(--fs-lg)", color: COLORS.muted }}>:</span>
-            <Wheel
-              values={MINUTES}
-              format={(v) => String(v).padStart(2, "0")}
-              selected={Math.floor(m / 5) * 5}
-              onSelect={pickMinute}
-            />
-            <button
-              onClick={() => setEditing(false)}
-              style={submitStyle}
-              title="Закрыть"
-            >
-              ок
-            </button>
-          </div>
-          {/* Выезд заранее (время в пути) и длительность — только когда
-              коллбэки переданы (в карточке задачи). Пресеты — кнопки. */}
-          {onChangeTravel && (
-            <div style={{ marginTop: "var(--sp-3)" }}>
-              <div style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted, marginBottom: "var(--sp-1)" }}>
-                Выехать заранее
-              </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-1)" }}>
-                {[null, 15, 30, 45, 60, 90].map((v) => (
-                  <button
-                    key={v ?? 0}
-                    onClick={() => onChangeTravel?.(v)}
-                    style={presetBtn(travelTime === v)}
-                  >
-                    {v === null ? "—" : `${v} мин`}
-                  </button>
-                ))}
-              </div>
+      {editing &&
+        (isTouch ? (
+          /* Модалка по центру экрана на мобильном: не зависит от положения
+             кнопки, не вылезает за края (в неделе/поиске меню обрезалось
+             контейнером со скроллом). */
+          <div style={overlayStyle} onClick={() => setEditing(false)}>
+            <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
+              {menu}
             </div>
-          )}
-          {onChangeDuration && (
-            <div style={{ marginTop: "var(--sp-3)" }}>
-              <div style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted, marginBottom: "var(--sp-1)" }}>
-                Длительность
-              </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-1)" }}>
-                {[null, 30, 60, 90, 120, 180].map((v) => (
-                  <button
-                    key={v ?? 0}
-                    onClick={() => onChangeDuration?.(v)}
-                    style={presetBtn(durationMinutes === v)}
-                  >
-                    {v === null
-                      ? "—"
-                      : v < 60
-                        ? `${v} мин`
-                        : v === 90
-                          ? "1.5 ч"
-                          : `${v / 60} ч`}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+          </div>
+        ) : (
+          <div style={menuStyle}>{menu}</div>
+        ))}
     </div>
   );
 }
 
-/** Прокручиваемое колёсико выбора: список значений, активное — подсвечено. */
-function Wheel({
-  values,
-  format,
-  selected,
-  onSelect,
-}: {
-  values: number[];
-  format: (v: number) => string;
-  selected: number;
-  onSelect: (v: number) => void;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  // При открытии/смене выбора прокручиваем к активному значению.
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const idx = values.indexOf(selected);
-    if (idx < 0) return;
-    const item = el.children[idx] as HTMLElement | undefined;
-    if (item) el.scrollTop = item.offsetTop - el.clientHeight / 2 + item.clientHeight / 2;
-  }, [selected, values]);
-  return (
-    <div
-      ref={ref}
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        overflowY: "auto",
-        maxHeight: 150,
-        scrollbarWidth: "none",
-        border: `1px solid ${COLORS.cardBorder}`,
-        borderRadius: "var(--radius-md)",
-        padding: "0 2px",
-      }}
-    >
-      {values.map((v) => {
-        const active = v === selected;
-        return (
-          <button
-            key={v}
-            onClick={() => onSelect(v)}
-            style={{
-              border: "none",
-              background: active ? accentTint(0.15) : "transparent",
-              color: active ? COLORS.accent : COLORS.text,
-              fontWeight: active ? 700 : 400,
-              fontSize: "var(--fs-md)",
-              padding: "8px 10px",
-              cursor: "pointer",
-              borderRadius: "var(--radius-sm)",
-              minWidth: 44,
-            }}
-          >
-            {format(v)}
-          </button>
-        );
-      })}
-    </div>
-  );
+/** ЧЧ:ММ для value системного input type=time. */
+function toHHMM(m: number): string {
+  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+}
+
+/** Подпись длительности: 30 мин / 1 ч / 1.5 ч / 2 ч. */
+function fmtDur(v: number): string {
+  if (v < 60) return `${v} мин`;
+  return v % 60 === 0 ? `${v / 60} ч` : `${Math.round((v / 60) * 2) / 2} ч`;
 }
 
 const pickerStyle: React.CSSProperties = { position: "relative", display: "inline-flex" };
@@ -252,17 +246,32 @@ function badgeStyle(hasTime: boolean, large = false, compact = false): React.CSS
     background: hasTime ? accentTint(0.1) : "transparent",
     padding: large ? "4px 10px" : "1px 6px",
     borderRadius: "var(--radius-md)",
-    // Компактный бейдж (правый ряд задачи на мобильном) — высота как у чипов
-    // действий, чтобы по нему удобно попадать пальцем.
     minHeight: compact ? 26 : undefined,
     alignItems: compact ? "center" : undefined,
   };
 }
+const labelStyle: React.CSSProperties = {
+  fontSize: "var(--fs-2xs)",
+  color: COLORS.muted,
+  marginBottom: "var(--sp-1)",
+};
 const menuStyle: React.CSSProperties = {
   position: "absolute", right: 0, top: "100%", marginTop: 4,
   background: COLORS.card, border: `1px solid ${COLORS.cardBorder}`,
   borderRadius: "var(--radius-md)", padding: "var(--sp-2)",
-  boxShadow: "var(--shadow-lg)", zIndex: 200, minWidth: 180,
+  boxShadow: "var(--shadow-lg)", zIndex: 200, minWidth: 200,
+  // Ограничение по высоте: длинное меню скроллится, а не уходит за экран.
+  maxHeight: "min(70vh, 480px)", overflowY: "auto",
+};
+const overlayStyle: React.CSSProperties = {
+  position: "fixed", inset: 0, zIndex: 300,
+  background: "rgba(0,0,0,0.45)",
+  display: "flex", alignItems: "center", justifyContent: "center",
+};
+const modalStyle: React.CSSProperties = {
+  background: COLORS.card, borderRadius: "var(--radius-lg)",
+  padding: "var(--sp-4)", boxShadow: "var(--shadow-lg)",
+  width: "min(92vw, 360px)", maxHeight: "80vh", overflowY: "auto",
 };
 function presetBtn(active: boolean): React.CSSProperties {
   return {
@@ -272,8 +281,19 @@ function presetBtn(active: boolean): React.CSSProperties {
     color: active ? COLORS.accent : COLORS.text, borderRadius: "var(--radius-sm)",
   };
 }
+const timeInputStyle: React.CSSProperties = {
+  width: "100%", fontSize: "var(--fs-md)", padding: "6px 8px",
+  border: `1px solid ${COLORS.cardBorder}`, borderRadius: "var(--radius-sm)",
+  background: "transparent", color: COLORS.text, outline: "none",
+};
+const numInputStyle: React.CSSProperties = {
+  width: 64, fontSize: "var(--fs-2xs)", padding: "3px 6px",
+  border: `1px solid ${COLORS.cardBorder}`, borderRadius: "var(--radius-sm)",
+  background: "transparent", color: COLORS.text, outline: "none",
+};
 const submitStyle: React.CSSProperties = {
-  alignSelf: "center", fontSize: "var(--fs-xs)", padding: "6px 10px", cursor: "pointer",
+  display: "block", width: "100%", marginTop: "var(--sp-3)",
+  fontSize: "var(--fs-xs)", padding: "8px 10px", cursor: "pointer",
   border: `1px solid ${COLORS.accent}`, background: COLORS.accent, color: "#fff",
   borderRadius: "var(--radius-md)",
 };
