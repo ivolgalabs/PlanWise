@@ -6,7 +6,7 @@ import type { CustomSlot, ThemePreset } from "./theme";
 export type ViewKind = "day" | "week" | "month";
 export type ThemeMode = "light" | "dark" | "system";
 /** Режим сортировки задач внутри дня/недели/месяца. */
-export type SortMode = "time" | "manual" | "difficulty";
+export type SortMode = "time" | "manual" | "priority";
 
 /** Шаблон быстрой задачи: кнопка «+ Шаблон» в дне/неделе создаёт задачу
  *  с этими параметрами. Хранится в настройках (persist). */
@@ -91,11 +91,15 @@ interface PlannerState {
   /** Шаблоны быстрых задач — кнопки «+ Шаблон» в дне/неделе. */
   taskPatterns: TaskPattern[];
   /** Сортировка задач в дне/неделе/месяце: time — по времени, manual —
-   *  ручной порядок (sortOrder), difficulty — лёгкие сначала. */
+   *  ручной порядок (sortOrder), priority — по приоритету (высокие сверху). */
   sortMode: SortMode;
   /** Запрещать создание задачи на время, занятое другой задачей
    *  (настройка хранится в БД, см. get_settings/set_settings). */
   preventOverlaps: boolean;
+  /** Авто-выполнение: если время задачи уже прошло (дата в прошлом или
+   *  сегодня и время ≤ текущего) — задача автоматически выполнена;
+   *  время в будущем — снимает выполнение. Применяется при установке времени. */
+  autoDonePastTime: boolean;
   setSelectedDate: (d: Date) => void;
   setWeekDate: (d: Date) => void;
   setMonthDate: (d: Date) => void;
@@ -129,6 +133,7 @@ interface PlannerState {
   setTaskPatterns: (p: TaskPattern[]) => void;
   setSortMode: (m: SortMode) => void;
   setPreventOverlaps: (v: boolean) => void;
+  setAutoDonePastTime: (v: boolean) => void;
 }
 
 export const useStore = create<PlannerState>()(
@@ -166,6 +171,7 @@ export const useStore = create<PlannerState>()(
       taskPatterns: [],
       sortMode: "time",
       preventOverlaps: true,
+      autoDonePastTime: true,
       setSelectedDate: (d) => set({ selectedDate: d }),
       setWeekDate: (d) => set({ weekDate: d }),
       setMonthDate: (d) => set({ monthDate: d }),
@@ -207,6 +213,7 @@ export const useStore = create<PlannerState>()(
       setTaskPatterns: (p) => set({ taskPatterns: p }),
       setSortMode: (m) => set({ sortMode: m }),
       setPreventOverlaps: (v) => set({ preventOverlaps: v }),
+      setAutoDonePastTime: (v) => set({ autoDonePastTime: v }),
     }),
     {
       name: "todo-settings",
@@ -234,6 +241,7 @@ export const useStore = create<PlannerState>()(
         timePresets: s.timePresets,
         taskPatterns: s.taskPatterns,
         sortMode: s.sortMode,
+        autoDonePastTime: s.autoDonePastTime,
       }),
       // Дефолтный shallow-merge zustand заменяет visibility целиком —
       // новые флаги (например, notes) терялись бы у старых установок.
@@ -251,12 +259,18 @@ export const useStore = create<PlannerState>()(
         // Аналогично: время-пресеты и шаблоны должны быть массивами.
         const tp = Array.isArray(p.timePresets) ? p.timePresets : current.timePresets;
         const pats = Array.isArray(p.taskPatterns) ? p.taskPatterns : current.taskPatterns;
+        // Старая сортировка «по сложности» — теперь «по приоритету».
+        const sm =
+          (p.sortMode as string) === "difficulty"
+            ? "priority"
+            : (p.sortMode ?? current.sortMode);
         return {
           ...current,
           ...p,
           notifyRemindMinutes: rmm,
           timePresets: tp,
           taskPatterns: pats,
+          sortMode: sm,
           visibility: {
             ...current.visibility,
             ...((p.visibility ?? {}) as Partial<VisibilityState>),

@@ -55,7 +55,7 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
   const [moveOpen, setMoveOpen] = useState(false);
   // Подтверждение удаления: по кнопке «Удалить» показываем диалог.
   const [confirmDel, setConfirmDel] = useState(false);
-  const { colorSets, setColorSets, visibility, tasks: allTasks } = useStore();
+  const { colorSets, setColorSets, visibility, tasks: allTasks, autoDonePastTime } = useStore();
   // На тач-устройствах время и кнопки действий собираются в одну строку под
   // текстом задачи (компактно), а не в ряд с текстом.
   const [isTouch, setTouch] = useState(
@@ -239,18 +239,18 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
   // конфликтующую задачу и предлагаем добавить текущую как подзадачу.
   const [conflictDlg, setConflictDlg] = useState<{ task: Task; time: number } | null>(null);
 
-  // ── Сложность («класс» задачи) ────────────────────────────────────
-  const DIFF = useMemo(
+  // ── Приоритет задачи (0 = не задан, 1 = низкий, 2 = средний, 3 = высокий) ──
+  const PRIO = useMemo(
     () => [
-      { label: "", color: "" },
-      { label: "лёгкая", color: "#4caf50" },
-      { label: "средняя", color: "#ffb300" },
-      { label: "сложная", color: "#e05252" },
+      { label: "", short: "", color: "" },
+      { label: "низкий", short: "н", color: "#4caf50" },
+      { label: "средний", short: "с", color: "#ffb300" },
+      { label: "высокий", short: "в", color: "#e05252" },
     ],
     [],
   );
   const diff = task.difficulty ?? 0;
-  const diffMeta = DIFF[diff] ?? DIFF[0];
+  const diffMeta = PRIO[diff] ?? PRIO[0];
   const cycleDifficulty = async () => {
     const next = diff >= 3 ? 0 : diff + 1;
     await api.upsertTask({ ...task, difficulty: next });
@@ -260,6 +260,20 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
   const setTime = async (m: number | null) => {
     try {
       await api.upsertTask({ ...task, timeMinutes: m });
+      // Авто-выполнение: время в прошлом → задача выполнена; в будущем —
+      // выполнение снимается. Только при установке времени (настройка).
+      if (autoDonePastTime && m != null) {
+        const now = new Date();
+        const today = Math.floor(
+          Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / 86_400_000,
+        );
+        const nowMin = now.getHours() * 60 + now.getMinutes();
+        const past = task.date < today || (task.date === today && m <= nowMin);
+        const future = task.date > today || (task.date === today && m > nowMin);
+        if (past || future) {
+          await api.upsertTask({ ...task, timeMinutes: m, isDone: past });
+        }
+      }
       onChange();
     } catch {
       // Rust-команда не дала сохранить: время занято другой задачей
@@ -515,14 +529,14 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
           )}
           {visibility.taskActions && (
             <>
-              {/* Сложность (класс) задачи: клик циклично меняет уровень. */}
+              {/* Приоритет задачи: клик циклично меняет уровень. */}
               <button
                 onClick={cycleDifficulty}
                 className="chip-btn"
                 title={
                   diff
-                    ? `Сложность: ${diffMeta.label}. Нажмите, чтобы изменить`
-                    : "Сложность не задана. Нажмите, чтобы выбрать"
+                    ? `Приоритет: ${diffMeta.label}. Нажмите, чтобы изменить`
+                    : "Приоритет не задан. Нажмите, чтобы выбрать"
                 }
                 style={{
                   background: diff ? diffMeta.color : "transparent",
@@ -532,7 +546,7 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
                   fontSize: "var(--fs-2xs)",
                 }}
               >
-                {diff ? diffMeta.label.charAt(0) : "⌀"}
+                {diff ? diffMeta.short : "⌀"}
               </button>
               <button
                 onClick={() => setColorMenu((v) => !v)}
@@ -584,14 +598,14 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
           {/* Кнопки цвета/удаления — скрываются настройкой. */}
           {visibility.taskActions && (
             <div className="task-actions" style={{ display: "flex", gap: "var(--sp-3)" }}>
-              {/* Сложность (класс) задачи: клик циклично меняет уровень. */}
+              {/* Приоритет задачи: клик циклично меняет уровень. */}
               <button
                 onClick={cycleDifficulty}
                 className="chip-btn"
                 title={
                   diff
-                    ? `Сложность: ${diffMeta.label}. Нажмите, чтобы изменить`
-                    : "Сложность не задана. Нажмите, чтобы выбрать"
+                    ? `Приоритет: ${diffMeta.label}. Нажмите, чтобы изменить`
+                    : "Приоритет не задан. Нажмите, чтобы выбрать"
                 }
                 style={{
                   display: "inline-flex",
@@ -610,7 +624,7 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
                     display: "inline-block",
                   }}
                 />
-                {diff ? diffMeta.label : "класс"}
+                {diff ? diffMeta.label : "приоритет"}
               </button>
               <button
                 onClick={() => setColorMenu((v) => !v)}

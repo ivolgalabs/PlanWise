@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 // Файловый ввод-вывод: на Android системные диалоги возвращают content://,
@@ -119,6 +119,8 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
     setSortMode,
     preventOverlaps,
     setPreventOverlaps,
+    autoDonePastTime,
+    setAutoDonePastTime,
   } = useStore();
 
   // ── Черновики категорий для редактирования (служебный cs-none скрыт).
@@ -190,6 +192,23 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
       /* настройка остаётся в store; сервер вернётся к дефолту (запрещать) */
     }
   };
+
+  // ── Вкладки: контент одной секции вместо длинного скролла всех сразу. ──
+  const TABS: [string, string][] = [
+    ["appearance", "Оформление"],
+    ["tasks", "Задачи"],
+    ["time", "Время"],
+    ["notify", "Уведомления"],
+    ["interface", "Интерфейс"],
+    ["categories", "Категории"],
+    ["data", "Данные"],
+  ];
+  const [settingsTab, setSettingsTab] = useState("appearance");
+  const bodyRef = useRef<HTMLDivElement>(null);
+  // При переключении вкладки — к началу списка настроек.
+  useEffect(() => {
+    bodyRef.current?.scrollTo({ top: 0 });
+  }, [settingsTab]);
 
   // Доступность «десктопных» элементов сейчас, на этом экране. Пункты
   // настроек показываем, только если соответствующая панель/кнопка реально
@@ -513,7 +532,24 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
           </button>
         </div>
 
-        <div className="settings-body">
+        <div className="settings-body" ref={bodyRef}>
+          {/* Вкладки: настройки разбиты по группам, чтобы не листать
+              длинный список — на мобиле лента скроллится горизонтально. */}
+          <div className="settings-tabs">
+            {TABS.map(([id, label]) => (
+              <button
+                key={id}
+                className={`settings-tab ${settingsTab === id ? "active" : ""}`}
+                onClick={() => setSettingsTab(id)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* ── Оформление ── */}
+          {settingsTab === "appearance" && (
+          <>
           {/* ── Масштаб ── */}
           <section className="settings-section">
             <div className="section-head">
@@ -909,6 +945,10 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
             )}
           </section>
 
+          {/* ── Задачи ── */}
+          </>)}
+          {settingsTab === "tasks" && (
+          <>
           {/* ── Неделя ── */}
           <section className="settings-section">
             <h3 className="section-title">Неделя</h3>
@@ -969,6 +1009,18 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
               Не даёт поставить задачу на время, занятое другой (можно добавить
               как подзадачу). Наложения у старых задач подсвечиваются красным.
             </p>
+            <label className="oled-toggle">
+              <input
+                type="checkbox"
+                checked={autoDonePastTime}
+                onChange={(e) => setAutoDonePastTime(e.target.checked)}
+              />
+              <span>Прошедшее время = задача выполнена</span>
+            </label>
+            <p className="section-hint">
+              При установке времени: если оно уже прошло — задача автоматически
+              выполненная; время в будущем — снимает выполнение.
+            </p>
             <p className="section-hint" style={{ margin: "var(--sp-2) 0 var(--sp-1)" }}>
               Сортировка задач в дне/неделе/месяце:
             </p>
@@ -977,7 +1029,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
                 [
                   ["time", "По времени"],
                   ["manual", "Вручную"],
-                  ["difficulty", "По сложности"],
+                  ["priority", "По приоритету"],
                 ] as [SortMode, string][]
               ).map(([m, label]) => (
                 <button
@@ -989,9 +1041,13 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
                 </button>
               ))}
             </div>
-            <p className="section-hint">«По сложности» — лёгкие задачи сначала</p>
+            <p className="section-hint">«По приоритету» — высокие задачи сначала</p>
           </section>
 
+          {/* ── Время ── */}
+          </>)}
+          {settingsTab === "time" && (
+          <>
           {/* ── Быстрое время ── */}
           <section className="settings-section">
             <div className="section-head">
@@ -1083,34 +1139,26 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
                     title="Время начала (можно своё, системные часы)"
                   />
                   <input
-                    type="number"
-                    inputMode="numeric"
-                    min={0}
-                    max={1440}
-                    step={5}
-                    value={d.durationMinutes ?? ""}
-                    onChange={(e) => {
-                      const n = parseInt(e.target.value, 10);
-                      patchPattern(d.clientKey, {
-                        durationMinutes: Number.isFinite(n) && n > 0 ? n : null,
-                      });
-                    }}
-                    placeholder="мин"
+                    type="time"
+                    value={d.durationMinutes != null ? formatMinutes(d.durationMinutes) ?? "" : ""}
+                    onChange={(e) =>
+                      patchPattern(d.clientKey, { durationMinutes: parseTimeToMinutes(e.target.value) })
+                    }
                     className="set-name"
-                    style={{ maxWidth: 70 }}
-                    title="Длительность, минуты"
+                    style={{ maxWidth: 110 }}
+                    title="Длительность — системные часы (01:30 = 90 мин)"
                   />
                   <select
                     value={d.difficulty}
                     onChange={(e) => patchPattern(d.clientKey, { difficulty: parseInt(e.target.value, 10) })}
                     className="set-name"
                     style={{ maxWidth: 130, background: "var(--bg-tertiary)" }}
-                    title="Сложность"
+                    title="Приоритет"
                   >
-                    <option value={0}>Сложность —</option>
-                    <option value={1}>лёгкая</option>
-                    <option value={2}>средняя</option>
-                    <option value={3}>сложная</option>
+                    <option value={0}>Приоритет —</option>
+                    <option value={1}>низкий</option>
+                    <option value={2}>средний</option>
+                    <option value={3}>высокий</option>
                   </select>
                   <button
                     className="preset-btn"
@@ -1137,6 +1185,9 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
           </section>
 
           {/* ── Уведомления ── */}
+          </>)}
+          {settingsTab === "notify" && (
+          <>
           <section className="settings-section">
             <h3 className="section-title">Уведомления</h3>
             <p className="section-hint">Приходят, пока приложение работает (в т.ч. в фоне)</p>
@@ -1195,6 +1246,9 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
           </section>
 
           {/* ── Интерфейс ── */}
+          </>)}
+          {settingsTab === "interface" && (
+          <>
           <section className="settings-section">
             <h3 className="section-title">Интерфейс</h3>
             <p className="section-hint">Скрытые элементы можно вернуть здесь же</p>
@@ -1259,6 +1313,9 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
           </section>
 
           {/* ── Категории (цвет-сеты) ── */}
+          </>)}
+          {settingsTab === "categories" && (
+          <>
           <section className="settings-section">
             <div className="section-head">
               <div>
@@ -1323,6 +1380,9 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
           </section>
 
           {/* ── Данные ── */}
+          </>)}
+          {settingsTab === "data" && (
+          <>
           <section className="settings-section">
             <div className="section-head">
               <div>
@@ -1340,6 +1400,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
               {dataMsg && <span style={{ fontSize: "var(--fs-2xs)", color: dataError ? "var(--danger, #c0392b)" : COLORS.muted }}>{dataMsg}</span>}
             </div>
           </section>
+          </>)}
         </div>
       </div>
     </div>

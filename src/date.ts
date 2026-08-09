@@ -90,13 +90,14 @@ export const parseTimeToMinutes = (s: string): number | null => {
 };
 
 /** Сортировка задач внутри дня (по выбранному режиму из настроек):
- *  - "time"       — по времени начала (задачи без времени — вниз);
- *  - "difficulty" — лёгкие сначала, внутри — по времени;
- *  - "manual"     — ручной порядок (sortOrder, перетаскиванием).
+ *  - "time"     — по времени начала (задачи без времени — вниз);
+ *  - "priority" — по приоритету: высокий сверху, внутри — по времени,
+ *                 без приоритета — в самый низ;
+ *  - "manual"   — ручной порядок (sortOrder, перетаскиванием).
  *  Стабильная: при равенстве ключей сохраняется ручной порядок. */
 export const sortTasksByMode = <T extends { timeMinutes?: number | null; difficulty?: number; sortOrder: number }>(
   tasks: T[],
-  mode: "time" | "manual" | "difficulty",
+  mode: "time" | "manual" | "priority",
 ): T[] => {
   const arr = [...tasks];
   if (mode === "manual") {
@@ -104,8 +105,10 @@ export const sortTasksByMode = <T extends { timeMinutes?: number | null; difficu
   }
   const key = (t: T) => {
     const time = t.timeMinutes ?? Number.MAX_SAFE_INTEGER;
-    const diff = t.difficulty ?? 0;
-    return mode === "difficulty" ? diff * 1_000_000 + time : time;
+    const d = t.difficulty ?? 0;
+    // Приоритет: 3 (высокий) → 1, 2 → 2, 1 → 3, 0 (не задан) → 4 (вниз).
+    const pr = d === 0 ? 4 : 4 - d;
+    return mode === "priority" ? pr * 1_000_000 + time : time;
   };
   return arr.sort((a, b) => {
     const ka = key(a), kb = key(b);

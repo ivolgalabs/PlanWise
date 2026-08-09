@@ -1,13 +1,12 @@
 import { useEffect, useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import type { Task } from "../api";
-import { api, fromEpochDay } from "../api";
+import { fromEpochDay } from "../api";
 import { startOfWeek, firstOfMonth, isSameDay, isToday, isPast, formatMinutes, sortTasksByMode } from "../date";
-import { COLORS, accentTint, setHex, argbToHex } from "../theme";
+import { COLORS, accentTint, setHex } from "../theme";
 import { useStore } from "../store";
 import { dayId } from "../drag";
-import { TimePicker } from "../components/TimePicker";
-import { Icon } from "../components/Icon";
+import { TaskFormFields } from "../components/AddTaskModal";
 
 interface Props {
   tasks: Task[];
@@ -28,12 +27,7 @@ export function MonthView({ tasks, onSelectDay, onChange }: Props) {
     if (monthDate === null) setMonthDate(selectedDate);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  // Категории для меню добавления (без служебного «Без категории»).
-  const sets = colorSets.filter((s) => s.id !== "cs-none");
   const [menuDay, setMenuDay] = useState<Date | null>(null);
-  const [addTitle, setAddTitle] = useState("");
-  const [addTime, setAddTime] = useState<number | null>(null);
-  const [addColor, setAddColor] = useState<string | null>(null);
 
   // Escape закрывает модалку добавления.
   useEffect(() => {
@@ -41,9 +35,6 @@ export function MonthView({ tasks, onSelectDay, onChange }: Props) {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setMenuDay(null);
-        setAddTitle("");
-        setAddTime(null);
-        setAddColor(null);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -79,25 +70,6 @@ export function MonthView({ tasks, onSelectDay, onChange }: Props) {
   const openDay = (d: Date) => {
     setMenuDay(null);
     onSelectDay(d);
-  };
-
-  const addTask = async (d: Date) => {
-    const t = addTitle.trim();
-    if (!t) return;
-    const epochDay = Math.floor(
-      Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86_400_000,
-    );
-    await api.upsertTask({
-      title: t,
-      date: epochDay,
-      timeMinutes: addTime,
-      colorSetId: addColor,
-    });
-    setAddTitle("");
-    setAddTime(null);
-    setAddColor(null);
-    setMenuDay(null);
-    onChange();
   };
 
   return (
@@ -155,7 +127,7 @@ export function MonthView({ tasks, onSelectDay, onChange }: Props) {
       {/* Меню при клике на день */}
       {menuDay && (
         <div
-          onClick={() => { setMenuDay(null); setAddTitle(""); setAddTime(null); setAddColor(null); }}
+          onClick={() => setMenuDay(null)}
           style={{
             position: "fixed", inset: 0,
             background: "var(--overlay)", zIndex: 200,
@@ -231,101 +203,24 @@ export function MonthView({ tasks, onSelectDay, onChange }: Props) {
               ))}
             </div>
 
-            {/* Форма: «Далее/Готово» на мобильной клавиатуре добавляет задачу.
-                Без autoFocus: при открытии окна клавиатура не вылезает
-                принудительно (пользователь сам тапает в поле). */}
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                addTask(menuDay);
+            {/* Форма добавления: название, время (системные часы + пресеты),
+                приоритет, длительность, категория — общий компонент,
+                как в дне/неделе (окно «Новая задача»). */}
+            <TaskFormFields
+              day={menuDay}
+              onAdded={() => {
+                setMenuDay(null);
+                onChange();
               }}
+              onCancel={() => setMenuDay(null)}
+            />
+            <button
+              className="modal-action-btn"
+              onClick={() => openDay(menuDay)}
+              style={btnStyle(true)}
             >
-              <input
-                value={addTitle}
-                onChange={(e) => setAddTitle(e.target.value)}
-                enterKeyHint="done"
-                placeholder="Добавить задачу на этот день"
-                style={{
-                  // Поле как в поиске — заметно выше, текст не липнет к краям.
-                  width: "100%", fontSize: "var(--fs-md)",
-                  border: `1px solid ${COLORS.cardBorder}`, borderRadius: "var(--radius-md)",
-                  padding: "10px 12px", marginBottom: "var(--sp-5)",
-                  background: "transparent", color: COLORS.text,
-                }}
-              />
-            </form>
-            {/* Время задачи — крупный чип, как остальные поля панели */}
-            <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)", marginBottom: "var(--sp-4)" }}>
-              <span style={{ fontSize: "var(--fs-sm)", color: COLORS.muted, minWidth: "var(--island-h)" }}>Время</span>
-              <TimePicker value={addTime} onChange={setAddTime} large />
-            </div>
-            {/* Цвет (категория) задачи — крупные свотчи с подписями */}
-            <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)", marginBottom: "var(--sp-5)" }}>
-              <span style={{ fontSize: "var(--fs-sm)", color: COLORS.muted, minWidth: "var(--island-h)" }}>Цвет</span>
-              <button
-                onClick={() => setAddColor(null)}
-                title="Без категории"
-                className="chip-btn"
-                style={{
-                  background: "transparent",
-                  border: `1px solid ${addColor === null ? COLORS.accent : COLORS.cardBorder}`,
-                  opacity: addColor === null ? 1 : 0.5,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  padding: 4,
-                }}
-              >
-                <Icon name="close" size={12} />
-              </button>
-              {sets.map((c) => (
-                <button
-                  key={c.id}
-                  onClick={() => setAddColor(c.id)}
-                  title={c.name}
-                  // Без chip-btn: его фиксированный квадрат сжимает колонку
-                  // «свотч + подпись».
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    gap: "var(--sp-1)",
-                    padding: 4,
-                    background: "transparent",
-                    border: "none",
-                    borderRadius: "var(--radius-md)",
-                    cursor: "pointer",
-                    opacity: addColor && addColor !== c.id ? 0.45 : 1,
-                  }}
-                >
-                  <span
-                    style={{
-                      width: 18,
-                      height: 18,
-                      borderRadius: "50%",
-                      background: argbToHex(c.color),
-                      border: `2px solid ${addColor === c.id ? COLORS.accent : "transparent"}`,
-                    }}
-                  />
-                  <span
-                    style={{
-                      fontSize: "var(--fs-xs)",
-                      color: COLORS.muted,
-                      maxWidth: 48,
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {c.name}
-                  </span>
-                </button>
-              ))}
-            </div>
-            <div style={{ display: "flex", gap: "var(--sp-2)" }}>
-              <button className="modal-action-btn" onClick={() => addTask(menuDay)} style={btnStyle(false)}>Добавить</button>
-              <button className="modal-action-btn" onClick={() => openDay(menuDay)} style={btnStyle(true)}>Перейти к дню</button>
-            </div>
+              Перейти к дню
+            </button>
           </div>
         </div>
       )}

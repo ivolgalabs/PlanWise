@@ -348,3 +348,34 @@
   background: var(--bg-secondary);
   color: var(--danger, #c0392b);
 }
+
+/* Вкладки настроек: лента групп поверх контента; на мобиле скроллится
+   горизонтально, чтобы поместились все группы. */
+.settings-tabs {
+  display: flex;
+  gap: var(--sp-2);
+  padding: 0 var(--sp-2) var(--sp-4);
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  background: var(--bg-primary, var(--bg));
+  z-index: 2;
+}
+.settings-tab {
+  flex-shrink: 0;
+  font-size: var(--fs-2xs);
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.settings-tab.active {
+  border-color: var(--accent, #4a90d9);
+  background: color-mix(in srgb, var(--accent, #4a90d9) 12%, transparent);
+  color: var(--text-primary);
+  font-weight: 600;
+}

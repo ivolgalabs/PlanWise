@@ -53,14 +53,6 @@ export function TimePicker({
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
   }, []);
-  // Черновики числовых полей (выезд/длительность): применяются по blur/Enter,
-  // чтобы не слать upsert на каждый символ ввода с клавиатуры.
-  const [travelDraft, setTravelDraft] = useState(travelTime?.toString() ?? "");
-  const [durDraft, setDurDraft] = useState(durationMinutes?.toString() ?? "");
-  useEffect(() => {
-    setTravelDraft(travelTime?.toString() ?? "");
-    setDurDraft(durationMinutes?.toString() ?? "");
-  }, [editing, travelTime, durationMinutes]);
 
   // «Своё время» из системных часов: "HH:MM" → минуты, применяем сразу.
   const pickTime = (t: string) => {
@@ -68,11 +60,15 @@ export function TimePicker({
     const [hh, mm] = t.split(":").map(Number);
     if (Number.isFinite(hh) && Number.isFinite(mm)) onChange(hh * 60 + mm);
   };
-  // Числовое поле (минуты): применяем значение по blur/Enter; пустое = убрать.
-  const applyMinutes = (raw: string, apply: ((m: number | null) => void) | undefined) => {
+  // Длительность/выезд системными часами: "ЧЧ:ММ" трактуется как длительность
+  // (01:30 = 90 минут); пустое поле = снять значение (null).
+  const applyMinutes = (t: string, apply: ((m: number | null) => void) | undefined) => {
     if (!apply) return;
-    const n = parseInt(raw, 10);
-    apply(Number.isFinite(n) && n >= 0 && n <= 1440 ? n : null);
+    if (!t) return apply(null);
+    const [hh, mm] = t.split(":").map(Number);
+    if (Number.isFinite(hh) && Number.isFinite(mm) && hh * 60 + mm <= 1440) {
+      apply(hh * 60 + mm);
+    }
   };
 
   // Меню (общее для модалки и popup). На мобиле кнопка «Готово» закрывает —
@@ -110,11 +106,12 @@ export function TimePicker({
           title="Выбрать время системными часами"
         />
       </div>
-      {/* Выезд заранее (время в пути): пресеты + своё значение минутами. */}
+      {/* Выезд заранее (время в пути): пресеты + своё значение системными
+          часами (интерпретируется как длительность: 01:30 = 90 минут). */}
       {onChangeTravel && (
         <div style={{ marginTop: "var(--sp-3)" }}>
           <div style={labelStyle}>Выехать заранее</div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-1)" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-1)", alignItems: "center" }}>
             {[null, 15, 30, 45, 60, 90].map((v) => (
               <button
                 key={v ?? 0}
@@ -125,29 +122,20 @@ export function TimePicker({
               </button>
             ))}
             <input
-              type="number"
-              inputMode="numeric"
-              min={0}
-              max={1440}
-              step={5}
-              placeholder="своё"
-              value={travelDraft}
-              onChange={(e) => setTravelDraft(e.target.value)}
-              onBlur={() => applyMinutes(travelDraft, onChangeTravel)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") applyMinutes(travelDraft, onChangeTravel);
-              }}
+              type="time"
+              value={travelTime != null && travelTime > 0 ? toHHMM(travelTime) : ""}
+              onChange={(e) => applyMinutes(e.target.value, onChangeTravel)}
               style={numInputStyle}
-              title="Своё значение в минутах"
+              title="Своё значение — системные часы (01:30 = 90 мин)"
             />
           </div>
         </div>
       )}
-      {/* Длительность выполнения: пресеты + своё значение минутами. */}
+      {/* Длительность выполнения: пресеты + своё значение системными часами. */}
       {onChangeDuration && (
         <div style={{ marginTop: "var(--sp-3)" }}>
           <div style={labelStyle}>Длительность</div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-1)" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-1)", alignItems: "center" }}>
             {[null, 30, 60, 90, 120, 180].map((v) => (
               <button
                 key={v ?? 0}
@@ -158,20 +146,11 @@ export function TimePicker({
               </button>
             ))}
             <input
-              type="number"
-              inputMode="numeric"
-              min={0}
-              max={1440}
-              step={5}
-              placeholder="своё"
-              value={durDraft}
-              onChange={(e) => setDurDraft(e.target.value)}
-              onBlur={() => applyMinutes(durDraft, onChangeDuration)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") applyMinutes(durDraft, onChangeDuration);
-              }}
+              type="time"
+              value={durationMinutes != null && durationMinutes > 0 ? toHHMM(durationMinutes) : ""}
+              onChange={(e) => applyMinutes(e.target.value, onChangeDuration)}
               style={numInputStyle}
-              title="Своё значение в минутах"
+              title="Своё значение — системные часы (01:30 = 90 мин)"
             />
           </div>
         </div>
@@ -287,7 +266,7 @@ const timeInputStyle: React.CSSProperties = {
   background: "transparent", color: COLORS.text, outline: "none",
 };
 const numInputStyle: React.CSSProperties = {
-  width: 64, fontSize: "var(--fs-2xs)", padding: "3px 6px",
+  width: 84, fontSize: "var(--fs-2xs)", padding: "3px 6px",
   border: `1px solid ${COLORS.cardBorder}`, borderRadius: "var(--radius-sm)",
   background: "transparent", color: COLORS.text, outline: "none",
 };

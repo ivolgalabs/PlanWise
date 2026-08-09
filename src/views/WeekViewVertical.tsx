@@ -7,6 +7,8 @@ import { TaskCard } from "../components/TaskCard";
 import { WeekShiftZone } from "../components/WeekShiftZone";
 import { SomedayColumn } from "../components/SomedayColumn";
 import { ArchivePanel } from "../components/ArchivePanel";
+import { AddTaskModal } from "../components/AddTaskModal";
+import { Icon } from "../components/Icon";
 import { COLORS, accentTint } from "../theme";
 import { useStore, type TaskPattern } from "../store";
 import { dayId } from "../drag";
@@ -162,6 +164,8 @@ function DayRow({
   const { setNodeRef, isOver } = useDroppable({ id: dayId(ed) });
   const { taskPatterns } = useStore();
   const weekday = day.toLocaleDateString("ru", { weekday: "short" });
+  // Расширенное окно добавления задачи на этот день.
+  const [addOpen, setAddOpen] = useState(false);
 
   // Шаблон задач: кнопка создаёт задачу на этот день с параметрами шаблона.
   const addPattern = async (p: TaskPattern) => {
@@ -248,31 +252,50 @@ function DayRow({
           />
         ))}
         {/* Inline-поле ввода новой задачи. Форма: «Далее/Готово» на мобильной
-            клавиатуре добавляет задачу, как Enter на десктопе. */}
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            addTask();
-          }}
-        >
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            enterKeyHint="done"
-            placeholder="+ добавить"
-            className="inline-input"
-            style={{
-              width: "100%",
-              border: "none",
-              borderTop: `1px solid ${COLORS.cardBorder}`,
-              padding: "var(--sp-2) var(--sp-1)",
-              fontSize: "var(--fs-sm)",
-              background: "transparent",
-              outline: "none",
-              color: COLORS.text,
+            клавиатуре добавляет задачу, как Enter на десктопе. Рядом —
+            «Настроить»: расширенное окно (время, приоритет, категория). */}
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-1)" }}>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              addTask();
             }}
-          />
+            style={{ flex: 1, minWidth: 0 }}
+          >
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              enterKeyHint="done"
+              placeholder="+ добавить"
+              className="inline-input"
+              style={{
+                width: "100%",
+                border: "none",
+                borderTop: `1px solid ${COLORS.cardBorder}`,
+                padding: "var(--sp-2) var(--sp-1)",
+                fontSize: "var(--fs-sm)",
+                background: "transparent",
+                outline: "none",
+                color: COLORS.text,
+              }}
+            />
           </form>
+          <button
+            className="chip-btn"
+            onClick={() => setAddOpen(true)}
+            title="Настроить задачу: время, приоритет, длительность, категория"
+            style={{ flexShrink: 0 }}
+          >
+            <Icon name="gear" size={13} />
+          </button>
+        </div>
+        {addOpen && (
+          <AddTaskModal
+            day={day}
+            onChange={onChange}
+            onClose={() => setAddOpen(false)}
+          />
+        )}
           {/* Быстрые шаблоны задач — кнопка создаёт задачу на этот день. */}
           {taskPatterns.length > 0 && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-1)", padding: "var(--sp-1) var(--sp-1) 0" }}>
