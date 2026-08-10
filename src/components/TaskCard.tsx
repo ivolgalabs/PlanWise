@@ -167,6 +167,15 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
   const taskSet = colorSets.find((s) => s.id === task.colorSetId);
   const setHex = taskSet ? argbToHex(taskSet.color) : undefined;
 
+  // Приоритет задачи — цветной маркер в строке (не редактируется здесь,
+  // меняется в карточке).
+  const PRIO_META: Record<number, { label: string; color: string }> = {
+    1: { label: "низкий", color: "#4caf50" },
+    2: { label: "средний", color: "#ffb300" },
+    3: { label: "высокий", color: "#e05252" },
+  };
+  const prioMeta = PRIO_META[task.difficulty ?? 0];
+
   // Время показываем, только если его запросил родитель И настройка
   // «Время задач» включена.
   const effectiveShowTime = showTime && visibility.taskTime;
@@ -361,6 +370,21 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
           style={{ flexShrink: 0 }}
         />
       </label>
+      {/* Цветной маркер приоритета: виден в строке, настройка — в карточке. */}
+      {prioMeta && (
+        <span
+          title={`Приоритет: ${prioMeta.label}`}
+          style={{
+            width: 8,
+            height: 8,
+            borderRadius: "50%",
+            background: prioMeta.color,
+            flexShrink: 0,
+            alignSelf: "center",
+            marginRight: "var(--sp-1)",
+          }}
+        />
+      )}
       {/* Текст + время + заметка. На мобильном CSS время переводит в колонку
           (под текстом); на десктопе — в ряд с текстом. Заметка всегда видна
           под текстом, пока пользователь не скроет её настройкой. */}

@@ -1,9 +1,9 @@
-import { useState } from "react";
-import type { Task } from "../api";
+import { useEffect, useRef, useState } from "react";
+import type { Subtask, Task } from "../api";
 import { api, toEpochDay } from "../api";
 import { useStore } from "../store";
 import { COLORS, argbToHex } from "../theme";
-import { TimePicker } from "./TimePicker";
+import { TimePicker, DurationSelect } from "./TimePicker";
 import { Icon } from "./Icon";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { DatePickerModal } from "./DatePickerModal";
@@ -17,8 +17,8 @@ const PRIO = [
 ];
 
 /** Варианты «Уведомить»: по умолчанию (глобальные интервалы настроек),
- *  не уведомлять или своё значение за N минут до начала. Своё значение —
- *  системными часами (02:30 = за 2.5 часа). */
+ *  не уведомлять или своё значение — КОЛИЧЕСТВО времени до начала
+ *  (селекты «часы»/«минуты», системный барабан). */
 const NOTIFY_OPTS: { v: number; label: string }[] = [
   { v: -1, label: "По умолчанию (из настроек)" },
   { v: 0, label: "Не уведомлять" },
@@ -31,17 +31,6 @@ const NOTIFY_OPTS: { v: number; label: string }[] = [
   { v: 1440, label: "За 1 день" },
   { v: -2, label: "Своё значение…" },
 ];
-
-/** ЧЧ:ММ для input type=time (длительность напоминания). */
-const toHHMM = (m: number): string =>
-  `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
-/** "ЧЧ:ММ" → минуты (02:30 = 150); пустое — null. */
-const fromHHMM = (t: string): number | null => {
-  if (!t) return null;
-  const [hh, mm] = t.split(":").map(Number);
-  if (Number.isFinite(hh) && Number.isFinite(mm)) return hh * 60 + mm;
-  return null;
-};
 
 interface FieldsProps {
   /** День, на который добавляется задача (для создания) или день задачи. */
@@ -88,11 +77,17 @@ export function TaskFormFields({
   const [error, setError] = useState("");
   const [confirmDel, setConfirmDel] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
-  // Подзадачи при создании: тексты добавляются в список и сохраняются
-  // вместе с задачей (в карточке существующей задачи подзадачи уже есть
-  // в списке под строкой).
+  // Подзадачи: при создании — тексты, которые сохранятся вместе с задачей;
+  // при редактировании — реальные подзадачи задачи (чекбоксы, удаление,
+  // добавление сразу).
   const [subs, setSubs] = useState<string[]>([]);
   const [newSub, setNewSub] = useState("");
+  const [subItems, setSubItems] = useState<Subtask[]>([]);
+  useEffect(() => {
+    if (!editing || !initial) return;
+    api.getSubtasks(initial.id).then(setSubItems).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initial?.id]);
   const { colorSets } = useStore();
   const sets = colorSets.filter((s) => s.id !== "cs-none");
 
@@ -151,6 +146,14 @@ export function TaskFormFields({
     if (!s) return;
     setSubs((arr) => [...arr, s]);
     setNewSub("");
+  };
+  // Добавить подзадачу к существующей задаче прямо из карточки.
+  const addSubItem = async () => {
+    const s = newSub.trim();
+    if (!s || !initial) return;
+    await api.upsertSubtask({ taskId: initial.id, title: s });
+    setNewSub("");
+    setSubItems(await api.getSubtasks(initial.id));
   };
 
   const fieldRow: React.CSSProperties = {
@@ -272,25 +275,9 @@ export function TaskFormFields({
           ))}
         </select>
         {customNotify && (
-          <input
-            type="time"
-            value={notify != null && notify > 0 ? toHHMM(notify) : ""}
-            onChange={(e) => {
-              const m = fromHHMM(e.target.value);
-              setNotify(m);
-            }}
-            style={{
-              fontSize: "var(--fs-sm)",
-              padding: "6px 8px",
-              border: `1px solid ${COLORS.cardBorder}`,
-              borderRadius: "var(--radius-md)",
-              background: "transparent",
-              color: COLORS.text,
-              outline: "none",
-              maxWidth: 110,
-            }}
-            title="Своё время напоминания (02:30 = за 2.5 часа)"
-          />
+          /* Своё значение — КОЛИЧЕСТВО времени до начала (системные
+             селекты «ч»/«мин»), а не время суток. */
+          <DurationSelect value={notify != null && notify > 0 ? notify : null} onChange={setNotify} />
         )}
       </div>
 
@@ -381,81 +368,127 @@ export function TaskFormFields({
         />
       </div>
 
-      {/* Подзадачи при создании: сразу можно добавить несколько пунктов. */}
-      {!editing && (
-        <div style={{ ...fieldRow, alignItems: "flex-start" }}>
-          <span style={labelStyle}>Подзадачи</span>
-          <div style={{ flex: 1, minWidth: 180 }}>
-            {subs.map((s, i) => (
-              <div
-                key={i}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "var(--sp-2)",
-                  fontSize: "var(--fs-sm)",
-                  color: COLORS.text,
-                }}
-              >
-                <span style={{ width: 6, height: 6, borderRadius: "50%", background: COLORS.muted, flexShrink: 0 }} />
-                <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {s}
-                </span>
-                <button
-                  type="button"
-                  className="chip-btn"
-                  onClick={() => setSubs((arr) => arr.filter((_, j) => j !== i))}
-                  title="Убрать"
+      {/* Подзадачи: при создании — добавляются сразу (шестерёнка); в карточке
+          существующей задачи — полный список с чекбоксами, удалением и полем. */}
+      <div style={{ ...fieldRow, alignItems: "flex-start" }}>
+        <span style={labelStyle}>Подзадачи</span>
+        <div style={{ flex: 1, minWidth: 180 }}>
+          {editing
+            ? subItems.map((s) => (
+                <div
+                  key={s.id}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "var(--sp-2)",
+                    fontSize: "var(--fs-sm)",
+                    color: COLORS.text,
+                  }}
                 >
-                  <Icon name="close" size={12} />
-                </button>
-              </div>
-            ))}
-            <div style={{ display: "flex", gap: "var(--sp-1)", alignItems: "center" }}>
-              <input
-                value={newSub}
-                onChange={(e) => setNewSub(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    addSub();
-                  }
-                }}
-                placeholder="+ подзадача"
-                style={{
-                  flex: 1,
-                  minWidth: 0,
-                  fontSize: "var(--fs-sm)",
-                  border: `1px dashed ${COLORS.cardBorder}`,
-                  borderRadius: "var(--radius-md)",
-                  padding: "6px 10px",
-                  background: "transparent",
-                  color: COLORS.text,
-                  outline: "none",
-                }}
-              />
-              <button
-                type="button"
-                className="modal-action-btn"
-                onClick={addSub}
-                title="Добавить подзадачу"
-                style={{
-                  flexShrink: 0,
-                  padding: "6px 10px",
-                  cursor: "pointer",
-                  fontSize: "var(--fs-sm)",
-                  borderRadius: "var(--radius-md)",
-                  border: "none",
-                  background: COLORS.accent,
-                  color: "#fff",
-                }}
-              >
-                +
-              </button>
-            </div>
+                  <input
+                    type="checkbox"
+                    checked={s.isDone}
+                    onChange={async () => {
+                      await api.upsertSubtask({ ...s, isDone: !s.isDone });
+                      setSubItems(await api.getSubtasks(s.taskId));
+                    }}
+                    style={{ margin: 0 }}
+                  />
+                  <span
+                    style={{
+                      flex: 1,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      textDecoration: s.isDone ? "line-through" : "none",
+                      color: s.isDone ? COLORS.muted : COLORS.text,
+                    }}
+                  >
+                    {s.title}
+                  </span>
+                  <button
+                    type="button"
+                    className="chip-btn"
+                    onClick={async () => {
+                      await api.deleteSubtask(s.id);
+                      setSubItems(await api.getSubtasks(s.taskId));
+                    }}
+                    title="Удалить подзадачу"
+                  >
+                    <Icon name="close" size={12} />
+                  </button>
+                </div>
+              ))
+            : subs.map((s, i) => (
+                <div
+                  key={i}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "var(--sp-2)",
+                    fontSize: "var(--fs-sm)",
+                    color: COLORS.text,
+                  }}
+                >
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: COLORS.muted, flexShrink: 0 }} />
+                  <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {s}
+                  </span>
+                  <button
+                    type="button"
+                    className="chip-btn"
+                    onClick={() => setSubs((arr) => arr.filter((_, j) => j !== i))}
+                    title="Убрать"
+                  >
+                    <Icon name="close" size={12} />
+                  </button>
+                </div>
+              ))}
+          <div style={{ display: "flex", gap: "var(--sp-1)", alignItems: "center" }}>
+            <input
+              value={newSub}
+              onChange={(e) => setNewSub(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  if (editing) addSubItem();
+                  else addSub();
+                }
+              }}
+              placeholder="+ подзадача"
+              style={{
+                flex: 1,
+                minWidth: 0,
+                fontSize: "var(--fs-sm)",
+                border: `1px dashed ${COLORS.cardBorder}`,
+                borderRadius: "var(--radius-md)",
+                padding: "6px 10px",
+                background: "transparent",
+                color: COLORS.text,
+                outline: "none",
+              }}
+            />
+            <button
+              type="button"
+              className="modal-action-btn"
+              onClick={() => (editing ? addSubItem() : addSub())}
+              title="Добавить подзадачу"
+              style={{
+                flexShrink: 0,
+                padding: "6px 10px",
+                cursor: "pointer",
+                fontSize: "var(--fs-sm)",
+                borderRadius: "var(--radius-md)",
+                border: "none",
+                background: COLORS.accent,
+                color: "#fff",
+              }}
+            >
+              +
+            </button>
           </div>
         </div>
-      )}
+      </div>
 
       {error && (
         <div
@@ -584,13 +617,21 @@ export function AddTaskModal({
   initial?: Task;
 }) {
   const editing = initial !== undefined;
+  // Защита от «клика-призрака»: карточка открылась по тапу на задачу, а
+  // отпускание пальца попало на оверлей (position:fixed) — такой клик не
+  // должен сразу закрывать только что открытое окно.
+  const openedAt = useRef(Date.now());
   // Задача «Когда-нибудь» не привязана ко дню — заголовок без даты.
   const head = editing && initial?.someday
     ? "Когда-нибудь"
     : day.toLocaleDateString("ru", { day: "numeric", month: "long", weekday: "long" });
   return (
     <div
-      onClick={onClose}
+      onClick={(e) => {
+        if (e.target !== e.currentTarget) return;
+        if (Date.now() - openedAt.current < 300) return;
+        onClose();
+      }}
       style={{
         position: "fixed",
         inset: 0,

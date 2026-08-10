@@ -73,42 +73,7 @@ export function TimePicker({
     maxHours: number,
   ) => {
     if (!apply) return null;
-    const h = value != null ? Math.floor(value / 60) : 0;
-    const m = value != null ? value % 60 : 0;
-    const set = (nh: number, nm: number) => {
-      apply(nh === 0 && nm === 0 ? null : nh * 60 + nm);
-    };
-    return (
-      <div
-        style={{ display: "inline-flex", alignItems: "center", gap: 3 }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <select
-          value={h}
-          onChange={(e) => set(Number(e.target.value), m)}
-          style={selStyle}
-          title="Часы"
-        >
-          {Array.from({ length: maxHours + 1 }, (_, i) => (
-            <option key={i} value={i}>
-              {i} ч
-            </option>
-          ))}
-        </select>
-        <select
-          value={m}
-          onChange={(e) => set(h, Number(e.target.value))}
-          style={selStyle}
-          title="Минуты"
-        >
-          {Array.from({ length: 12 }, (_, i) => i * 5).map((v) => (
-            <option key={v} value={v}>
-              {v === 0 ? "0 мин" : `${v} мин`}
-            </option>
-          ))}
-        </select>
-      </div>
-    );
+    return <DurationSelect value={value} onChange={apply} maxHours={maxHours} />;
   };
 
   // Меню (общее для модалки и popup). На мобиле кнопка «Готово» закрывает —
@@ -245,6 +210,54 @@ export function TimePicker({
 /** ЧЧ:ММ для value системного input type=time. */
 function toHHMM(m: number): string {
   return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+}
+
+/** Системные селекты «часы» + «минуты» для ввода КОЛИЧЕСТВА времени
+ *  (длительность, выезд, напоминание): на Android открывают системный барабан
+ *  выбора. 0 часов 0 минут = снять значение (null). Переиспользуется в пикере
+ *  и в карточке/настройках. */
+export function DurationSelect({
+  value,
+  onChange,
+  maxHours = 12,
+}: {
+  value: number | null;
+  onChange: (m: number | null) => void;
+  maxHours?: number;
+}) {
+  const h = value != null ? Math.floor(value / 60) : 0;
+  const m = value != null ? value % 60 : 0;
+  const set = (nh: number, nm: number) => {
+    onChange(nh === 0 && nm === 0 ? null : nh * 60 + nm);
+  };
+  return (
+    <div style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
+      <select
+        value={h}
+        onChange={(e) => set(Number(e.target.value), m)}
+        style={selStyle}
+        title="Часы"
+      >
+        {Array.from({ length: maxHours + 1 }, (_, i) => (
+          <option key={i} value={i}>
+            {i} ч
+          </option>
+        ))}
+      </select>
+      <select
+        value={m}
+        onChange={(e) => set(h, Number(e.target.value))}
+        style={selStyle}
+        title="Минуты"
+      >
+        {Array.from({ length: 12 }, (_, i) => i * 5).map((v) => (
+          <option key={v} value={v}>
+            {v === 0 ? "0 мин" : `${v} мин`}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
 }
 
 /** Подпись длительности: 30 мин / 1 ч / 1.5 ч / 2 ч. */

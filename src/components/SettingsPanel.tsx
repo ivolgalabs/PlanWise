@@ -16,7 +16,7 @@ import { DEFAULT_VISIBILITY } from "../store";
 import { parseTimeToMinutes, formatMinutes } from "../date";
 import { api, isTauri } from "../api";
 import { Icon, type IconName } from "./Icon";
-import { TimePicker } from "./TimePicker";
+import { TimePicker, DurationSelect } from "./TimePicker";
 import "./SettingsPanel.css";
 
 /** Приоритет шаблона: 0 = не задан, 1 = низкий, 2 = средний, 3 = высокий. */
@@ -1253,25 +1253,14 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
                     {m < 60 ? `${m} мин` : m === 60 ? "1 час" : m === 120 ? "2 часа" : "за день"}
                   </button>
                 ))}
-                {/* Своё значение — системными часами (01:30 = за 1.5 часа):
-                    добавляет/убирает интервал из списка. */}
-                <input
-                  type="time"
-                  value=""
-                  onChange={(e) => {
-                    const m = parseTimeToMinutes(e.target.value);
+                {/* Своё значение — КОЛИЧЕСТВО времени до начала (селекты
+                    «ч»/«мин», системный барабан), а не час времени суток:
+                    выбор добавляет/убирает интервал из списка. */}
+                <DurationSelect
+                  value={null}
+                  onChange={(m) => {
                     if (m != null && m > 0) setNotifyRemindMinutes(m);
                   }}
-                  style={{
-                    background: "var(--bg-tertiary)",
-                    border: "1px solid var(--border-color)",
-                    borderRadius: 6,
-                    padding: "6px 10px",
-                    color: "var(--text-primary)",
-                    fontSize: "var(--fs-xs)",
-                    maxWidth: 110,
-                  }}
-                  title="Своё время напоминания (01:30 = за полтора часа)"
                 />
               </div>
             )}
