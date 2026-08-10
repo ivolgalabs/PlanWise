@@ -16,6 +16,7 @@ interface Props {
 export function ConfirmDialog({ title, confirmLabel = "Удалить", danger = true, onConfirm, onCancel }: Props) {
   return (
     <div
+      className="modal-overlay"
       onClick={onCancel}
       style={{
         position: "fixed",

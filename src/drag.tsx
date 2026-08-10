@@ -250,6 +250,7 @@ export function TaskDndContext({ children, onChange }: TaskDndContextProps) {
       {/* Диалог подтверждения promote подзадачи в задачу. */}
       {pending && (
         <div
+          className="modal-overlay"
           onClick={() => setPending(null)}
           style={{
             position: "fixed",

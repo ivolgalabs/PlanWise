@@ -646,6 +646,7 @@ export function AddTaskModal({
     : day.toLocaleDateString("ru", { day: "numeric", month: "long", weekday: "long" });
   return (
     <div
+      className="modal-overlay"
       onClick={(e) => {
         if (e.target !== e.currentTarget) return;
         if (Date.now() - openedAt.current < 300) return;

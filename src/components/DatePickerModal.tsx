@@ -22,6 +22,7 @@ export function DatePickerModal({ tasks, onPick, onClose }: Props) {
 
   return (
     <div
+      className="modal-overlay"
       onClick={onClose}
       style={{
         position: "fixed",

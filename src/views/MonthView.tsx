@@ -146,6 +146,7 @@ export function MonthView({ tasks, onSelectDay, onSelectWeek, onChange }: Props)
       {/* Меню при клике на день */}
       {menuDay && (
         <div
+          className="modal-overlay"
           onClick={() => setMenuDay(null)}
           style={{
             position: "fixed", inset: 0,

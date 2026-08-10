@@ -376,9 +376,10 @@ function App() {
     if (typing) return;
     // Ручка перетаскивания, колёсики времени, кнопки шапки — их свайп не
     // трогает (ручка — drag, кнопки — тап, колёсики — свой скролл). Также
-    // исключаем окно настроек: листание списка настроек не должно
-    // переключать вид за оверлеем.
-    if (el.closest(".task-drag-hint, .time-wheel, .icon-btn, .settings-overlay")) return;
+    // исключаем окно настроек и ВСЕ модальные оверлеи (карточка задачи,
+    // календарь дат, модалка месяца, подтверждения): листание их контента
+    // не должно переключать вид за оверлеем.
+    if (el.closest(".task-drag-hint, .time-wheel, .icon-btn, .settings-overlay, .modal-overlay")) return;
     const idx = ORDER.indexOf(view);
     if (dx < 0) setView(ORDER[(idx + 1) % ORDER.length]); // влево — следующий
     else setView(ORDER[(idx - 1 + ORDER.length) % ORDER.length]); // вправо — предыдущий
