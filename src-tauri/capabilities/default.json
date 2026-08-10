@@ -11,7 +11,14 @@
     "fs:write-files",
     {
       "identifier": "fs:scope",
-      "allow": [{ "path": "**" }]
+      "allow": [
+        "$HOME/**",
+        "$APPDATA/**",
+        "$CACHE/**",
+        "$DOWNLOAD/**",
+        "$DOCUMENT/**",
+        "$PICTURE/**"
+      ]
     }
   ]
 }

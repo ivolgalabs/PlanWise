@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import type { Task } from "../api";
 import { api, fromEpochDay } from "../api";
@@ -10,6 +10,7 @@ import { Icon } from "../components/Icon";
 import { COLORS, accentTint } from "../theme";
 import { dayId } from "../drag";
 import { isToday, sortTasksByMode, formatMinutes } from "../date";
+import { useMediaQuery } from "../useMediaQuery";
 import { useStore, type TaskPattern } from "../store";
 
 interface Props {
@@ -30,15 +31,7 @@ export function DayView({ day, tasks, archivedTasks, onChange }: Props) {
   const newInputRef = useRef<HTMLInputElement>(null);
 
   // В совсем узком окне прячем и боковую зону «завтра».
-  const [tiny, setTiny] = useState(
-    () => window.matchMedia("(max-width: 560px)").matches,
-  );
-  useEffect(() => {
-    const mq = window.matchMedia("(max-width: 560px)");
-    const handler = (e: MediaQueryListEvent) => setTiny(e.matches);
-    mq.addEventListener("change", handler);
-    return () => mq.removeEventListener("change", handler);
-  }, []);
+  const tiny = useMediaQuery("(max-width: 560px)");
 
   const { sortMode } = useStore();
   const dayTasks = sortTasksByMode(

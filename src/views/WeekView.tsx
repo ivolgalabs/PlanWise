@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import type { Task } from "../api";
 import { fromEpochDay } from "../api";
 import { weekDays, isSameDay, sortTasksByMode } from "../date";
@@ -6,6 +6,7 @@ import { DayColumn } from "../components/DayColumn";
 import { WeekShiftZone } from "../components/WeekShiftZone";
 import { WeekViewVertical } from "./WeekViewVertical";
 import { useStore } from "../store";
+import { useMediaQuery } from "../useMediaQuery";
 
 interface Props {
   tasks: Task[];
@@ -31,16 +32,8 @@ export function WeekView({ tasks, archivedTasks, onChange }: Props) {
   const days = weekDays(weekDate ?? selectedDate, mondayFirst);
 
   // В узком окне принудительно вертикальный список — сетка из 7 узких колонок
-  // нечитаема. matchMedia реагирует на ресайз окна.
-  const [narrow, setNarrow] = useState(
-    () => typeof window !== "undefined" && window.matchMedia("(max-width: 820px)").matches,
-  );
-  useEffect(() => {
-    const mq = window.matchMedia("(max-width: 820px)");
-    const handler = (e: MediaQueryListEvent) => setNarrow(e.matches);
-    mq.addEventListener("change", handler);
-    return () => mq.removeEventListener("change", handler);
-  }, []);
+  // нечитаема. useMediaQuery реагирует на ресайз окна (общий listener).
+  const narrow = useMediaQuery("(max-width: 820px)");
   // Вертикаль, если выбрано настройкой ИЛИ окно узкое.
   const effectiveVertical = weekVertical || narrow;
 

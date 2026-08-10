@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { Task } from "../api";
 import { MiniCalendar } from "./MiniCalendar";
 import { SomedayColumn } from "./SomedayColumn";
 import { ArchivePanel } from "./ArchivePanel";
 import { COLORS } from "../theme";
 import { useStore } from "../store";
+import { useMediaQuery } from "../useMediaQuery";
 import { Icon } from "./Icon";
 
 interface Props {
@@ -26,15 +27,7 @@ export function RightPanel({ tasks, width, onSelect, onChange, fill = false }: P
   // Низкое окно (горизонтальный режим телефона): крупный календарь не
   // влезает по высоте и обрезается — рендерим компактный вариант, чтобы
   // панелька была видна полностью (обёртка всё равно скроллится).
-  const [low, setLow] = useState(
-    () => typeof window !== "undefined" && window.matchMedia("(max-height: 520px)").matches,
-  );
-  useEffect(() => {
-    const mq = window.matchMedia("(max-height: 520px)");
-    const handler = (e: MediaQueryListEvent) => setLow(e.matches);
-    mq.addEventListener("change", handler);
-    return () => mq.removeEventListener("change", handler);
-  }, []);
+  const low = useMediaQuery("(max-height: 520px)");
   // Календарь виден не везде: в «Месяце» его нет, и настройкой его можно
   // скрыть. Тогда «Когда-нибудь» растягивается на всю панель (stretch),
   // чтобы под ней не оставалось мёртвого пространства.

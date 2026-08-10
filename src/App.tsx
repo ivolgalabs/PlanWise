@@ -4,6 +4,7 @@ import type { Task } from "./api";
 import { useStore } from "./store";
 import type { ViewKind } from "./store";
 import { COLORS, applyTheme, watchSystemTheme, accentTint, applyCustomSlot } from "./theme";
+import { useMediaQuery } from "./useMediaQuery";
 import { TopBar } from "./components/TopBar";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { DatePickerModal } from "./components/DatePickerModal";
@@ -98,33 +99,13 @@ function App() {
   }, [calWidth]);
   // Узкое окно недели (порог 820px — тот же, что в WeekView): в нём сетка из
   // 7 колонок нечитаема, список принудителен, поэтому toggle ориентации в
-  // шапке не показываем. Дублируем matchMedia здесь, чтобы передать флаг в
-  // TopBar (WeekView спрятал свой Toolbar, кнопка переехала в шапку).
-  const [weekNarrow, setWeekNarrow] = useState(
-    () => typeof window !== "undefined" && window.matchMedia("(max-width: 820px)").matches,
-  );
-  useEffect(() => {
-    const mq = window.matchMedia("(max-width: 820px)");
-    const handler = (e: MediaQueryListEvent) => setWeekNarrow(e.matches);
-    mq.addEventListener("change", handler);
-    return () => mq.removeEventListener("change", handler);
-  }, []);
+  // шапке не показываем. Общие listener'ы на запросы — см. useMediaQuery.
+  const weekNarrow = useMediaQuery("(max-width: 820px)");
   // Панель скрывается в узком окне; порог зависит от вида (неделя 1000,
   // день 700). Раньше у недели был порог 1200 — при дефолтном окне 1100
   // панель в неделе пропадала; 1000 — панель видна, а при 1140+ вместе
   // с сеткой недели.
-  const [calNarrow, setCalNarrow] = useState(
-    () => window.matchMedia(`(max-width: ${view === "day" ? 700 : 1000}px)`).matches,
-  );
-  useEffect(() => {
-    const mq = window.matchMedia(`(max-width: ${view === "day" ? 700 : 1000}px)`);
-    const handler = (e: MediaQueryListEvent) => setCalNarrow(e.matches);
-    mq.addEventListener("change", handler);
-    // Сразу синхронизируем при смене вида (порог другой) — иначе состояние
-    // останется от старого порога до следующего ресайза.
-    setCalNarrow(mq.matches);
-    return () => mq.removeEventListener("change", handler);
-  }, [view]);
+  const calNarrow = useMediaQuery(`(max-width: ${view === "day" ? 700 : 1000}px)`);
   const [archiveCount, setArchiveCount] = useState(0);
   // Флаг «архив уже выполнен за маунт»: в dev React.StrictMode монтирует
   // компонент дважды и эффект вызывается два раза — второй вызов архивирует

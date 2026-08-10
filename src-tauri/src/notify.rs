@@ -6,9 +6,12 @@
 //  2. Напоминания: за N минут (настраивается) до задачи, у которой задано
 //     время (timeMinutes) — «пришло время заняться задачей».
 //
-// Реализация: отдельный поток проверяет каждые 20 секунд, наступило ли
+// Реализация: отдельный поток проверяет каждые 60 секунд, наступило ли
 // время какого-либо события, и показывает системное уведомление через
 // tauri-plugin-notification (работает на Android и macOS).
+// Интервал 60 секунд — компромисс между точностью уведомлений (окно ±1 мин)
+// и энергопотреблением: процесс не просыпается каждые 20 секунд ради
+// виджета, данные которого приложение и так обновляет при каждом изменении.
 //
 // Ограничение: уведомления приходят, пока процесс приложения жив (в т.ч.
 // в фоне на мобильном). Полноценное планирование «на уровне ОС» (AlarmManager
@@ -98,25 +101,42 @@ pub fn load_prefs(app: &tauri::AppHandle) -> NotifyPrefs {
 }
 
 /// Сохранить настройки (вызывается командой set_notification_prefs).
+/// Пишем атомарно: сначала во временный файл, затем rename — если запись
+/// оборвётся (сбой питания, выгрузка процесса), старые настройки не
+/// превратятся в обрезанный/пустой JSON.
 pub fn save_prefs(app: &tauri::AppHandle, prefs: &NotifyPrefs) -> Result<(), String> {
     let p = prefs_path(app);
     if let Some(dir) = p.parent() {
         let _ = std::fs::create_dir_all(dir);
     }
+    let tmp = p.with_extension("json.tmp");
     std::fs::write(
-        p,
+        &tmp,
         serde_json::to_string_pretty(prefs).map_err(|e| e.to_string())?,
     )
-    .map_err(|e| e.to_string())
+    .map_err(|e| e.to_string())?;
+    std::fs::rename(&tmp, &p).map_err(|e| e.to_string())
 }
 
-/// Отправленные события: ключ → маркер, чтобы не показывать повторно
-/// (в пределах запуска; после перезапуска возможно дублирование, если окно
-/// отправки ещё активно — приемлемо).
-static FIRED: std::sync::OnceLock<Mutex<HashMap<String, String>>> = std::sync::OnceLock::new();
+/// Отправленные события: ключ → время отправки (epoch-ms), чтобы не показывать
+/// повторно в пределах запуска. Записи старше суток чистятся при каждом тике —
+/// иначе кеш растёт бесконечно (каждый день и каждое напоминание добавляют
+/// ключ, который больше никогда не удаляется).
+static FIRED: std::sync::OnceLock<Mutex<HashMap<String, i64>>> = std::sync::OnceLock::new();
 
-fn fired() -> &'static Mutex<HashMap<String, String>> {
+fn fired() -> &'static Mutex<HashMap<String, i64>> {
     FIRED.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Пометить событие как отправленное; заодно удалить записи старше суток.
+fn mark_fired(key: String) {
+    let now = chrono::Utc::now().timestamp_millis();
+    let mut map = fired().lock().unwrap();
+    if map.len() > 128 {
+        // Чистим только при разросшемся кеше — retain на каждый тик лишний.
+        map.retain(|_, ts| now - *ts < 86_400_000);
+    }
+    map.insert(key, now);
 }
 
 /// Запустить планировщик: запрос разрешения + фоновый поток-тик.
@@ -125,15 +145,28 @@ pub fn start_scheduler(app: tauri::AppHandle) {
     // JS-плагин — вызов request_permission здесь блокировал setup навсегда.
     std::thread::spawn(move || loop {
         tick(&app);
-        std::thread::sleep(Duration::from_secs(20));
+        std::thread::sleep(Duration::from_secs(60));
     });
+}
+
+/// День, для которого виджет уже записан (i64::MIN = ещё не писался).
+static WIDGET_DAY: std::sync::OnceLock<Mutex<i64>> = std::sync::OnceLock::new();
+
+fn widget_day() -> &'static Mutex<i64> {
+    WIDGET_DAY.get_or_init(|| Mutex::new(i64::MIN))
 }
 
 /// Один проход планировщика.
 fn tick(app: &tauri::AppHandle) {
-    // Виджет должен быть свежим всегда, даже при выключенных уведомлениях:
-    // тик будит процесс — заодно обновляем widget.json для сегодняшней даты.
-    {
+    // Виджет: обновляем при старте и при смене календарного дня. Писать файл
+    // каждые 60 секунд не нужно — фронтенд и так обновляет данные при каждом
+    // изменении задач (write_widget_data), а здесь достаточно поймать смену
+    // даты (иначе утром виджет показывал бы вчерашний список).
+    let today = days_from_epoch(Local::now().date_naive());
+    let mut last = widget_day().lock().unwrap();
+    if *last != today {
+        *last = today;
+        drop(last);
         let state = app.state::<Db>();
         let _ = crate::commands::refresh_widget(app, &state);
     }
@@ -181,7 +214,7 @@ fn check_digest(app: &tauri::AppHandle, prefs: &NotifyPrefs, now: NaiveDateTime)
 
     if tasks.is_empty() {
         // Пустой день тоже можно отмечать как «отправлено», чтобы не спамить.
-        fired().lock().unwrap().insert(key, String::new());
+        mark_fired(key);
         return;
     }
 
@@ -204,8 +237,11 @@ fn check_digest(app: &tauri::AppHandle, prefs: &NotifyPrefs, now: NaiveDateTime)
         .body(body)
         .show();
 
-    fired().lock().unwrap().insert(key, String::new());
+    mark_fired(key);
 }
+
+/// Строка задачи с полями, нужными для расчёта напоминания.
+type ReminderRow = (String, String, i64, i64, Option<i64>, Option<i64>);
 
 /// Напоминания: за remind_minutes до задач со временем (сегодня/завтра).
 ///
@@ -225,7 +261,7 @@ fn check_reminders(app: &tauri::AppHandle, prefs: &NotifyPrefs, now: NaiveDateTi
     // (id, title, time_minutes, date_epoch, travel_time, notify_minutes) — дата,
     // время в пути и своё уведомление нужны для расчёта due. travel_time может
     // отсутствовать в старых БД — query_map вернёт NULL как None.
-    let timed: Vec<(String, String, i64, i64, Option<i64>, Option<i64>)> = {
+    let timed: Vec<ReminderRow> = {
         let db = app.state::<Db>();
         let conn = db.0.lock().unwrap();
         let mut stmt = match conn.prepare(
@@ -254,11 +290,6 @@ fn check_reminders(app: &tauri::AppHandle, prefs: &NotifyPrefs, now: NaiveDateTi
         rows
     };
 
-    eprintln!(
-        "[notify] reminders: {} timed tasks, now={}",
-        timed.len(),
-        now
-    );
     for (id, title, minutes, date_epoch, travel_time, notify_minutes) in timed {
         // Своё «не уведомлять» (0) — пропускаем задачу целиком, включая выезд.
         if notify_minutes == Some(0) {
@@ -301,14 +332,13 @@ fn check_reminders(app: &tauri::AppHandle, prefs: &NotifyPrefs, now: NaiveDateTi
             } else {
                 format!("через {} мин", rm)
             };
-            eprintln!("[notify] reminder fired: {}", title);
             let _ = app
                 .notification()
                 .builder()
                 .title("Напоминание")
                 .body(format!("«{}» — {}", title, when))
                 .show();
-            fired().lock().unwrap().insert(key, String::new());
+            mark_fired(key);
         }
 
         // 2. «Пора выезжать»: за travel_time до начала задачи (если задано).
@@ -317,16 +347,16 @@ fn check_reminders(app: &tauri::AppHandle, prefs: &NotifyPrefs, now: NaiveDateTi
                 let due = start - chrono::Duration::minutes(tt);
                 if now >= due && now <= due + chrono::Duration::minutes(2) {
                     let key = format!("remind|travel|{}|{}", id, due);
-                    fired().lock().unwrap().entry(key).or_insert_with(|| {
-                        eprintln!("[notify] travel fired: {}", title);
-                        let _ = app
-                            .notification()
-                            .builder()
-                            .title("Пора выезжать")
-                            .body(format!("«{}» — в {:02}:{:02}", title, h, m))
-                            .show();
-                        String::new()
-                    });
+                    if fired().lock().unwrap().contains_key(&key) {
+                        continue;
+                    }
+                    let _ = app
+                        .notification()
+                        .builder()
+                        .title("Пора выезжать")
+                        .body(format!("«{}» — в {:02}:{:02}", title, h, m))
+                        .show();
+                    mark_fired(key);
                 }
             }
         }

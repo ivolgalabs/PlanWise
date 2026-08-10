@@ -188,14 +188,15 @@ fn check_time_overlap(conn: &rusqlite::Connection, task: &Task) -> Result<(), St
 }
 
 #[tauri::command]
-pub fn delete_task(state: State<'_, Db>, id: String) {
+pub fn delete_task(state: State<'_, Db>, id: String) -> Result<(), String> {
     let conn = state.0.lock().unwrap();
     conn.execute("DELETE FROM tasks WHERE id = ?1", [id])
-        .expect("delete_task");
+        .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 #[tauri::command]
-pub fn move_task(state: State<'_, Db>, id: String, new_date: i64) {
+pub fn move_task(state: State<'_, Db>, id: String, new_date: i64) -> Result<(), String> {
     let conn = state.0.lock().unwrap();
     // Перенос в прошлое = задача закрыта (выполнена); перенос в будущее из
     // прошлого = снова актуальна (не выполнена). Сегодня не трогаем.
@@ -208,7 +209,8 @@ pub fn move_task(state: State<'_, Db>, id: String, new_date: i64) {
            updated_at = ?3 WHERE id = ?4",
         rusqlite::params![new_date, today_epoch_day(), now_ms(), id],
     )
-    .expect("move_task");
+    .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 /// Задачи «Когда-нибудь» — без привязки ко дню.
@@ -249,13 +251,14 @@ pub fn get_someday_tasks(state: State<'_, Db>) -> Vec<Task> {
 
 /// Переместить задачу в «Когда-нибудь» (дата сбрасывается).
 #[tauri::command]
-pub fn set_someday(state: State<'_, Db>, id: String) {
+pub fn set_someday(state: State<'_, Db>, id: String) -> Result<(), String> {
     let conn = state.0.lock().unwrap();
     conn.execute(
         "UPDATE tasks SET someday = 1, date = 0, archived = 0, updated_at = ?1 WHERE id = ?2",
         rusqlite::params![now_ms(), id],
     )
-    .expect("set_someday");
+    .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -279,7 +282,7 @@ pub fn get_color_sets(state: State<'_, Db>) -> Vec<ColorSet> {
 
 /// Создать/обновить категорию (цвет-сет). Пустой id — новая категория.
 #[tauri::command]
-pub fn upsert_color_set(state: State<'_, Db>, mut set: ColorSet) -> ColorSet {
+pub fn upsert_color_set(state: State<'_, Db>, mut set: ColorSet) -> Result<ColorSet, String> {
     let conn = state.0.lock().unwrap();
     if set.id.is_empty() {
         set.id = Uuid::new_v4().to_string();
@@ -290,32 +293,33 @@ pub fn upsert_color_set(state: State<'_, Db>, mut set: ColorSet) -> ColorSet {
            sort_order=excluded.sort_order",
         rusqlite::params![set.id, set.name, set.color, set.sort_order],
     )
-    .expect("upsert_color_set execute");
-    set
+    .map_err(|e| e.to_string())?;
+    Ok(set)
 }
 
 /// Удалить категорию. Задачи с ней становятся «без категории» (NULL).
 #[tauri::command]
-pub fn delete_color_set(state: State<'_, Db>, id: String) {
+pub fn delete_color_set(state: State<'_, Db>, id: String) -> Result<(), String> {
     let conn = state.0.lock().unwrap();
     // Служебный сет «Без категории» (cs-none) удалять нельзя — на него
     // завязан NULL-смысл color_set_id.
     if id == "cs-none" {
-        return;
+        return Ok(());
     }
     conn.execute(
         "UPDATE tasks SET color_set_id = NULL, updated_at = ?1 WHERE color_set_id = ?2",
         rusqlite::params![now_ms(), id],
     )
-    .expect("delete_color_set tasks");
+    .map_err(|e| e.to_string())?;
     conn.execute("DELETE FROM color_sets WHERE id = ?1", [id])
-        .expect("delete_color_set");
+        .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 /// Перенос просроченных невыполненных задач в «Архив» (вместо переноса на
 /// сегодня). Возвращает количество заархивированных задач (для баннера в UI).
 #[tauri::command]
-pub fn archive_overdue(state: State<'_, Db>, today_epoch_day: i64) -> i64 {
+pub fn archive_overdue(state: State<'_, Db>, today_epoch_day: i64) -> Result<i64, String> {
     let conn = state.0.lock().unwrap();
     // Сначала считаем, сколько строк затронем.
     let count: i64 = conn
@@ -324,16 +328,16 @@ pub fn archive_overdue(state: State<'_, Db>, today_epoch_day: i64) -> i64 {
             [today_epoch_day],
             |row| row.get(0),
         )
-        .unwrap_or(0);
+        .map_err(|e| e.to_string())?;
     if count == 0 {
-        return 0;
+        return Ok(0);
     }
     conn.execute(
         "UPDATE tasks SET archived = 1, updated_at = ?1 WHERE is_done = 0 AND date < ?2 AND someday = 0 AND archived = 0",
         rusqlite::params![now_ms(), today_epoch_day],
     )
-    .expect("archive_overdue execute");
-    count
+    .map_err(|e| e.to_string())?;
+    Ok(count)
 }
 
 /// Задачи «Архива» — скрытые из видов, ждут возврата на дату.
@@ -374,7 +378,7 @@ pub fn get_archived_tasks(state: State<'_, Db>) -> Vec<Task> {
 
 /// Вернуть задачу из «Архива» на выбранную дату (archived снимается).
 #[tauri::command]
-pub fn restore_archived(state: State<'_, Db>, id: String, date: i64) {
+pub fn restore_archived(state: State<'_, Db>, id: String, date: i64) -> Result<(), String> {
     let conn = state.0.lock().unwrap();
     // Возврат на прошедший день = задача закрыта (иначе на следующем старте
     // она снова уйдёт в архив как просроченная); в будущее = снова актуальна.
@@ -387,37 +391,42 @@ pub fn restore_archived(state: State<'_, Db>, id: String, date: i64) {
            updated_at = ?3 WHERE id = ?4",
         rusqlite::params![date, today_epoch_day(), now_ms(), id],
     )
-    .expect("restore_archived");
+    .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 // ── Подзадачи ───────────────────────────────────────────────────────
 
 #[tauri::command]
-pub fn get_subtasks(state: State<'_, Db>, task_id: String) -> Vec<Subtask> {
+pub fn get_subtasks(state: State<'_, Db>, task_id: String) -> Result<Vec<Subtask>, String> {
     let conn = state.0.lock().unwrap();
     let mut stmt = conn
         .prepare(
             "SELECT id, task_id, title, is_done, sort_order, created_at
              FROM subtasks WHERE task_id = ?1 ORDER BY sort_order ASC",
         )
-        .expect("prepare get_subtasks");
-    stmt.query_map([task_id], |row| {
-        Ok(Subtask {
-            id: row.get(0)?,
-            task_id: row.get(1)?,
-            title: row.get(2)?,
-            is_done: row.get::<_, i64>(3)? != 0,
-            sort_order: row.get(4)?,
-            created_at: row.get(5)?,
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([task_id], |row| {
+            Ok(Subtask {
+                id: row.get(0)?,
+                task_id: row.get(1)?,
+                title: row.get(2)?,
+                is_done: row.get::<_, i64>(3)? != 0,
+                sort_order: row.get(4)?,
+                created_at: row.get(5)?,
+            })
         })
-    })
-    .expect("query get_subtasks")
-    .filter_map(|r| r.ok())
-    .collect()
+        .map_err(|e| e.to_string())?;
+    let mut out = Vec::new();
+    for r in rows {
+        out.push(r.map_err(|e| e.to_string())?);
+    }
+    Ok(out)
 }
 
 #[tauri::command]
-pub fn upsert_subtask(state: State<'_, Db>, mut sub: Subtask) -> Subtask {
+pub fn upsert_subtask(state: State<'_, Db>, mut sub: Subtask) -> Result<Subtask, String> {
     let conn = state.0.lock().unwrap();
     if sub.id.is_empty() {
         sub.id = Uuid::new_v4().to_string();
@@ -439,22 +448,16 @@ pub fn upsert_subtask(state: State<'_, Db>, mut sub: Subtask) -> Subtask {
             sub.created_at,
         ],
     )
-    .expect("upsert_subtask execute");
-    sub
+    .map_err(|e| e.to_string())?;
+    Ok(sub)
 }
 
 #[tauri::command]
-pub fn delete_subtask(state: State<'_, Db>, id: String) {
+pub fn delete_subtask(state: State<'_, Db>, id: String) -> Result<(), String> {
     let conn = state.0.lock().unwrap();
     conn.execute("DELETE FROM subtasks WHERE id = ?1", [id])
-        .expect("delete_subtask");
-}
-
-/// Экспорт всех данных в JSON-файл по пути (бэкап).
-#[tauri::command]
-pub fn export_to(state: State<'_, Db>, path: String) -> Result<(), String> {
-    let json = export_json(state)?;
-    std::fs::write(&path, json).map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 /// Экспорт всех данных JSON-строкой (файл пишет tauri-plugin-fs — на Android

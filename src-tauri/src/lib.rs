@@ -38,7 +38,6 @@ pub fn run() {
             commands::upsert_subtask,
             commands::delete_subtask,
             commands::exit_app,
-            commands::export_to,
             // Экспорт/импорт через JSON-строку: файловый ввод-вывод делает
             // tauri-plugin-fs (на Android умеет content:// из системных
             // диалогов, где std::fs не работает).

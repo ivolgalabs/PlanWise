@@ -15,6 +15,7 @@ import type { ThemeMode, VisibilityState, SortMode, TaskPattern } from "../store
 import { DEFAULT_VISIBILITY } from "../store";
 import { parseTimeToMinutes, formatMinutes } from "../date";
 import { api, isTauri } from "../api";
+import { useMediaQuery } from "../useMediaQuery";
 import { Icon, type IconName } from "./Icon";
 import { TimePicker, DurationSelect } from "./TimePicker";
 import "./SettingsPanel.css";
@@ -252,30 +253,10 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
   // настроек показываем, только если соответствующая панель/кнопка реально
   // доступна: на тач-экране нет кнопки даты и сетки недели, в узком окне —
   // правой панели с мини-календарём, в «Месяце» мини-календаря нет.
-  const [touchUI, setTouchUI] = useState(
-    () => window.matchMedia("(pointer: coarse), (max-width: 560px)").matches,
-  );
-  const [panelNarrow, setPanelNarrow] = useState(
-    () => window.matchMedia(`(max-width: ${view === "day" ? 700 : 1000}px)`).matches,
-  );
-  const [weekNarrow, setWeekNarrow] = useState(
-    () => window.matchMedia("(max-width: 820px)").matches,
-  );
-  useEffect(() => {
-    const subs: Array<[string, (v: boolean) => void]> = [
-      ["(pointer: coarse), (max-width: 560px)", setTouchUI],
-      [`(max-width: ${view === "day" ? 700 : 1000}px)`, setPanelNarrow],
-      ["(max-width: 820px)", setWeekNarrow],
-    ];
-    const offs = subs.map(([q, set]) => {
-      const mq = window.matchMedia(q);
-      set(mq.matches);
-      const h = (e: MediaQueryListEvent) => set(e.matches);
-      mq.addEventListener("change", h);
-      return () => mq.removeEventListener("change", h);
-    });
-    return () => offs.forEach((u) => u());
-  }, [view]);
+  // Общие listener'ы на запросы — см. useMediaQuery.
+  const touchUI = useMediaQuery("(pointer: coarse), (max-width: 560px)");
+  const panelNarrow = useMediaQuery(`(max-width: ${view === "day" ? 700 : 1000}px)`);
+  const weekNarrow = useMediaQuery("(max-width: 820px)");
 
   // colorSets грузятся асинхронно — если панель открылась до загрузки,
   // черновики остались пустыми. Дозаполняем их, когда данные пришли
@@ -1302,7 +1283,6 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
               ["subtasks", "Подзадачи"],
               ["notes", "Заметки"],
               ["someday", "«Когда-нибудь»"],
-              ["taskActions", "Кнопки «цвет» и «удалить» в задачах"],
               ["archiveBanner", "Баннер «Архивировано задач»"],
             ] as [keyof VisibilityState, string][]).map(([k, label]) => (
               <label key={k} className="oled-toggle">

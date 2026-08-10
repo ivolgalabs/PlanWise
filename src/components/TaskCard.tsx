@@ -5,6 +5,7 @@ import { api, fromEpochDay } from "../api";
 import { COLORS, accentTint, argbToHex } from "../theme";
 import { useStore } from "../store";
 import { formatMinutes } from "../date";
+import { useMediaQuery } from "../useMediaQuery";
 import { SubtaskList } from "./SubtaskList";
 import { AddTaskModal } from "./AddTaskModal";
 import { Icon } from "./Icon";
@@ -44,16 +45,9 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
   const savedRef = useRef<number>(0);
   const { colorSets, visibility, tasks: allTasks } = useStore();
   // На тач-устройствах время и мета собираются под текстом (компактно),
-  // на десктопе — в ряд с текстом.
-  const [isTouch, setTouch] = useState(
-    () => window.matchMedia("(pointer: coarse), (max-width: 560px)").matches,
-  );
-  useEffect(() => {
-    const mq = window.matchMedia("(pointer: coarse), (max-width: 560px)");
-    const handler = (e: MediaQueryListEvent) => setTouch(e.matches);
-    mq.addEventListener("change", handler);
-    return () => mq.removeEventListener("change", handler);
-  }, []);
+  // на десктопе — в ряд с текстом. Один общий listener на запрос — см.
+  // useMediaQuery (раньше каждая задача вешала свой matchMedia-listener).
+  const isTouch = useMediaQuery("(pointer: coarse), (max-width: 560px)");
   // Мобильный компактный ряд (только вне компактной сетки недели).
   const mobileRow = isTouch && !compact;
 

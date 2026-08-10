@@ -16,6 +16,11 @@ pub fn open(path: impl AsRef<std::path::Path>) -> Connection {
 
     // Включаем WAL для лучшей конкурентности и быстродействия.
     conn.pragma_update(None, "journal_mode", "WAL").ok();
+    // Внешние ключи: subtasks ссылаются на tasks — каскадная согласованность.
+    conn.pragma_update(None, "foreign_keys", "ON").ok();
+    // Если другой поток/процесс держит транзакцию дольше мгновения — ждём
+    // до 5 секунд вместо мгновенной ошибки SQLITE_BUSY.
+    conn.busy_timeout(std::time::Duration::from_secs(5)).ok();
 
     migrations::runner()
         .run(&mut conn)

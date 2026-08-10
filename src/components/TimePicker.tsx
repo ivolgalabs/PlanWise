@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { COLORS, accentTint } from "../theme";
 import { formatMinutes } from "../date";
 import { useStore } from "../store";
+import { useMediaQuery } from "../useMediaQuery";
 import { Icon } from "./Icon";
 
 interface Props {
@@ -48,15 +49,8 @@ export function TimePicker({
 }: Props) {
   const [editing, setEditing] = useState(false);
   const { timePresets } = useStore();
-  const [isTouch, setTouch] = useState(
-    () => window.matchMedia("(pointer: coarse), (max-width: 560px)").matches,
-  );
-  useEffect(() => {
-    const mq = window.matchMedia("(pointer: coarse), (max-width: 560px)");
-    const handler = (e: MediaQueryListEvent) => setTouch(e.matches);
-    mq.addEventListener("change", handler);
-    return () => mq.removeEventListener("change", handler);
-  }, []);
+  // Общий listener на запрос (см. useMediaQuery) — тач-раскладка селектов.
+  const isTouch = useMediaQuery("(pointer: coarse), (max-width: 560px)");
 
   // «Своё время» из системных часов: "HH:MM" → минуты, применяем сразу.
   const pickTime = (t: string) => {
