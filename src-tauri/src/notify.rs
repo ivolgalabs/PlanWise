@@ -21,7 +21,7 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::Duration;
 
-use chrono::{Local, NaiveDate, NaiveDateTime, Timelike};
+use chrono::{Local, NaiveDate, NaiveDateTime, TimeZone, Timelike};
 use serde::Deserialize as _;
 use tauri::Manager;
 use tauri_plugin_notification::NotificationExt;
@@ -246,6 +246,18 @@ fn check_digest(app: &tauri::AppHandle, prefs: &NotifyPrefs, now: NaiveDateTime)
 /// Строка задачи с полями, нужными для расчёта напоминания.
 type ReminderRow = (String, String, i64, i64, Option<i64>, Option<i64>);
 
+/// Момент «за N минут до start» с учётом часового пояса. Наивная арифметика
+/// NaiveDateTime в дни перехода времени (DST) сдвигает момент на час — считаем
+/// через Local (знает смещение), затем возвращаем локальную дату-время.
+fn due_at(start: NaiveDateTime, minutes: i64) -> NaiveDateTime {
+    let local = Local
+        .from_local_datetime(&start)
+        .single()
+        .unwrap_or_else(|| Local.from_utc_datetime(&start))
+        - chrono::Duration::minutes(minutes);
+    local.naive_local()
+}
+
 /// Напоминания: за remind_minutes до задач со временем (сегодня/завтра).
 ///
 /// Ключевой момент: момент напоминания (due) считается от ДАТЫ ЗАДАЧИ, а не от
@@ -258,26 +270,28 @@ type ReminderRow = (String, String, i64, i64, Option<i64>, Option<i64>);
 /// «Пора выезжать» за это время до начала.
 fn check_reminders(app: &tauri::AppHandle, prefs: &NotifyPrefs, now: NaiveDateTime) {
     let today_epoch = crate::commands::today_epoch_day();
-    let tomorrow_epoch = today_epoch + 1;
+    // Горизонт выборки: сегодня + 2 дня. Покрывает глобальные интервалы и
+    // свои значения notify_minutes до ~3 суток (задача на послезавтра с
+    // напоминанием «за сутки»/«за 2 суток» всё ещё в выборке).
+    let horizon_epoch = today_epoch + 2;
 
     // (id, title, time_minutes, date_epoch, travel_time, notify_minutes) — дата,
     // время в пути и своё уведомление нужны для расчёта due. travel_time может
     // отсутствовать в старых БД — query_map вернёт NULL как None.
     let timed: Vec<ReminderRow> = {
         let db = app.state::<Db>();
-        let conn = db.0.lock().unwrap();
+        let conn = db.lock();
         let mut stmt = match conn.prepare(
-      "SELECT id, title, time_minutes, date, travel_time, notify_minutes FROM tasks WHERE date IN (?1, ?2) AND time_minutes IS NOT NULL AND is_done = 0 AND archived = 0 AND someday = 0",
+      "SELECT id, title, time_minutes, date, travel_time, notify_minutes FROM tasks WHERE date BETWEEN ?1 AND ?2 AND time_minutes IS NOT NULL AND is_done = 0 AND archived = 0 AND someday = 0",
     ) {
       Ok(s) => s,
       Err(e) => {
-        // travel_time ещё нет (БД до V7) — работаем без него.
-        eprintln!("[notify] prepare (no travel_time?) {:?}", e);
+        eprintln!("[notify] не удалось подготовить запрос напоминаний: {:?}", e);
         return;
       }
     };
         let rows = stmt
-            .query_map([today_epoch, tomorrow_epoch], |r| {
+            .query_map([today_epoch, horizon_epoch], |r| {
                 Ok((
                     r.get::<_, String>(0)?,
                     r.get::<_, String>(1)?,
@@ -318,7 +332,7 @@ fn check_reminders(app: &tauri::AppHandle, prefs: &NotifyPrefs, now: NaiveDateTi
 
         // 1. Выбранные интервалы напоминаний — каждому своё уведомление.
         for rm in intervals {
-            let due = start - chrono::Duration::minutes(rm);
+            let due = due_at(start, rm);
             // Окно отправки: 2 минуты после наступления момента.
             if now < due || now > due + chrono::Duration::minutes(2) {
                 continue;
@@ -346,7 +360,7 @@ fn check_reminders(app: &tauri::AppHandle, prefs: &NotifyPrefs, now: NaiveDateTi
         // 2. «Пора выезжать»: за travel_time до начала задачи (если задано).
         if let Some(tt) = travel_time {
             if tt > 0 {
-                let due = start - chrono::Duration::minutes(tt);
+                let due = due_at(start, tt);
                 if now >= due && now <= due + chrono::Duration::minutes(2) {
                     let key = format!("remind|travel|{}|{}", id, due);
                     if fired().lock().unwrap().contains_key(&key) {

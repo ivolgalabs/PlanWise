@@ -48,7 +48,7 @@ export function TimePicker({
   conflict = false,
 }: Props) {
   const [editing, setEditing] = useState(false);
-  const { timePresets } = useStore();
+  const timePresets = useStore((s) => s.timePresets);
   // Общий listener на запрос (см. useMediaQuery) — тач-раскладка селектов.
   const isTouch = useMediaQuery("(pointer: coarse), (max-width: 560px)");
 

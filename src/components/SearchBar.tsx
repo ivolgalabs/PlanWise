@@ -106,7 +106,7 @@ function FilterSelect<T extends string>({ label, value, options, open, onToggle,
 /** Полоса поиска: текст, категории (чипы с именами), период/статус/сортировка
  *  — компактные выпадающие фильтры в один ряд. */
 export function SearchBar({ query, onQuery, color, onColor, period, status, sort, onPeriod, onStatus, onSort, from, to, onFrom, onTo, onClose }: Props) {
-  const { colorSets } = useStore();
+  const colorSets = useStore((s) => s.colorSets);
   const sets = colorSets.filter((s) => s.id !== "cs-none");
   // Какой фильтр раскрыт (один на панель); null — все свёрнуты.
   const [openKey, setOpenKey] = useState<FilterKey | null>(null);

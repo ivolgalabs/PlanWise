@@ -18,8 +18,11 @@ interface Props {
   /** Архивные задачи — на мобильном правая панель скрыта, архив открывается
    *  кнопкой внизу недели (как в «Дне»). */
   archivedTasks: Task[];
-  /** Узкий экран: показывать секции «Архив» внизу. */
-  narrow: boolean;
+  /** Правая панель скрыта (тот же порог, что в App — 1000px для недели):
+   *  «Когда-нибудь» и «Архив» дублируются внизу. Отдельный флаг от narrow,
+   *  чтобы в полосе 821–1000px секции не пропадали, а сетка/список недели
+   *  переключались по-прежнему на 820px. */
+  mobileSections?: boolean;
   /** Якорь недели (weekDate ?? selectedDate) — тот же, что у сетки недели,
    *  иначе список и сетка показывали бы разные недели после выбора дня. */
   anchor?: Date;
@@ -31,8 +34,11 @@ interface Props {
  * в каждом дне и расширяемыми строками. Каждый день — droppable-зона
  * для перетаскивания задач (@dnd-kit).
  */
-export function WeekViewVertical({ tasks, archivedTasks, narrow, anchor, onChange }: Props) {
-  const { selectedDate, mondayFirst, visibility, sortMode } = useStore();
+export function WeekViewVertical({ tasks, archivedTasks, mobileSections, anchor, onChange }: Props) {
+  const selectedDate = useStore((s) => s.selectedDate);
+  const mondayFirst = useStore((s) => s.mondayFirst);
+  const visibility = useStore((s) => s.visibility);
+  const sortMode = useStore((s) => s.sortMode);
   const [titlesByDay, setTitlesByDay] = useState<Record<string, string>>({});
   const days = weekDays(anchor ?? selectedDate, mondayFirst);
   // Раскрытие архива — по кнопке (как в «Дне»), чтобы не раздувать список.
@@ -102,10 +108,11 @@ export function WeekViewVertical({ tasks, archivedTasks, narrow, anchor, onChang
             addTask={() => addTask(d)}
           />
         ))}
-        {/* Мобильный доступ к «Когда-нибудь» и «Архиву»: правая панель в узком
-            окне скрыта, поэтому секции дублируются внизу недели (как в «Дне»).
-            «Когда-нибудь» — по настройке видимости. */}
-        {narrow && (
+        {/* Мобильный доступ к «Когда-нибудь» и «Архиву»: правая панель скрыта
+            (mobileSections = тот же порог, что в App), поэтому секции
+            дублируются внизу недели (как в «Дне»). «Когда-нибудь» — по
+            настройке видимости. */}
+        {mobileSections && (
           <>
             {visibility.someday && (
               <SomedayColumn
@@ -165,7 +172,7 @@ function DayRow({
     Date.UTC(day.getFullYear(), day.getMonth(), day.getDate()) / 86_400_000,
   );
   const { setNodeRef, isOver } = useDroppable({ id: dayId(ed) });
-  const { taskPatterns } = useStore();
+  const taskPatterns = useStore((s) => s.taskPatterns);
   const weekday = day.toLocaleDateString("ru", { weekday: "short" });
   // Расширенное окно добавления задачи на этот день.
   const [addOpen, setAddOpen] = useState(false);

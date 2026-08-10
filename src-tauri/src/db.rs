@@ -46,8 +46,7 @@ pub fn init(app: &AppHandle) -> Result<Mutex<Connection>, String> {
         .path()
         .app_data_dir()
         .map_err(|e| format!("недоступен каталог данных: {e}"))?;
-    FsUtils::ensure_dir(&app_dir)
-        .map_err(|e| format!("не удалось создать каталог данных: {e}"))?;
+    FsUtils::ensure_dir(&app_dir).map_err(|e| format!("не удалось создать каталог данных: {e}"))?;
     let db_path = app_dir.join("daily_planner.sqlite");
     Ok(Mutex::new(open(db_path)?))
 }

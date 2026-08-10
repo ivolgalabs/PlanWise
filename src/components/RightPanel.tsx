@@ -22,7 +22,10 @@ interface Props {
 /** Правая панель: мини-календарь сверху, «Когда-нибудь» под ним, полоска
  *  «Архив · N» внизу. Разворот архива занимает панель целиком. */
 export function RightPanel({ tasks, width, onSelect, onChange, fill = false }: Props) {
-  const { visibility, archivedTasks, view, panelGap } = useStore();
+  const visibility = useStore((s) => s.visibility);
+  const archivedTasks = useStore((s) => s.archivedTasks);
+  const view = useStore((s) => s.view);
+  const panelGap = useStore((s) => s.panelGap);
   const [archiveOpen, setArchiveOpen] = useState(false);
   // Низкое окно (горизонтальный режим телефона): крупный календарь не
   // влезает по высоте и обрезается — рендерим компактный вариант, чтобы

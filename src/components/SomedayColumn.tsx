@@ -22,7 +22,7 @@ interface Props {
 export function SomedayColumn({ tasks, onChange, stretch = false }: Props) {
   const [newTitle, setNewTitle] = useState("");
   const { setNodeRef, isOver } = useDroppable({ id: somedayZoneId });
-  const { sortMode } = useStore();
+  const sortMode = useStore((s) => s.sortMode);
   // Сортировка «Когда-нибудь» — по тому же режиму, что и дни (время/сложность/
   // ручной порядок); время здесь обычно не задано, поэтому в основном работает
   // сортировка по сложности и ручной порядок.

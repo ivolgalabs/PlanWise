@@ -868,16 +868,17 @@ pub fn import_json(
         let stored = a.get("storedName").and_then(|x| x.as_str()).unwrap_or("");
         let b64 = a.get("base64").and_then(|x| x.as_str());
         let Some(b64) = b64 else { continue };
-        let data = base64::Engine::decode(
-            &base64::engine::general_purpose::STANDARD,
-            b64.as_bytes(),
-        )
-        .map_err(|e| format!("Не удалось декодировать вложение: {e}"))?;
+        let data =
+            base64::Engine::decode(&base64::engine::general_purpose::STANDARD, b64.as_bytes())
+                .map_err(|e| format!("Не удалось декодировать вложение: {e}"))?;
         if data.is_empty() || stored.is_empty() {
             continue;
         }
         // Безопасное имя: только существовавшие на диске файлы (uuid.ext).
-        if !stored.chars().all(|c| c.is_ascii_alphanumeric() || c == '.') {
+        if !stored
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '.')
+        {
             continue;
         }
         new_files.insert(stored.to_string());
@@ -890,7 +891,9 @@ pub fn import_json(
                 a.get("taskId").and_then(|x| x.as_str()).unwrap_or(""),
                 a.get("fileName").and_then(|x| x.as_str()).unwrap_or("file"),
                 a.get("mime").and_then(|x| x.as_str()).unwrap_or(""),
-                a.get("size").and_then(|x| x.as_i64()).unwrap_or(data.len() as i64),
+                a.get("size")
+                    .and_then(|x| x.as_i64())
+                    .unwrap_or(data.len() as i64),
                 stored,
                 a.get("createdAt").and_then(|x| x.as_i64()).unwrap_or(0),
             ],

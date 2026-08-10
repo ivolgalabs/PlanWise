@@ -34,7 +34,7 @@ interface Props {
  * Чекбокс отмечает задачу, кнопка с датой переходит к дню задачи.
  */
 export function SearchResults({ tasks, query, color, period, status, sort, from, to, onJumpToDay, onChange, onResetFilters }: Props) {
-  const { colorSets } = useStore();
+  const colorSets = useStore((s) => s.colorSets);
   const q = query.trim().toLowerCase();
 
   /** Имя цвет-сета для сортировки; без категории — в конец ("\uffff" префикс). */

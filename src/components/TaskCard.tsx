@@ -45,7 +45,11 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
   // Защита от двойного save: Enter (onKeyDown) и следующий за ним blur
   // (onBlur) вызывают save дважды подряд — пропускаем повторный вызов.
   const savedRef = useRef<number>(0);
-  const { colorSets, visibility, tasks: allTasks } = useStore();
+  // Селекторы: подписка только на нужные поля (иначе любой set() в сторе
+  // перерендеривал бы каждую карточку задачи).
+  const colorSets = useStore((s) => s.colorSets);
+  const visibility = useStore((s) => s.visibility);
+  const allTasks = useStore((s) => s.tasks);
   // На тач-устройствах время и мета собираются под текстом (компактно),
   // на десктопе — в ряд с текстом. Один общий listener на запрос — см.
   // useMediaQuery (раньше каждая задача вешала свой matchMedia-listener).

@@ -42,7 +42,11 @@ const MAX_DOTS = 4;
  * даты, в «Дне» — сам выбранный день.
  */
 export function MiniCalendar({ tasks, large, onSelect, droppable = true, fill = false }: Props) {
-  const { selectedDate, weekDate, setSelectedDate, mondayFirst, view } = useStore();
+  const selectedDate = useStore((s) => s.selectedDate);
+  const weekDate = useStore((s) => s.weekDate);
+  const setSelectedDate = useStore((s) => s.setSelectedDate);
+  const mondayFirst = useStore((s) => s.mondayFirst);
+  const view = useStore((s) => s.view);
   const [collapsed, setCollapsed] = useState(false);
   // Месяц календаря — собственное состояние, отвязанное от выбранной даты:
   // можно свободно листать вперёд/назад, не сдвигая выбранный день.
@@ -270,7 +274,17 @@ function CalendarDayCell({
   return (
     <div
       ref={setNodeRef}
+      role="button"
+      tabIndex={0}
+      aria-label={day.toLocaleDateString("ru", { day: "numeric", month: "long" })}
       onClick={() => onPick(day)}
+      onKeyDown={(e) => {
+        // Клавиатура: Enter/пробел выбирают день (как клик).
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onPick(day);
+        }
+      }}
       style={{
         textAlign: "center",
         padding: cellPad,
@@ -322,7 +336,7 @@ function DayDots({
   past: boolean;
   large?: boolean;
 }) {
-  const { colorSets } = useStore();
+  const colorSets = useStore((s) => s.colorSets);
   const sz = large ? 4 : 3;
   const visible = dayTasks.slice(0, MAX_DOTS);
   const rest = dayTasks.length - visible.length;

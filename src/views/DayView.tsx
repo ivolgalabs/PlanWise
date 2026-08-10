@@ -32,8 +32,13 @@ export function DayView({ day, tasks, archivedTasks, onChange }: Props) {
 
   // В совсем узком окне прячем и боковую зону «завтра».
   const tiny = useMediaQuery("(max-width: 560px)");
+  // Правая панель (с мини-календарём и «Когда-нибудь») скрывается при
+  // <700px — тот же порог, что в App (calNarrow). Секции «Когда-нибудь» и
+  // «Архив» должны дублироваться внизу дня В ТОТ ЖЕ момент, иначе в полосе
+  // 561–700px они становятся недоступны вовсе.
+  const panelNarrow = useMediaQuery("(max-width: 700px)");
 
-  const { sortMode } = useStore();
+  const sortMode = useStore((s) => s.sortMode);
   const dayTasks = sortTasksByMode(
     tasks.filter((t) => {
       const d = fromEpochDay(t.date);
@@ -91,7 +96,7 @@ export function DayView({ day, tasks, archivedTasks, onChange }: Props) {
         dayTasks={dayTasks}
         allTasks={tasks}
         archivedTasks={archivedTasks}
-        tiny={tiny}
+        panelNarrow={panelNarrow}
         onChange={onChange}
         createNext={createNext}
         newTitle={newTitle}
@@ -144,7 +149,7 @@ function DayTasksArea({
   dayTasks,
   allTasks,
   archivedTasks,
-  tiny,
+  panelNarrow,
   onChange,
   createNext,
   newTitle,
@@ -156,7 +161,7 @@ function DayTasksArea({
   dayTasks: Task[];
   allTasks: Task[];
   archivedTasks: Task[];
-  tiny: boolean;
+  panelNarrow: boolean;
   onChange: () => void;
   createNext: (afterId: string) => void;
   newTitle: string;
@@ -171,7 +176,8 @@ function DayTasksArea({
   const dayKey = `${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`;
   // На мобильном правая панель скрыта — «Когда-нибудь» и «Архив» показываем
   // здесь, внизу дня (раскрытие архива — по кнопке, чтобы не раздувать день).
-  const { visibility, taskPatterns } = useStore();
+  const visibility = useStore((s) => s.visibility);
+  const taskPatterns = useStore((s) => s.taskPatterns);
   const [archiveOpen, setArchiveOpen] = useState(false);
   // Расширенное окно добавления: время, приоритет, длительность, категория.
   const [addOpen, setAddOpen] = useState(false);
@@ -311,9 +317,10 @@ function DayTasksArea({
       )}
 
       {/* Мобильный доступ к «Когда-нибудь» и «Архиву»: правая панель на узком
-          экране скрыта, поэтому секции дублируются здесь, внизу дня.
-          «Когда-нибудь» — по настройке видимости. */}
-      {tiny && (
+          экране скрыта (panelNarrow = тот же порог, что в App), поэтому
+          секции дублируются здесь, внизу дня. «Когда-нибудь» — по настройке
+          видимости. */}
+      {panelNarrow && (
         <div style={{ marginTop: "var(--sp-6)" }}>
           {visibility.someday && (
             <SomedayColumn

@@ -22,7 +22,12 @@ interface Props {
  * Панель и drag-контекст — на уровне App; здесь только сетка дней.
  */
 export function WeekView({ tasks, archivedTasks, onChange }: Props) {
-  const { selectedDate, weekDate, setWeekDate, mondayFirst, weekVertical, sortMode } = useStore();
+  const selectedDate = useStore((s) => s.selectedDate);
+  const weekDate = useStore((s) => s.weekDate);
+  const setWeekDate = useStore((s) => s.setWeekDate);
+  const mondayFirst = useStore((s) => s.mondayFirst);
+  const weekVertical = useStore((s) => s.weekVertical);
+  const sortMode = useStore((s) => s.sortMode);
   // Якорь недели: фиксируем при первом открытии вида (позже клики в «Дне»
   // не будут двигать неделю — см. store.ts weekDate).
   useEffect(() => {
@@ -34,6 +39,9 @@ export function WeekView({ tasks, archivedTasks, onChange }: Props) {
   // В узком окне принудительно вертикальный список — сетка из 7 узких колонок
   // нечитаема. useMediaQuery реагирует на ресайз окна (общий listener).
   const narrow = useMediaQuery("(max-width: 820px)");
+  // Правая панель скрыта при <1000px (тот же порог, что в App): в этой полосе
+  // «Когда-нибудь» и «Архив» должны дублироваться внизу списка недели.
+  const mobileSections = useMediaQuery("(max-width: 1000px)");
   // Вертикаль, если выбрано настройкой ИЛИ окно узкое.
   const effectiveVertical = weekVertical || narrow;
 
@@ -54,7 +62,7 @@ export function WeekView({ tasks, archivedTasks, onChange }: Props) {
             <WeekViewVertical
               tasks={tasks}
               archivedTasks={archivedTasks}
-              narrow={narrow}
+              mobileSections={mobileSections}
               anchor={weekDate ?? selectedDate}
               onChange={onChange}
             />

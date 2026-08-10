@@ -1457,9 +1457,19 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
       </div>
 
       {/* Модальная карточка шаблона задачи — как окно «Новая задача»:
-          название, время (системные часы), приоритет, длительность, уведомление. */}
+          название, время (системные часы), приоритет, длительность, уведомление.
+          Клик по подложке закрывает ТОЛЬКО модалку (stopPropagation), а не
+          всю панель настроек — иначе всплытие до внешнего settings-overlay
+          закрывало бы всё окно. */}
       {patternModal && (
-        <div className="settings-overlay" onClick={() => setPatternModal(null)} style={{ zIndex: 300 }}>
+        <div
+          className="settings-overlay"
+          onClick={(e) => {
+            e.stopPropagation();
+            setPatternModal(null);
+          }}
+          style={{ zIndex: 300 }}
+        >
           <div
             className="settings-window"
             onClick={(e) => e.stopPropagation()}

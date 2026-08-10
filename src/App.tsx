@@ -634,6 +634,10 @@ function AppRightPanel({
   onChange: () => void;
 }) {
   const draggingRef = useRef(false);
+  // Актуальные обработчики resize — в ref, чтобы их можно было снять при
+  // размонтировании панели (иначе при unmount в процессе drag слушатели
+  // утекали бы до следующего клика мышью).
+  const resizeHandlers = useRef<{ onMove: (ev: MouseEvent) => void; onUp: () => void } | null>(null);
 
   // Resize мышью через drag-handle на левом краю панели.
   const startResize = (e: React.MouseEvent) => {
@@ -650,6 +654,7 @@ function AppRightPanel({
     };
     const onUp = () => {
       draggingRef.current = false;
+      resizeHandlers.current = null;
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
       document.body.style.cursor = "";
@@ -657,9 +662,24 @@ function AppRightPanel({
     };
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
+    resizeHandlers.current = { onMove, onUp };
     document.body.style.cursor = "col-resize";
     document.body.style.userSelect = "none";
   };
+
+  // При размонтировании (ресайз окна скрыл панель) снимаем слушатели, если
+  // drag ещё активен — иначе они утекают до следующего клика.
+  useEffect(() => {
+    return () => {
+      const h = resizeHandlers.current;
+      if (h) {
+        document.removeEventListener("mousemove", h.onMove);
+        document.removeEventListener("mouseup", h.onUp);
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      }
+    };
+  }, []);
 
   // Единая ширина панели в «Дне» и «Неделе» (calWidth): resize-ручка есть
   // только в неделе, но значение общее — панель не «гуляет» между видами.

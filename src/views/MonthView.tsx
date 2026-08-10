@@ -22,7 +22,12 @@ interface Props {
  * Drag задач между днями — через @dnd-kit.
  */
 export function MonthView({ tasks, onSelectDay, onSelectWeek, onChange }: Props) {
-  const { selectedDate, monthDate, setMonthDate, mondayFirst, colorSets, sortMode } = useStore();
+  const selectedDate = useStore((s) => s.selectedDate);
+  const monthDate = useStore((s) => s.monthDate);
+  const setMonthDate = useStore((s) => s.setMonthDate);
+  const mondayFirst = useStore((s) => s.mondayFirst);
+  const colorSets = useStore((s) => s.colorSets);
+  const sortMode = useStore((s) => s.sortMode);
   // Якорь месяца: фиксируем при первом открытии вида — выбор дня в «Дне»
   // не будет двигать месяц (см. store.ts monthDate).
   useEffect(() => {
@@ -303,7 +308,17 @@ function MonthCell({
   return (
     <div
       ref={setNodeRef}
+      role="button"
+      tabIndex={0}
+      aria-label={day.toLocaleDateString("ru", { day: "numeric", month: "long" })}
       onClick={onClickDay}
+      onKeyDown={(e) => {
+        // Клавиатура: Enter/пробел открывают меню дня (как клик).
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClickDay();
+        }
+      }}
       style={{
         background: isOver
           ? accentTint(0.12)
@@ -342,7 +357,7 @@ function MonthCell({
  *  точка. Выполненные задачи не учитываются (плашка = «сколько ещё сделать»).
  *  Клик по дню открывает окно с полным списком задач (см. menuDay). */
 function CategoryBadges({ tasks }: { tasks: Task[] }) {
-  const { colorSets } = useStore();
+  const colorSets = useStore((s) => s.colorSets);
   // Группируем невыполненные задачи по colorSetId; null/cs-none → «без цвета».
   const open = tasks.filter((t) => !t.isDone);
   if (open.length === 0) return null;
