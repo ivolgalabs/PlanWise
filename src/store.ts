@@ -19,6 +19,8 @@ export interface TaskPattern {
   durationMinutes: number | null;
   /** Своё уведомление шаблона (null = по умолчанию). */
   notifyMinutes?: number | null;
+  /** Выехать заранее (минуты на дорогу) — как в карточке задачи. */
+  travelTime?: number | null;
 }
 
 /** Флаги видимости элементов интерфейса (настройки → «Интерфейс»). */

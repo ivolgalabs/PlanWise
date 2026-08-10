@@ -193,6 +193,7 @@ function DayTasksArea({
       difficulty: p.difficulty,
       durationMinutes: p.durationMinutes,
       notifyMinutes: p.notifyMinutes ?? null,
+      travelTime: p.travelTime ?? null,
     });
     onChange();
   };
