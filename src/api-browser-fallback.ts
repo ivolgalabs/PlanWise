@@ -83,7 +83,9 @@ export const browserApi = {
     save(K.sets, load<ColorSet>(K.sets).filter((s) => s.id !== id));
     save(K.tasks, load<Task>(K.tasks).map((t) => (t.colorSetId === id ? { ...t, colorSetId: null } : t)));
   },
-  async archiveOverdue(todayDay: number): Promise<number> {
+  async archiveOverdue(): Promise<number> {
+    // Граница «сегодня» — локальная, как на бэкенде.
+    const todayDay = Math.floor(Date.UTC(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()) / 86_400_000);
     let n = 0;
     save(K.tasks, load<Task>(K.tasks).map((t) => {
       if (t.date < todayDay && !t.isDone && !t.someday && !t.archived) { n++; return { ...t, archived: true }; }

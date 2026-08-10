@@ -110,11 +110,10 @@ export const api = {
   },
   /** Удалить категорию; задачи с ней становятся без категории. */
   deleteColorSet: (id: string) => (isTauri() ? invoke<void>("delete_color_set", { id }) : browserApi.deleteColorSet(id)),
-  /** Архив: просроченные невыполненные задачи. Возвращает кол-во. */
-  archiveOverdue: (today: Date) => {
-    const td = toEpochDay(today);
-    return isTauri() ? invoke<number>("archive_overdue", { todayEpochDay: td }) : browserApi.archiveOverdue(td);
-  },
+  /** Архив: просроченные невыполненные задачи. Возвращает кол-во.
+   *  Граница «сегодня» вычисляется на бэкенде (часы устройства). */
+  archiveOverdue: () =>
+    isTauri() ? invoke<number>("archive_overdue") : browserApi.archiveOverdue(),
   /** Задачи «Архива» (скрыты из видов, ждут возврата). */
   getArchivedTasks: () => (isTauri() ? invoke<Task[]>("get_archived_tasks") : browserApi.getArchivedTasks()),
   /** Вернуть задачу из архива на выбранную дату. */

@@ -53,6 +53,9 @@ export function SearchResults({ tasks, query, color, period, status, sort, from,
     })
     .filter((t) => {
       const d = fromEpochDay(t.date);
+      // «Когда-нибудь» (date = 0 → 1970 год) никогда не бывает «просроченной»
+      // и не входит в диапазоны дат — только в «Все».
+      if (t.someday) return false;
       if (period === "today") return isToday(d);
       if (period === "overdue") return isPast(d);
       if (period === "7days") {

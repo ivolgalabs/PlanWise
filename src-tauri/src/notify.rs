@@ -144,7 +144,11 @@ pub fn start_scheduler(app: tauri::AppHandle) {
     // Разрешение на уведомления (Android 13+) запрашивает фронтенд через
     // JS-плагин — вызов request_permission здесь блокировал setup навсегда.
     std::thread::spawn(move || loop {
-        tick(&app);
+        // Паника в одном тике (например, сбой БД) не должна убивать
+        // планировщик навсегда — ловим и продолжаем следующий цикл.
+        if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| tick(&app))).is_err() {
+            eprintln!("[notify] тик планировщика упал, продолжаю через 60 с");
+        }
         std::thread::sleep(Duration::from_secs(60));
     });
 }
@@ -162,7 +166,7 @@ fn tick(app: &tauri::AppHandle) {
     // каждые 60 секунд не нужно — фронтенд и так обновляет данные при каждом
     // изменении задач (write_widget_data), а здесь достаточно поймать смену
     // даты (иначе утром виджет показывал бы вчерашний список).
-    let today = days_from_epoch(Local::now().date_naive());
+    let today = crate::commands::today_epoch_day();
     let mut last = widget_day().lock().unwrap();
     if *last != today {
         *last = today;
@@ -186,16 +190,15 @@ fn tick(app: &tauri::AppHandle) {
 
 /// Утренний дайджест: в назначенный час (окно 2 минуты) — задачи на сегодня.
 fn check_digest(app: &tauri::AppHandle, prefs: &NotifyPrefs, now: NaiveDateTime) {
-    let today = now.date();
     if now.hour() != prefs.day_summary_hour as u32 || now.minute() > 2 {
         return;
     }
-    let key = format!("digest|{}", today);
+    let key = format!("digest|{}", now.date());
     if fired().lock().unwrap().contains_key(&key) {
         return;
     }
 
-    let today_epoch = days_from_epoch(today);
+    let today_epoch = crate::commands::today_epoch_day();
     let tasks = {
         let db = app.state::<Db>();
         let conn = db.0.lock().unwrap();
@@ -254,8 +257,7 @@ type ReminderRow = (String, String, i64, i64, Option<i64>, Option<i64>);
 /// уведомление вместо всех глобальных). Если задано travel_time — дополнительно
 /// «Пора выезжать» за это время до начала.
 fn check_reminders(app: &tauri::AppHandle, prefs: &NotifyPrefs, now: NaiveDateTime) {
-    let today = now.date();
-    let today_epoch = days_from_epoch(today);
+    let today_epoch = crate::commands::today_epoch_day();
     let tomorrow_epoch = today_epoch + 1;
 
     // (id, title, time_minutes, date_epoch, travel_time, notify_minutes) — дата,
@@ -361,12 +363,6 @@ fn check_reminders(app: &tauri::AppHandle, prefs: &NotifyPrefs, now: NaiveDateTi
             }
         }
     }
-}
-
-/// epoch-day (UTC-дни с 1970-01-01) для локальной даты — так, как хранит
-/// фронтенд (дата задачи = локальная дата в epoch-day).
-fn days_from_epoch(date: NaiveDate) -> i64 {
-    (date - NaiveDate::from_ymd_opt(1970, 1, 1).unwrap()).num_days()
 }
 
 /// Обратное преобразование: epoch-day → NaiveDate.

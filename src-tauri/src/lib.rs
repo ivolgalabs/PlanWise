@@ -14,7 +14,17 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
-            let conn = db::init(app.handle());
+            // Понятная ошибка вместо молчаливой паники: при сбое БД (read-only
+            // каталог, коррупция) пишем причину в лог и закрываемся.
+            let conn = match db::init(app.handle()) {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!("[daily-planner] КРИТИЧЕСКАЯ ОШИБКА БАЗЫ ДАННЫХ: {e}");
+                    eprintln!("[daily-planner] Приложение будет закрыто. Проверьте доступ к каталогу данных.");
+                    app.handle().exit(1);
+                    return Ok(());
+                }
+            };
             app.manage(Db(conn));
             // Планировщик уведомлений: утренний список задач на день и
             // напоминания за N минут до задач со временем. Пересчитывает

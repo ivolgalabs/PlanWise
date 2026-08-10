@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import type { Task } from "../api";
-import { fromEpochDay } from "../api";
+import { toEpochDay } from "../api";
 import {
   startOfWeek,
   firstOfMonth,
@@ -56,8 +56,19 @@ export function MiniCalendar({ tasks, large, onSelect, droppable = true, fill = 
   const selectedWeek =
     view === "week" ? weekDays(weekDate ?? selectedDate, mondayFirst) : null;
 
-  const tasksForDay = (d: Date): Task[] =>
-    tasks.filter((t) => isSameDay(fromEpochDay(t.date), d));
+  // Группировка задач по дню — ОДИН проход вместо 42 фильтраций на рендер
+  // (раньше каждая ячейка фильтровала весь массив задач и создавала Date).
+  const tasksByDay = useMemo(() => {
+    const map = new Map<number, Task[]>();
+    for (const t of tasks) {
+      const list = map.get(t.date) ?? [];
+      list.push(t);
+      map.set(t.date, list);
+    }
+    return map;
+  }, [tasks]);
+
+  const tasksForDay = (d: Date): Task[] => tasksByDay.get(toEpochDay(d)) ?? [];
 
   const cells: Date[] = Array.from({ length: 42 }, (_, i) => {
     const d = new Date(gridStart);

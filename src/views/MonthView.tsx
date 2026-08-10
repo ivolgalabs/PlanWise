@@ -132,7 +132,10 @@ export function MonthView({ tasks, onSelectDay, onSelectWeek, onChange }: Props)
                   <MonthCell
                     key={day.toISOString()}
                     day={day}
-                    inMonth={day.getMonth() === selectedDate.getMonth()}
+                    // Затемнять надо ячейки вне ОТОБРАЖАЕМОГО месяца (якорь
+                    // monthDate), а не выбранной даты — иначе при рассинхроне
+                    // якорей весь месяц выглядел бы «чужим».
+                    inMonth={day.getMonth() === (monthDate ?? selectedDate).getMonth()}
                     dayTasks={tasksForDay(day)}
                     onClickDay={() => setMenuDay(day)}
                   />

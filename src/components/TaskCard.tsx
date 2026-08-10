@@ -84,7 +84,6 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
     // Enter+blur дублируют вызов в течение <300мс — пропускаем повтор.
     const now = Date.now();
     if (now - savedRef.current < 300) return task;
-    savedRef.current = now;
     // Авто-удаление при пустом тексте — ТОЛЬКО если задача изначально была
     // пустой (создана Enter-ом и забыта).
     if (!t) {
@@ -105,6 +104,9 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
     if (t !== task.title) {
       try {
         const updated = await api.upsertTask({ ...task, title: t });
+        // Дедупликацию включаем только после РЕАЛЬНОЙ записи: blur без
+        // изменений не должен съедать быстрое сохранение следующим Enter-ом.
+        savedRef.current = now;
         onChange();
         return updated;
       } catch {

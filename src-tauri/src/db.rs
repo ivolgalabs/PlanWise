@@ -6,13 +6,24 @@ use tauri::{AppHandle, Manager};
 /// Состояние БД, доступное Tauri-командам через State<Db>.
 pub struct Db(pub Mutex<Connection>);
 
+impl Db {
+    /// Безопасный захват соединения: даже если мьютекс «отравлен» паникой
+    /// другого потока, берём данные как есть (into_inner) вместо повторной
+    /// паники на каждом вызове — одна ошибка не убивает все команды.
+    pub fn lock(&self) -> std::sync::MutexGuard<'_, Connection> {
+        self.0.lock().unwrap_or_else(|e| e.into_inner())
+    }
+}
+
 use refinery::embed_migrations;
 embed_migrations!("migrations");
 
 /// Открывает SQLite по пути и прогоняет миграции (refinery).
 /// Вынесено из init, чтобы тесты могли открывать in-memory БД.
-pub fn open(path: impl AsRef<std::path::Path>) -> Connection {
-    let mut conn = Connection::open(path).expect("failed to open sqlite db");
+/// Возвращает понятную ошибку вместо паники — при сбое БД (read-only каталог,
+/// коррупция, ошибка миграции) приложение закроется с сообщением, а не молча.
+pub fn open(path: impl AsRef<std::path::Path>) -> Result<Connection, String> {
+    let mut conn = Connection::open(path).map_err(|e| format!("не удалось открыть БД: {e}"))?;
 
     // Включаем WAL для лучшей конкурентности и быстродействия.
     conn.pragma_update(None, "journal_mode", "WAL").ok();
@@ -24,20 +35,21 @@ pub fn open(path: impl AsRef<std::path::Path>) -> Connection {
 
     migrations::runner()
         .run(&mut conn)
-        .expect("failed to run migrations");
+        .map_err(|e| format!("ошибка миграций БД: {e}"))?;
 
-    conn
+    Ok(conn)
 }
 
 /// Инициализирует SQLite в app_data_dir и прогоняет миграции (refinery).
-pub fn init(app: &AppHandle) -> Mutex<Connection> {
+pub fn init(app: &AppHandle) -> Result<Mutex<Connection>, String> {
     let app_dir = app
         .path()
         .app_data_dir()
-        .expect("app data dir not resolvable");
-    FsUtils::ensure_dir(&app_dir).ok();
+        .map_err(|e| format!("недоступен каталог данных: {e}"))?;
+    FsUtils::ensure_dir(&app_dir)
+        .map_err(|e| format!("не удалось создать каталог данных: {e}"))?;
     let db_path = app_dir.join("daily_planner.sqlite");
-    Mutex::new(open(db_path))
+    Ok(Mutex::new(open(db_path)?))
 }
 
 #[cfg(test)]
@@ -48,7 +60,7 @@ mod tests {
     /// с default '' (фича «Заметки»).
     #[test]
     fn migrations_add_notes_column() {
-        let conn = open(":memory:");
+        let conn = open(":memory:").expect("open test db");
         let has_notes: bool = conn
             .query_row(
                 "SELECT COUNT(*) > 0 FROM pragma_table_info('tasks') WHERE name = 'notes'",
@@ -78,7 +90,7 @@ mod tests {
     /// V5: у tasks есть колонка someday с default 0.
     #[test]
     fn migrations_add_someday_column() {
-        let conn = open(":memory:");
+        let conn = open(":memory:").expect("open test db");
         let has: bool = conn
             .query_row(
                 "SELECT COUNT(*) > 0 FROM pragma_table_info('tasks') WHERE name = 'someday'",
@@ -98,7 +110,7 @@ mod tests {
     /// V6: у tasks есть колонка archived с default 0.
     #[test]
     fn migrations_add_archived_column() {
-        let conn = open(":memory:");
+        let conn = open(":memory:").expect("open test db");
         let has: bool = conn
             .query_row(
                 "SELECT COUNT(*) > 0 FROM pragma_table_info('tasks') WHERE name = 'archived'",

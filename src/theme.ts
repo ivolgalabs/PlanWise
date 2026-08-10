@@ -66,33 +66,6 @@ export const THEME_FAMILIES: ThemeFamily[] = PALETTES.map((p) => {
   };
 });
 
-const MODE_LABEL: Record<ThemeMode, string> = {
-  light: "Светлая",
-  dark: "Тёмная",
-  oled: "OLED",
-};
-
-export interface FullTheme {
-  id: string;
-  palette: string;
-  mode: ThemeMode;
-  label: string;
-}
-
-/** Все темы (11 палитр × 3 режима). */
-export const ALL_THEMES: FullTheme[] = PALETTES.flatMap((p) =>
-  (["light", "dark", "oled"] as ThemeMode[]).map((mode) => ({
-    id: `${mode}-${p.id}`,
-    palette: p.id,
-    mode,
-    label: `${p.label} · ${MODE_LABEL[mode]}`,
-  })),
-);
-
-/** Получить HEX акцента палитры. */
-export const paletteAccent = (palette: string): string =>
-  PALETTES.find((p) => p.id === palette)?.accent ?? "#4c5699";
-
 /** Применить тему по полному id ("light-slate" и т.д.). */
 export const applyTheme = (themeId: string) => {
   document.documentElement.setAttribute("data-theme", themeId);

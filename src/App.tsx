@@ -114,6 +114,9 @@ function App() {
   // Поиск: полоса поиска открыта, текст, фильтр по цвету-сету,
   // период, статус и сортировка результатов.
   const [searchOpen, setSearchOpen] = useState(false);
+  // Ошибка загрузки данных (сбой БД) — показывается баннером, чтобы приложение
+  // не выглядело «пустым» без объяснения.
+  const [loadError, setLoadError] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchColor, setSearchColor] = useState<string | null>(null);
   const [searchPeriod, setSearchPeriod] = useState<PeriodFilter>("all");
@@ -251,11 +254,15 @@ function App() {
     archiveRan.current = true;
     (async () => {
       try {
-        setArchiveCount(await api.archiveOverdue(new Date()));
+        setArchiveCount(await api.archiveOverdue());
+        // Заархивированные задачи должны исчезнуть из видов, а «Архив» —
+        // получить их: перезагружаем оба пула.
+        reload();
       } catch {
         /* некритично */
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [archiveEnabled]);
 
   // Если кнопка поиска скрыта настройками — закрываем открытый поиск
@@ -273,13 +280,21 @@ function App() {
   const reload = useCallback(async () => {
     // Обычные задачи (широкий диапазон для календаря) + «Когда-нибудь» +
     // «Архив» (отдельным пулом — в виды не попадает).
-    const [regular, someday, archived] = await Promise.all([
-      api.getTasks(new Date(0), new Date(9999, 0, 1)),
-      api.getSomedayTasks(),
-      api.getArchivedTasks(),
-    ]);
-    setTasks([...regular, ...someday]);
-    setArchivedTasks(archived);
+    try {
+      const [regular, someday, archived] = await Promise.all([
+        api.getTasks(new Date(0), new Date(9999, 0, 1)),
+        api.getSomedayTasks(),
+        api.getArchivedTasks(),
+      ]);
+      setTasks([...regular, ...someday]);
+      setArchivedTasks(archived);
+    } catch (e) {
+      // Сбой БД/загрузки — не оставляем пользователя с «пустым» приложением
+      // без объяснения: показываем заглушку-предупреждение.
+      console.error("Не удалось загрузить задачи:", e);
+      setLoadError("Не удалось загрузить задачи. Проверьте доступ к данным приложения.");
+      return;
+    }
     // Данные для Android-виджета (список задач на сегодня) — пишем при
     // каждой перезагрузке задач, виджет читает files/widget.json.
     if (isTauri()) {
@@ -295,7 +310,11 @@ function App() {
 
   // Загрузка категорий (цвет-сетов) — при старте и после правок в настройках.
   const reloadSets = useCallback(async () => {
-    setColorSets(await api.getColorSets());
+    try {
+      setColorSets(await api.getColorSets());
+    } catch (e) {
+      console.error("Не удалось загрузить категории:", e);
+    }
   }, [setColorSets]);
 
   useEffect(() => {
@@ -420,6 +439,30 @@ function App() {
         weekVertical={weekVertical}
         onToggleWeekOrientation={() => setWeekVertical(!weekVertical)}
       />
+      {/* Баннер ошибки загрузки данных — не «пустой» экран без объяснения. */}
+      {loadError && (
+        <div
+          style={{
+            background: "rgba(224,82,82,0.12)",
+            color: COLORS.text,
+            fontSize: "var(--fs-2xs)",
+            padding: "var(--sp-2) var(--sp-8)",
+            display: "flex",
+            alignItems: "center",
+            gap: "var(--sp-2)",
+          }}
+        >
+          <span>{loadError}</span>
+          <button
+            className="icon-btn"
+            style={{ marginLeft: "auto" }}
+            onClick={() => setLoadError("")}
+            title="Скрыть"
+          >
+            <Icon name="close" size={14} />
+          </button>
+        </div>
+      )}
       {/* Баннер архива скрывается настройками видимости. */}
       {visibility.archiveBanner && archiveCount > 0 && (
         <div

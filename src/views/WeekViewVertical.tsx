@@ -20,6 +20,9 @@ interface Props {
   archivedTasks: Task[];
   /** Узкий экран: показывать секции «Архив» внизу. */
   narrow: boolean;
+  /** Якорь недели (weekDate ?? selectedDate) — тот же, что у сетки недели,
+   *  иначе список и сетка показывали бы разные недели после выбора дня. */
+  anchor?: Date;
   onChange: () => void;
 }
 
@@ -28,10 +31,10 @@ interface Props {
  * в каждом дне и расширяемыми строками. Каждый день — droppable-зона
  * для перетаскивания задач (@dnd-kit).
  */
-export function WeekViewVertical({ tasks, archivedTasks, narrow, onChange }: Props) {
+export function WeekViewVertical({ tasks, archivedTasks, narrow, anchor, onChange }: Props) {
   const { selectedDate, mondayFirst, visibility, sortMode } = useStore();
   const [titlesByDay, setTitlesByDay] = useState<Record<string, string>>({});
-  const days = weekDays(selectedDate, mondayFirst);
+  const days = weekDays(anchor ?? selectedDate, mondayFirst);
   // Раскрытие архива — по кнопке (как в «Дне»), чтобы не раздувать список.
   const [archiveOpen, setArchiveOpen] = useState(false);
 

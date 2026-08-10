@@ -137,9 +137,17 @@ export function TaskFormFields({
       if (editing && initial) {
         await api.upsertTask({ ...initial, ...payload });
         // Авто-выполнение при смене времени (настройка): прошлое → выполнена,
-        // будущее → выполнение снимается. Только если время изменилось.
+        // будущее → выполнение снимается. Только если время изменилось и у
+        // задачи ЕСТЬ дата — «Когда-нибудь» (date=0 → 1970) не «прошлая»:
+        // иначе установка времени помечала бы её выполненной.
         const timeChanged = initial.timeMinutes !== time;
-        if (autoDonePastTime && timeChanged && time != null) {
+        if (
+          autoDonePastTime &&
+          timeChanged &&
+          time != null &&
+          !initial.someday &&
+          !initial.archived
+        ) {
           const now = new Date();
           const today = Math.floor(
             Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / 86_400_000,

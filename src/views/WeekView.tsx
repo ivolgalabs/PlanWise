@@ -55,6 +55,7 @@ export function WeekView({ tasks, archivedTasks, onChange }: Props) {
               tasks={tasks}
               archivedTasks={archivedTasks}
               narrow={narrow}
+              anchor={weekDate ?? selectedDate}
               onChange={onChange}
             />
           ) : (

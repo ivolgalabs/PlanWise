@@ -35,10 +35,6 @@ export const isToday = (d: Date): boolean => isSameDay(d, new Date());
 export const firstOfMonth = (d: Date): Date =>
   new Date(d.getFullYear(), d.getMonth(), 1);
 
-/** Последний день месяца. */
-export const lastOfMonth = (d: Date): Date =>
-  new Date(d.getFullYear(), d.getMonth() + 1, 0);
-
 /** День в прошлом (строго раньше сегодня). */
 export const isPast = (d: Date): boolean => {
   const today = new Date();

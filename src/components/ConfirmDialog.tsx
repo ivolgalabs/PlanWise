@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { COLORS } from "../theme";
 
 interface Props {
@@ -14,6 +15,14 @@ interface Props {
 /** Кастомное окно подтверждения (например, «Удалить задачу?»).
  *  Оверлей + карточка, стиль как у DatePickerModal. Esc закрывает. */
 export function ConfirmDialog({ title, confirmLabel = "Удалить", danger = true, onConfirm, onCancel }: Props) {
+  // Esc = отмена (как в DatePickerModal/MonthView).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCancel();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onCancel]);
   return (
     <div
       className="modal-overlay"

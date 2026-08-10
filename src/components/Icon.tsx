@@ -7,7 +7,7 @@ interface IconProps { name: IconName; size?: number; title?: string; }
 export type IconName =
   | "search" | "calendar" | "gear" | "chevronL" | "chevronR" | "close"
   | "plus" | "drag" | "dots" | "clock" | "palette" | "grid"
-  | "list" | "calendarHide" | "calendarCheck" | "sun" | "moon" | "monitor" | "trash"
+  | "list" | "calendarCheck" | "sun" | "moon" | "monitor" | "trash"
   | "save" | "note" | "zoom" | "upload" | "download" | "archive" | "copy" | "file" | "edit";
 
 const PATHS: Record<IconName, ReactNode> = {
@@ -24,7 +24,6 @@ const PATHS: Record<IconName, ReactNode> = {
   palette: <><path d="M12 3a9 9 0 0 0 0 18c1.5 0 2-1 2-2 0-1.2-1-1.5-1-2.5 0-1.3 1.1-2.5 2.5-2.5H17a4 4 0 0 0 4-4c0-4.4-4-7-9-7z" /><circle cx="7.5" cy="11" r="1" /><circle cx="10.5" cy="7.5" r="1" /><circle cx="14.5" cy="7.5" r="1" /></>,
   grid: <><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></>,
   list: <><path d="M8 6h13M8 12h13M8 18h13" /><circle cx="4" cy="6" r="1" /><circle cx="4" cy="12" r="1" /><circle cx="4" cy="18" r="1" /></>,
-  calendarHide: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M8 3v4M16 3v4M3 10h18" /><path d="M4 21l16-16" /></>,
   // Календарь с галочкой — «назначить дату» (перенос задачи); геометрия из
   // Universal UI icons.css (icon--calendar-check).
   calendarCheck: <><path d="M8 2v4M16 2v4" /><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M3 10h18" /><path d="M9 16l2 2 4-4" /></>,
