@@ -1284,7 +1284,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
                   maxHours={168}
                 />
                 <span style={{ fontSize: "var(--fs-2xs)", color: "var(--text-muted)" }}>
-                  добавьте интервал селектами
+                  введите ч/мин и нажмите «ОК»
                 </span>
               </div>
             )}

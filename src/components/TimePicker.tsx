@@ -211,13 +211,14 @@ function toHHMM(m: number): string {
   return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 }
 
-/** Системные селекты «часы» + «минуты» для ввода КОЛИЧЕСТВА времени
- *  (длительность, выезд, напоминание): на Android открывают системный барабан
- *  ввода: компактные числовые поля «ч» и «мин» (на таче — цифровая
- *  клавиатура). Без жёсткого потолка: maxHours — только верхняя граница
- *  поля «часы» (по умолчанию 168 ч = 7 суток; раньше было 12 ч — длительность
- *  и время в пути нельзя было задать больше). 0 ч 0 мин = снять значение
- *  (null). Переиспользуется в пикере и в карточке/настройках. */
+/** Числовые поля «ч» и «мин» для ввода КОЛИЧЕСТВА времени (длительность,
+ *  выезд, напоминание): на таче — цифровая клавиатура. Значение применяется
+ *  ТОЛЬКО по подтверждению (Enter или кнопка «ОК») — пока печатаешь число,
+ *  ничего не меняется (раньше каждая цифра сразу коммитила значение, а в
+ *  настройках напоминаний каждая цифра добавляла отдельный интервал).
+ *  Без жёсткого потолка: maxHours — верхняя граница поля «часы» (по умолчанию
+ *  168 ч = 7 суток). 0 ч 0 мин = снять значение (null). Переиспользуется
+ *  в пикере и в карточке/настройках. */
 export function DurationSelect({
   value,
   onChange,
@@ -241,12 +242,20 @@ export function DurationSelect({
     setMStr(value != null && value > 0 ? String(value % 60) : "");
   }, [value]);
 
-  // Коммитим, только когда оба поля заполнены (пустое = ввод ещё идёт).
-  const commit = (nh: string, nm: string) => {
-    if (nh === "" || nm === "") return;
-    const hh = Math.max(0, Math.min(maxHours, parseInt(nh, 10) || 0));
-    const mm = Math.max(0, Math.min(59, parseInt(nm, 10) || 0));
+  // Применение — ТОЛЬКО по явному подтверждению (Enter или кнопка «ОК»):
+  // пока печатаешь число, значение не меняется (раньше каждая цифра была
+  // «подтверждением» — в настройках напоминаний каждая цифра добавляла
+  // отдельный интервал). Пустое поле = 0.
+  const commit = () => {
+    const nh = hStr === "" ? 0 : parseInt(hStr, 10);
+    const nm = mStr === "" ? 0 : parseInt(mStr, 10);
+    if (Number.isNaN(nh) || Number.isNaN(nm)) return;
+    const hh = Math.max(0, Math.min(maxHours, nh));
+    const mm = Math.max(0, Math.min(59, nm));
     onChange(hh === 0 && mm === 0 ? null : hh * 60 + mm);
+  };
+  const onKey = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") commit();
   };
 
   return (
@@ -257,10 +266,8 @@ export function DurationSelect({
         min={0}
         max={maxHours}
         value={hStr}
-        onChange={(e) => {
-          setHStr(e.target.value);
-          commit(e.target.value, mStr);
-        }}
+        onChange={(e) => setHStr(e.target.value)}
+        onKeyDown={onKey}
         style={numStyle}
         title={`Часы (до ${maxHours})`}
       />
@@ -271,14 +278,20 @@ export function DurationSelect({
         min={0}
         max={59}
         value={mStr}
-        onChange={(e) => {
-          setMStr(e.target.value);
-          commit(hStr, e.target.value);
-        }}
+        onChange={(e) => setMStr(e.target.value)}
+        onKeyDown={onKey}
         style={numStyle}
         title="Минуты"
       />
       <span style={unitStyle}>мин</span>
+      <button
+        type="button"
+        onClick={commit}
+        style={okBtnStyle}
+        title="Применить значение"
+      >
+        ОК
+      </button>
     </div>
   );
 }
@@ -344,6 +357,17 @@ const numStyle: React.CSSProperties = {
 };
 const unitStyle: React.CSSProperties = {
   fontSize: "var(--fs-2xs)", color: COLORS.muted, marginRight: 2,
+};
+// Кнопка «ОК» в DurationSelect: явное подтверждение введённого ч/мин.
+const okBtnStyle: React.CSSProperties = {
+  fontSize: "var(--fs-2xs)",
+  padding: "4px 8px",
+  cursor: "pointer",
+  border: `1px solid ${COLORS.accent}`,
+  background: accentTint(0.1),
+  color: COLORS.accent,
+  borderRadius: "var(--radius-sm)",
+  fontWeight: 600,
 };
 const submitStyle: React.CSSProperties = {
   display: "block", width: "100%", marginTop: "var(--sp-3)",
