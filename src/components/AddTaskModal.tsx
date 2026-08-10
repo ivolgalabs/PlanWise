@@ -241,9 +241,10 @@ export function TaskFormFields({
       />
 
       {/* Время + длительность + выезд — одним пикером (системные часы/селекты).
-          Бейдж времени ровно по центру карточки (без подписи слева): время —
-          главное поле, его удобно видеть и нажимать не у левого края. */}
-      <div style={{ ...fieldRow, justifyContent: "center" }}>
+          Бейдж — слева, как у остальных полей; само меню пикера открывается
+          по центру карточки (см. TimePicker). */}
+      <div style={fieldRow}>
+        <span style={labelStyle}>Время</span>
         <TimePicker
           value={time}
           onChange={setTime}

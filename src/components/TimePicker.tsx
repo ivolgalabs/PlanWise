@@ -1,5 +1,4 @@
-import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useState } from "react";
 import { COLORS, accentTint } from "../theme";
 import { formatMinutes } from "../date";
 import { useStore } from "../store";
@@ -49,54 +48,9 @@ export function TimePicker({
   conflict = false,
 }: Props) {
   const [editing, setEditing] = useState(false);
-  // Десктоп-попап рендерится ПРЯМО В body (портал) с position:fixed и
-  // координатами от кнопки: так он не может обрезаться контейнером со
-  // скроллом и не уезжает за край экрана (раскрывается вверх, если снизу
-  // не хватает места). Раньше абсолютный попап внутри модалки/настроек
-  // обрезался и уходил за край.
-  const [openUp, setOpenUp] = useState(false);
-  const [popPos, setPopPos] = useState<{ top: number; bottom: number; left: number; maxH: number } | null>(null);
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const popRef = useRef<HTMLDivElement>(null);
   const timePresets = useStore((s) => s.timePresets);
   // Общий listener на запрос (см. useMediaQuery) — тач-раскладка селектов.
   const isTouch = useMediaQuery("(pointer: coarse), (max-width: 560px)");
-
-  // Закрытие попапа по клику вне его (десктоп). Раньше попап «висел», пока
-  // не выберешь значение; теперь клик в другом месте его закрывает.
-  useEffect(() => {
-    if (!editing || isTouch) return;
-    const onDown = (e: MouseEvent) => {
-      if (popRef.current && !popRef.current.contains(e.target as Node)) setEditing(false);
-    };
-    document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
-  }, [editing, isTouch]);
-
-  // Открытие меню: на таче — модалка по центру (за экран не выходит), на
-  // десктопе — попап у кнопки: снизу, а если не влезает — вверх; ширина и
-  // высота ограничены экраном.
-  const openMenu = () => {
-    if (isTouch) {
-      setEditing(true);
-      return;
-    }
-    const b = buttonRef.current?.getBoundingClientRect();
-    if (!b) {
-      setEditing(true);
-      return;
-    }
-    const below = window.innerHeight - b.bottom;
-    const above = b.top;
-    const up = below < 240 && above > below;
-    const w = Math.min(340, window.innerWidth * 0.88);
-    // Правый край попапа — по правому краю кнопки, но не дальше экрана.
-    const left = Math.max(8, Math.min(b.right - w, window.innerWidth - w - 8));
-    const maxH = (up ? above : below) - 8;
-    setOpenUp(up);
-    setPopPos({ top: b.bottom + 4, bottom: b.top - 4, left, maxH: Math.max(180, Math.min(480, maxH)) });
-    setEditing(true);
-  };
 
   // «Своё время» из системных часов: "HH:MM" → минуты, применяем сразу.
   // Пустая строка («УДАЛИТЬ» в системных часах) — снимаем значение.
@@ -218,9 +172,8 @@ export function TimePicker({
   return (
     <div style={pickerStyle}>
       <button
-        ref={buttonRef}
         type="button"
-        onClick={openMenu}
+        onClick={() => setEditing(true)}
         style={{
           ...badgeStyle(value !== null, large, compact, conflict),
           cursor: "pointer",
@@ -239,46 +192,16 @@ export function TimePicker({
             : "в течение дня"}
       </button>
 
-      {editing &&
-        (isTouch ? (
-          /* Модалка по центру экрана на мобильном: не зависит от положения
-             кнопки, не вылезает за края. */
-          <div style={overlayStyle} onClick={() => setEditing(false)}>
-            <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
-              {menu}
-            </div>
+      {editing && (
+        /* Меню — модалкой ПО ЦЕНТРУ (одинаково на телефоне и десктопе):
+           не привязано к кнопке слева, не обрезается контейнером и не
+           выходит за край экрана. Клик по подложке закрывает. */
+        <div style={overlayStyle} onClick={() => setEditing(false)}>
+          <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
+            {menu}
           </div>
-        ) : (
-          /* Десктоп: попап порталом в body, position:fixed у кнопки. Не
-             обрезается контейнером и не выходит за экран (вверх/вниз —
-             смотри openMenu). zIndex 400 — выше всех модалок и настроек. */
-          popPos &&
-          createPortal(
-            <div
-              ref={popRef}
-              style={{
-                position: "fixed",
-                ...(openUp
-                  ? { bottom: window.innerHeight - popPos.bottom }
-                  : { top: popPos.top }),
-                left: popPos.left,
-                width: "min(88vw, 340px)",
-                minWidth: 200,
-                maxHeight: popPos.maxH,
-                overflowY: "auto",
-                background: COLORS.card,
-                border: `1px solid ${COLORS.cardBorder}`,
-                borderRadius: "var(--radius-md)",
-                padding: "var(--sp-2)",
-                boxShadow: "var(--shadow-lg)",
-                zIndex: 400,
-              }}
-            >
-              {menu}
-            </div>,
-            document.body,
-          )
-        ))}
+        </div>
+      )}
     </div>
   );
 }
