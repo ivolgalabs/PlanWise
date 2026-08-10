@@ -31,21 +31,17 @@ export function DayColumn({
   const weekday = day.toLocaleDateString("ru", { weekday: "short" });
   const dayNum = day.getDate();
   // Иерархия по весу дня: past — бледный/компактный, today/tomorrow — крупные,
-  // near — нормальный, future — слегка уменьшенный.
-  const dim = weight === "past" ? 0.4 : weight === "future" ? 0.7 : 1;
+  // остальные будущие — одинаково нормальные (иначе пятница яркая, а суббота
+  // вдруг серая — без понятной пользователю причины).
+  const dim = weight === "past" ? 0.4 : 1;
   // Размеры заголовка зависят от веса.
   const headPad =
     weight === "past"
       ? "var(--sp-1) var(--sp-2)"
-      : weight === "future"
-        ? "var(--sp-1) var(--sp-3)"
-        : "var(--sp-2) var(--sp-3)";
-  const headFs =
-    weight === "past"
-      ? "var(--fs-2xs)"
-      : weight === "future"
-        ? "var(--fs-xs)"
-        : "var(--fs-sm)";
+      : weight === "today" || weight === "tomorrow"
+        ? "var(--sp-2) var(--sp-3)"
+        : "var(--sp-1) var(--sp-3)";
+  const headFs = weight === "past" ? "var(--fs-2xs)" : "var(--fs-sm)";
   const headWeight = weight === "past" ? 400 : weight === "today" || weight === "tomorrow" ? 700 : 600;
 
   const epochDay = Math.floor(
@@ -64,28 +60,6 @@ export function DayColumn({
     onChange();
     // Вернуть фокус на поле ввода для непрерывного набора.
     requestAnimationFrame(() => newInputRef.current?.focus());
-  };
-
-  /** Создать новую пустую строку после задачи [afterId] и сфокусировать её. */
-  const createNext = async (afterId: string) => {
-    // sortOrder новой задачи — чуть больше, чем у afterId.
-    const after = tasks.find((t) => t.id === afterId);
-    const sort = after ? after.sortOrder + 1 : Date.now();
-    await api.upsertTask({ title: "", date: epochDay, sortOrder: sort });
-    onChange();
-    // Фокус новой строки после ре-рендера — ищем ТОЛЬКО внутри своей колонки
-    // (data-day-key), чтобы не сфокусировать пустую строку соседнего дня.
-    // В компактной сетке поле задачи — textarea, поэтому ищем оба варианта.
-    requestAnimationFrame(() => {
-      const container = document.querySelector(`[data-day-key="${dayKey}"]`);
-      if (!container) return;
-      const empty = Array.from(
-        container.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
-          "input[data-task-id], textarea[data-task-id]",
-        ),
-      ).find((i) => i.value === "");
-      empty?.focus();
-    });
   };
 
   return (
@@ -144,13 +118,8 @@ export function DayColumn({
           flex: 1,
           overflowY: "auto",
           minHeight: 0,
-          // Иерархия: прошедшие дни — мельче шрифт задач, будущие — чуть меньше.
-          fontSize:
-            weight === "past"
-              ? "var(--fs-2xs)"
-              : weight === "future"
-                ? "var(--fs-xs)"
-                : "var(--fs-sm)",
+          // Иерархия: прошедшие дни — мельче шрифт задач, будущие — обычный.
+          fontSize: weight === "past" ? "var(--fs-2xs)" : "var(--fs-sm)",
         }}
       >
         {tasks.map((t) => (
@@ -158,8 +127,11 @@ export function DayColumn({
             key={t.id}
             task={t}
             onChange={onChange}
-            onCreateNext={createNext}
             compact
+            // Без onCreateNext: в компактной сетке Enter просто сохраняет
+            // задачу и НЕ создаёт новую пустую строку ниже (иначе каждая
+            // задача «плодила» пустую). Новые задачи — полем «+ добавить»
+            // внизу колонки.
           />
         ))}
       </div>

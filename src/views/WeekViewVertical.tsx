@@ -190,16 +190,17 @@ function DayRow({
     onChange();
   };
 
-  // Иерархия: past — бледный/компактный, today/tomorrow — крупные.
-  const dim = weight === "past" ? 0.4 : weight === "future" ? 0.75 : 1;
+  // Иерархия: past — бледный/компактный, today/tomorrow — крупные, остальные
+  // (ближние и дальние будущие) — одинаково нормальные: иначе пятница
+  // (за +2..3 дня) была яркой, а суббота (за +4) вдруг серой — без видимой
+  // причины для пользователя.
+  const dim = weight === "past" ? 0.4 : 1;
   const headFs =
     weight === "past"
       ? "var(--fs-2xs)"
-      : weight === "future"
-        ? "var(--fs-xs)"
-        : weight === "today" || weight === "tomorrow"
-          ? "var(--fs-md)"
-          : "var(--fs-sm)";
+      : weight === "today" || weight === "tomorrow"
+        ? "var(--fs-md)"
+        : "var(--fs-sm)";
   const headWeight =
     weight === "past" ? 400 : weight === "today" || weight === "tomorrow" ? 700 : 600;
   const headColor =
@@ -245,13 +246,8 @@ function DayRow({
       <div
         style={{
           paddingLeft: "var(--sp-6)",
-          // Иерархия: прошедшие дни — мельче шрифт задач, будущие — чуть меньше.
-          fontSize:
-            weight === "past"
-              ? "var(--fs-2xs)"
-              : weight === "future"
-                ? "var(--fs-xs)"
-                : "var(--fs-sm)",
+          // Иерархия: прошедшие дни — мельче шрифт задач, остальные — обычный.
+          fontSize: weight === "past" ? "var(--fs-2xs)" : "var(--fs-sm)",
         }}
       >
         {dayTasks.map((t) => (

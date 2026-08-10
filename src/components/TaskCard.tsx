@@ -257,7 +257,11 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
       style={{
         position: "relative",
         display: "flex",
-        alignItems: "center",
+        // В компактной сетке выравниваем по ПЕРВОЙ строке текста (flex-start),
+        // а не по центру блока: когда под текстом появляется время, строка
+        // становится выше, и центрирование «утапливало» чекбокс/ручку вниз —
+        // ряд выглядел разъехавшимся.
+        alignItems: compact ? "flex-start" : "center",
         background: timeConflict ? "rgba(224,82,82,0.09)" : "transparent",
         borderRadius: "var(--radius-sm)",
         ...dragStyle,
@@ -287,6 +291,9 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
           flexShrink: 0,
           width: compact ? 16 : 20,
           marginRight: "var(--sp-2)",
+          // В компактной сетке ряд выровнен по первой строке текста —
+          // ручка прижимается к ней же (иначе иконка «плавает» выше текста).
+          marginTop: compact ? 6 : 0,
           display: "inline-flex",
           alignItems: "center",
           justifyContent: "center",
@@ -304,7 +311,7 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
           type="checkbox"
           checked={task.isDone}
           onChange={toggleDone}
-          style={{ flexShrink: 0 }}
+          style={{ flexShrink: 0, ...(compact ? { marginTop: 2 } : {}) }}
         />
       </label>
       {/* Цветной маркер приоритета: виден в строке, настройка — в карточке. */}
@@ -317,7 +324,9 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
             borderRadius: "50%",
             background: prioMeta.color,
             flexShrink: 0,
-            alignSelf: "center",
+            // В компактной сетке — к первой строке текста (как чекбокс).
+            alignSelf: compact ? "flex-start" : "center",
+            marginTop: compact ? 10 : 0,
             marginRight: "var(--sp-1)",
           }}
         />
@@ -455,7 +464,10 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
         style={{
           flexShrink: 0,
           marginLeft: "var(--sp-1)",
+          // В компактной сетке кнопка — к первой строке текста, не к центру
+          // блока (иначе при появлении времени под текстом ✎ «проваливалась»).
           alignSelf: compact ? "flex-start" : "center",
+          marginTop: compact ? 4 : 0,
           width: compact ? 20 : 24,
           height: compact ? 20 : 24,
         }}

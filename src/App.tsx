@@ -649,7 +649,9 @@ function AppRightPanel({
     const onMove = (ev: MouseEvent) => {
       if (!draggingRef.current) return;
       // Движение мыши влево увеличивает ширину (handle слева от панели).
-      const next = Math.min(CAL_MAX, Math.max(CAL_MIN, startWidth + (startX - ev.clientX)));
+      // Панель не должна съедать контент: минимум 240px под левую колонку.
+      const maxW = Math.max(CAL_MIN, window.innerWidth - 240);
+      const next = Math.min(Math.min(CAL_MAX, maxW), Math.max(CAL_MIN, startWidth + (startX - ev.clientX)));
       onResize(next);
     };
     const onUp = () => {
@@ -683,14 +685,18 @@ function AppRightPanel({
 
   // Единая ширина панели в «Дне» и «Неделе» (calWidth): resize-ручка есть
   // только в неделе, но значение общее — панель не «гуляет» между видами.
+  // Дополнительно ограничиваем ширину по окну: панель не должна занимать
+  // весь экран (под контент — минимум 240px), даже если сохранённая ширина
+  // была выставлена на большом мониторе.
+  const effectiveWidth = Math.max(CAL_MIN, Math.min(calWidth, window.innerWidth - 240));
   if (view === "day") {
-    return <RightPanel tasks={tasks} width={calWidth} onSelect={onSelect} onChange={onChange} />;
+    return <RightPanel tasks={tasks} width={effectiveWidth} onSelect={onSelect} onChange={onChange} />;
   }
   return (
     <div
       style={{
         position: "relative",
-        width: calWidth,
+        width: effectiveWidth,
         flexShrink: 0,
         display: "flex",
         flexDirection: "column",

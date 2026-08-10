@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { open } from "@tauri-apps/plugin-dialog";
-import { readFile } from "@tauri-apps/plugin-fs";
+import { createPortal } from "react-dom";
 import { openPath } from "@tauri-apps/plugin-opener";
 import type { Attachment, Subtask, Task } from "../api";
 import { api, toEpochDay } from "../api";
@@ -95,6 +94,13 @@ export function TaskFormFields({
   // при создании новой задачи id ещё нет — файлы добавит уже после сохранения.
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [attLoading, setAttLoading] = useState(false);
+  // Ошибка прикрепления файла — показываем рядом с кнопкой «Файл» (раньше
+  // ошибки молча глотались: «не все файлы прикрепляются» без объяснения).
+  const [attError, setAttError] = useState("");
+  // Скрытое поле выбора файла: на Android системный пикер открывает сам
+  // WebView (плагин-диалог там не работает — ActivityResultLauncher не
+  // регистрируется), на десктопе — нативный диалог WKWebView/Chromium.
+  const fileInputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (!editing || !initial) return;
     setAttLoading(true);
@@ -234,9 +240,10 @@ export function TaskFormFields({
         }}
       />
 
-      {/* Время + длительность + выезд — одним пикером (системные часы/селекты). */}
-      <div style={fieldRow}>
-        <span style={labelStyle}>Время</span>
+      {/* Время + длительность + выезд — одним пикером (системные часы/селекты).
+          Бейдж времени ровно по центру карточки (без подписи слева): время —
+          главное поле, его удобно видеть и нажимать не у левого края. */}
+      <div style={{ ...fieldRow, justifyContent: "center" }}>
         <TimePicker
           value={time}
           onChange={setTime}
@@ -321,7 +328,7 @@ export function TaskFormFields({
         {customNotify && (
           /* Своё значение — КОЛИЧЕСТВО времени до начала (системные
              селекты «ч»/«мин»), а не время суток. */
-          <DurationSelect value={notify != null && notify > 0 ? notify : null} onChange={setNotify} />
+          <DurationSelect value={notify != null && notify > 0 ? notify : null} onChange={setNotify} maxHours={168} />
         )}
       </div>
 
@@ -488,30 +495,52 @@ export function TaskFormFields({
               className="chip-btn"
               disabled={attLoading}
               style={{ alignSelf: "flex-start" }}
-              onClick={async () => {
-                try {
-                  // Системный диалог выбора файла (на Android — любые файлы).
-                  const path = await open({ multiple: false });
-                  if (!path || Array.isArray(path)) return;
-                  const name = path.split("/").pop() || "file";
-                  // Читаем файл плагином fs (умеет content:// на Android),
-                  // в Rust отправляем base64 — он сохранит в приватный каталог.
-                  const data = await readFile(path);
-                  let bin = "";
-                  const CH = 0x8000;
-                  for (let i = 0; i < data.length; i += CH) {
-                    bin += String.fromCharCode(...data.subarray(i, i + CH));
-                  }
-                  const b64 = btoa(bin);
-                  const att = await api.addAttachment(initial.id, name, mimeOf(name), b64);
-                  setAttachments((prev) => [...prev, att]);
-                } catch {
-                  /* отмена выбора или ошибка — молча */
-                }
-              }}
+              onClick={() => fileInputRef.current?.click()}
+              title="Выбрать файл (системный диалог)"
             >
               <Icon name="plus" size={12} /> Файл
             </button>
+            {/* Скрытый input: системный выбор файла на всех платформах. Содержимое
+                читаем FileReader-ом прямо в WebView (без плагинов-диалогов) и
+                отправляем в Rust base64-строкой. */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              style={{ display: "none" }}
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                // Сброс value: повторный выбор того же файла снова сработает.
+                e.target.value = "";
+                if (!file || !initial) return;
+                setAttLoading(true);
+                setAttError("");
+                try {
+                  // Blob → base64 порциями (избегаем переполнения стека для
+                  // больших файлов; 25 МБ — лимит Rust-команды).
+                  const b64 = await fileToBase64(file);
+                  const att = await api.addAttachment(
+                    initial.id,
+                    file.name,
+                    file.type || mimeOf(file.name),
+                    b64,
+                  );
+                  setAttachments((prev) => [...prev, att]);
+                } catch (err) {
+                  setAttError(
+                    typeof err === "string"
+                      ? err
+                      : `Не удалось прикрепить «${file.name}»`,
+                  );
+                } finally {
+                  setAttLoading(false);
+                }
+              }}
+            />
+            {attError && (
+              <span style={{ fontSize: "var(--fs-2xs)", color: "#d9534f" }}>
+                {attError}
+              </span>
+            )}
           </div>
         </div>
       )}
@@ -773,7 +802,11 @@ export function AddTaskModal({
   const head = editing && initial?.someday
     ? "Когда-нибудь"
     : day.toLocaleDateString("ru", { day: "numeric", month: "long", weekday: "long" });
-  return (
+  // Рендерим в document.body через портал: карточка открывается из задач,
+  // лежащих в днях с opacity<1 (прошедшие дни — «серые»). opacity создаёт
+  // stacking context, и fixed-оверлей «запирался» внутри него — календарь
+  // справа рисовался ПОВЕРХ карточки. Порталом уходим на уровень body.
+  return createPortal(
     <div
       className="modal-overlay"
       onClick={(e) => {
@@ -830,8 +863,33 @@ export function AddTaskModal({
           onCancel={onClose}
         />
       </div>
-    </div>
+    </div>,
+    document.body,
   );
+}
+
+/** Файл → base64 через FileReader (порциями, чтобы не переполнить стек
+ *  вызовов на больших файлах). FileReader — нативный для WebView, не зависит
+ *  от плагинов-диалогов (на Android они не работают). */
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject("Не удалось прочитать файл");
+    reader.onload = () => {
+      try {
+        const bytes = new Uint8Array(reader.result as ArrayBuffer);
+        const CH = 0x8000;
+        let bin = "";
+        for (let i = 0; i < bytes.length; i += CH) {
+          bin += String.fromCharCode(...bytes.subarray(i, i + CH));
+        }
+        resolve(btoa(bin));
+      } catch {
+        reject("Не удалось закодировать файл");
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  });
 }
 
 /** MIME по расширению файла — для открытия системным приложением. */

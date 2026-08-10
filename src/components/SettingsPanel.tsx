@@ -44,6 +44,20 @@ const CAT_PALETTE = [
   "#9b6de8", "#e07fb4", "#8a8a8a", "#795548",
 ];
 
+/** Человекочитаемая подпись интервала напоминания: 90 → «1 ч 30 мин»,
+ *  10080 → «за 7 дн». Используется в чипах своих интервалов напоминаний. */
+function fmtRemindInterval(m: number): string {
+  if (m < 60) return `${m} мин`;
+  const h = Math.floor(m / 60);
+  const mm = m % 60;
+  if (m >= 1440) {
+    const d = Math.floor(m / 1440);
+    const restH = Math.floor((m % 1440) / 60);
+    return d >= 1 && restH === 0 ? `за ${d} дн` : `за ${d} дн ${restH} ч`;
+  }
+  return mm === 0 ? `${h} ч` : `${h} ч ${mm} мин`;
+}
+
 // Кодирование TMT-кода (канон UUI): TMT-<тема с _ вместо ->-<accent>-<bgType L/O/D/T>-<bgHex>-<slot L/D/N>
 function encodePresetCode(p: ThemePreset): string {
   const theme = p.theme.replace(/-/g, "_");
@@ -306,6 +320,10 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
   // ── Экспорт/импорт данных (JSON-бэкап) ──
   const [dataMsg, setDataMsg] = useState("");
   const [dataError, setDataError] = useState(false);
+  // Своё значение интервала напоминания: держим в локальном состоянии, чтобы
+  // селекты «ч/мин» показывали выбранное, а не сбрасывались на 0 (раньше
+  // value={null} — после выбора всё выглядело «не применённым»).
+  const [customRemind, setCustomRemind] = useState<number | null>(null);
   const onExport = async () => {
     // В браузере диалог сохранения недоступен — только в Tauri-приложении.
     if (!isTauri()) {
@@ -1222,27 +1240,52 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
               <span>Напоминания перед задачами со временем</span>
             </label>
             {notifyReminders && (
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-2)", padding: "0 0 var(--sp-2)" }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-2)", padding: "0 0 var(--sp-2)", alignItems: "center" }}>
                 {/* Мультиселект: можно выбрать несколько интервалов сразу
-                    (например, за час И за день) — каждое уведомление придёт. */}
+                    (например, за час И за день) — каждое уведомление придёт.
+                    Нажатие на активную кнопку убирает интервал. */}
                 {[15, 30, 60, 120, 1440].map((m) => (
                   <button
                     key={m}
                     className={`preset-btn ${notifyRemindMinutes.includes(m) ? "active" : ""}`}
                     onClick={() => setNotifyRemindMinutes(m)}
+                    title={notifyRemindMinutes.includes(m) ? "Убрать этот интервал" : "Добавить этот интервал"}
                   >
                     {m < 60 ? `${m} мин` : m === 60 ? "1 час" : m === 120 ? "2 часа" : "за день"}
                   </button>
                 ))}
+                {/* Свои интервалы — такие же кнопки с ×: видно, что добавлено,
+                    и можно убрать. Раньше свои значения не показывались и
+                    «повисали» без возможности снять. */}
+                {notifyRemindMinutes
+                  .filter((m) => ![15, 30, 60, 120, 1440].includes(m))
+                  .map((m) => (
+                    <button
+                      key={m}
+                      className="preset-btn active"
+                      onClick={() => setNotifyRemindMinutes(m)}
+                      title="Убрать этот интервал"
+                    >
+                      {fmtRemindInterval(m)} ×
+                    </button>
+                  ))}
                 {/* Своё значение — КОЛИЧЕСТВО времени до начала (селекты
-                    «ч»/«мин», системный барабан), а не час времени суток:
-                    выбор добавляет/убирает интервал из списка. */}
+                    «ч»/«мин»). Селекты помнят выбранное (local state), выбор
+                    ДОБАВЛЯЕТ интервал (не переключает — иначе повторный выбор
+                    того же значения молча его убирал). */}
                 <DurationSelect
-                  value={null}
+                  value={customRemind}
                   onChange={(m) => {
-                    if (m != null && m > 0) setNotifyRemindMinutes(m);
+                    setCustomRemind(m);
+                    if (m != null && m > 0 && !notifyRemindMinutes.includes(m)) {
+                      setNotifyRemindMinutes(m);
+                    }
                   }}
+                  maxHours={168}
                 />
+                <span style={{ fontSize: "var(--fs-2xs)", color: "var(--text-muted)" }}>
+                  добавьте интервал селектами
+                </span>
               </div>
             )}
             <p className="section-hint" style={{ marginTop: "var(--sp-2)" }}>

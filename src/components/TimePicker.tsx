@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { COLORS, accentTint } from "../theme";
 import { formatMinutes } from "../date";
 import { useStore } from "../store";
@@ -48,13 +49,62 @@ export function TimePicker({
   conflict = false,
 }: Props) {
   const [editing, setEditing] = useState(false);
+  // Десктоп-попап рендерится ПРЯМО В body (портал) с position:fixed и
+  // координатами от кнопки: так он не может обрезаться контейнером со
+  // скроллом и не уезжает за край экрана (раскрывается вверх, если снизу
+  // не хватает места). Раньше абсолютный попап внутри модалки/настроек
+  // обрезался и уходил за край.
+  const [openUp, setOpenUp] = useState(false);
+  const [popPos, setPopPos] = useState<{ top: number; bottom: number; left: number; maxH: number } | null>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
   const timePresets = useStore((s) => s.timePresets);
   // Общий listener на запрос (см. useMediaQuery) — тач-раскладка селектов.
   const isTouch = useMediaQuery("(pointer: coarse), (max-width: 560px)");
 
+  // Закрытие попапа по клику вне его (десктоп). Раньше попап «висел», пока
+  // не выберешь значение; теперь клик в другом месте его закрывает.
+  useEffect(() => {
+    if (!editing || isTouch) return;
+    const onDown = (e: MouseEvent) => {
+      if (popRef.current && !popRef.current.contains(e.target as Node)) setEditing(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [editing, isTouch]);
+
+  // Открытие меню: на таче — модалка по центру (за экран не выходит), на
+  // десктопе — попап у кнопки: снизу, а если не влезает — вверх; ширина и
+  // высота ограничены экраном.
+  const openMenu = () => {
+    if (isTouch) {
+      setEditing(true);
+      return;
+    }
+    const b = buttonRef.current?.getBoundingClientRect();
+    if (!b) {
+      setEditing(true);
+      return;
+    }
+    const below = window.innerHeight - b.bottom;
+    const above = b.top;
+    const up = below < 240 && above > below;
+    const w = Math.min(340, window.innerWidth * 0.88);
+    // Правый край попапа — по правому краю кнопки, но не дальше экрана.
+    const left = Math.max(8, Math.min(b.right - w, window.innerWidth - w - 8));
+    const maxH = (up ? above : below) - 8;
+    setOpenUp(up);
+    setPopPos({ top: b.bottom + 4, bottom: b.top - 4, left, maxH: Math.max(180, Math.min(480, maxH)) });
+    setEditing(true);
+  };
+
   // «Своё время» из системных часов: "HH:MM" → минуты, применяем сразу.
+  // Пустая строка («УДАЛИТЬ» в системных часах) — снимаем значение.
   const pickTime = (t: string) => {
-    if (!t) return;
+    if (!t) {
+      onChange(null);
+      return;
+    }
     const [hh, mm] = t.split(":").map(Number);
     if (Number.isFinite(hh) && Number.isFinite(mm)) onChange(hh * 60 + mm);
   };
@@ -64,7 +114,7 @@ export function TimePicker({
   const durationSel = (
     value: number | null,
     apply: ((m: number | null) => void) | undefined,
-    maxHours: number,
+    maxHours?: number,
   ) => {
     if (!apply) return null;
     return <DurationSelect value={value} onChange={apply} maxHours={maxHours} />;
@@ -105,6 +155,10 @@ export function TimePicker({
           type="time"
           value={value !== null ? toHHMM(value) : ""}
           onChange={(e) => pickTime(e.target.value)}
+          onInput={(e) => pickTime(e.currentTarget.value)}
+          // Некоторые WebView-сборки коммитят значение только при закрытии
+          // пикера — ловим и blur (применение идемпотентно, повтор не вредит).
+          onBlur={(e) => pickTime(e.currentTarget.value)}
           style={timeInputStyle}
           title="Выбрать время системными часами"
         />
@@ -125,7 +179,7 @@ export function TimePicker({
                 {v === null ? "—" : `${v} мин`}
               </button>
             ))}
-            {durationSel(travelTime ?? null, onChangeTravel, 12)}
+            {durationSel(travelTime ?? null, onChangeTravel)}
           </div>
         </div>
       )}
@@ -144,7 +198,7 @@ export function TimePicker({
                 {v === null ? "—" : fmtDur(v)}
               </button>
             ))}
-            {durationSel(durationMinutes ?? null, onChangeDuration, 12)}
+            {durationSel(durationMinutes ?? null, onChangeDuration)}
           </div>
         </div>
       )}
@@ -164,8 +218,9 @@ export function TimePicker({
   return (
     <div style={pickerStyle}>
       <button
+        ref={buttonRef}
         type="button"
-        onClick={() => setEditing((v) => !v)}
+        onClick={openMenu}
         style={{
           ...badgeStyle(value !== null, large, compact, conflict),
           cursor: "pointer",
@@ -187,15 +242,42 @@ export function TimePicker({
       {editing &&
         (isTouch ? (
           /* Модалка по центру экрана на мобильном: не зависит от положения
-             кнопки, не вылезает за края (в неделе/поиске меню обрезалось
-             контейнером со скроллом). */
+             кнопки, не вылезает за края. */
           <div style={overlayStyle} onClick={() => setEditing(false)}>
             <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
               {menu}
             </div>
           </div>
         ) : (
-          <div style={menuStyle}>{menu}</div>
+          /* Десктоп: попап порталом в body, position:fixed у кнопки. Не
+             обрезается контейнером и не выходит за экран (вверх/вниз —
+             смотри openMenu). zIndex 400 — выше всех модалок и настроек. */
+          popPos &&
+          createPortal(
+            <div
+              ref={popRef}
+              style={{
+                position: "fixed",
+                ...(openUp
+                  ? { bottom: window.innerHeight - popPos.bottom }
+                  : { top: popPos.top }),
+                left: popPos.left,
+                width: "min(88vw, 340px)",
+                minWidth: 200,
+                maxHeight: popPos.maxH,
+                overflowY: "auto",
+                background: COLORS.card,
+                border: `1px solid ${COLORS.cardBorder}`,
+                borderRadius: "var(--radius-md)",
+                padding: "var(--sp-2)",
+                boxShadow: "var(--shadow-lg)",
+                zIndex: 400,
+              }}
+            >
+              {menu}
+            </div>,
+            document.body,
+          )
         ))}
     </div>
   );
@@ -208,48 +290,72 @@ function toHHMM(m: number): string {
 
 /** Системные селекты «часы» + «минуты» для ввода КОЛИЧЕСТВА времени
  *  (длительность, выезд, напоминание): на Android открывают системный барабан
- *  выбора. 0 часов 0 минут = снять значение (null). Переиспользуется в пикере
- *  и в карточке/настройках. */
+ *  ввода: компактные числовые поля «ч» и «мин» (на таче — цифровая
+ *  клавиатура). Без жёсткого потолка: maxHours — только верхняя граница
+ *  поля «часы» (по умолчанию 168 ч = 7 суток; раньше было 12 ч — длительность
+ *  и время в пути нельзя было задать больше). 0 ч 0 мин = снять значение
+ *  (null). Переиспользуется в пикере и в карточке/настройках. */
 export function DurationSelect({
   value,
   onChange,
-  maxHours = 12,
+  maxHours = 168,
 }: {
   value: number | null;
   onChange: (m: number | null) => void;
   maxHours?: number;
 }) {
-  const h = value != null ? Math.floor(value / 60) : 0;
-  const m = value != null ? value % 60 : 0;
-  const set = (nh: number, nm: number) => {
-    onChange(nh === 0 && nm === 0 ? null : nh * 60 + nm);
+  // Локальные строки полей: пока пользователь печатает, поле не «прыгает»
+  // (контролируемое число с onChange-коммитом затирало бы ввод).
+  const [hStr, setHStr] = useState<string>(() =>
+    value != null && value > 0 ? String(Math.floor(value / 60)) : "",
+  );
+  const [mStr, setMStr] = useState<string>(() =>
+    value != null && value > 0 ? String(value % 60) : "",
+  );
+  // Внешнее изменение (пресет, сброс) — синхронизируем поля.
+  useEffect(() => {
+    setHStr(value != null && value > 0 ? String(Math.floor(value / 60)) : "");
+    setMStr(value != null && value > 0 ? String(value % 60) : "");
+  }, [value]);
+
+  // Коммитим, только когда оба поля заполнены (пустое = ввод ещё идёт).
+  const commit = (nh: string, nm: string) => {
+    if (nh === "" || nm === "") return;
+    const hh = Math.max(0, Math.min(maxHours, parseInt(nh, 10) || 0));
+    const mm = Math.max(0, Math.min(59, parseInt(nm, 10) || 0));
+    onChange(hh === 0 && mm === 0 ? null : hh * 60 + mm);
   };
+
   return (
-    <div style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
-      <select
-        value={h}
-        onChange={(e) => set(Number(e.target.value), m)}
-        style={selStyle}
-        title="Часы"
-      >
-        {Array.from({ length: maxHours + 1 }, (_, i) => (
-          <option key={i} value={i}>
-            {i} ч
-          </option>
-        ))}
-      </select>
-      <select
-        value={m}
-        onChange={(e) => set(h, Number(e.target.value))}
-        style={selStyle}
+    <div style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+      <input
+        type="number"
+        inputMode="numeric"
+        min={0}
+        max={maxHours}
+        value={hStr}
+        onChange={(e) => {
+          setHStr(e.target.value);
+          commit(e.target.value, mStr);
+        }}
+        style={numStyle}
+        title={`Часы (до ${maxHours})`}
+      />
+      <span style={unitStyle}>ч</span>
+      <input
+        type="number"
+        inputMode="numeric"
+        min={0}
+        max={59}
+        value={mStr}
+        onChange={(e) => {
+          setMStr(e.target.value);
+          commit(hStr, e.target.value);
+        }}
+        style={numStyle}
         title="Минуты"
-      >
-        {Array.from({ length: 12 }, (_, i) => i * 5).map((v) => (
-          <option key={v} value={v}>
-            {v === 0 ? "0 мин" : `${v} мин`}
-          </option>
-        ))}
-      </select>
+      />
+      <span style={unitStyle}>мин</span>
     </div>
   );
 }
@@ -283,14 +389,6 @@ const labelStyle: React.CSSProperties = {
   color: COLORS.muted,
   marginBottom: "var(--sp-1)",
 };
-const menuStyle: React.CSSProperties = {
-  position: "absolute", right: 0, top: "100%", marginTop: 4,
-  background: COLORS.card, border: `1px solid ${COLORS.cardBorder}`,
-  borderRadius: "var(--radius-md)", padding: "var(--sp-2)",
-  boxShadow: "var(--shadow-lg)", zIndex: 200, minWidth: 200,
-  // Ограничение по высоте: длинное меню скроллится, а не уходит за экран.
-  maxHeight: "min(70vh, 480px)", overflowY: "auto",
-};
 const overlayStyle: React.CSSProperties = {
   position: "fixed", inset: 0, zIndex: 300,
   background: "rgba(0,0,0,0.45)",
@@ -314,11 +412,15 @@ const timeInputStyle: React.CSSProperties = {
   border: `1px solid ${COLORS.cardBorder}`, borderRadius: "var(--radius-sm)",
   background: "transparent", color: COLORS.text, outline: "none",
 };
-const selStyle: React.CSSProperties = {
-  fontSize: "var(--fs-2xs)", padding: "3px 4px",
+// Числовые поля «ч»/«мин» в DurationSelect: компактные, по центру цифры.
+const numStyle: React.CSSProperties = {
+  width: 54, fontSize: "var(--fs-sm)", padding: "4px 2px",
   border: `1px solid ${COLORS.cardBorder}`, borderRadius: "var(--radius-sm)",
   background: "transparent", color: COLORS.text, outline: "none",
-  maxWidth: 84,
+  textAlign: "center",
+};
+const unitStyle: React.CSSProperties = {
+  fontSize: "var(--fs-2xs)", color: COLORS.muted, marginRight: 2,
 };
 const submitStyle: React.CSSProperties = {
   display: "block", width: "100%", marginTop: "var(--sp-3)",

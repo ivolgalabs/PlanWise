@@ -188,6 +188,9 @@ input[type="checkbox"] {
 /* === Inline-поле ввода === */
 .inline-input {
   border-bottom: 1px solid var(--border-color);
+  /* Без явного цвета браузер использует системный (чёрный в тёмной теме
+     WebView) — текст был невидим на тёмном фоне сетки. */
+  color: var(--text-primary);
 }
 .inline-input:focus {
   border-bottom-color: var(--accent);

@@ -270,10 +270,11 @@ fn due_at(start: NaiveDateTime, minutes: i64) -> NaiveDateTime {
 /// «Пора выезжать» за это время до начала.
 fn check_reminders(app: &tauri::AppHandle, prefs: &NotifyPrefs, now: NaiveDateTime) {
     let today_epoch = crate::commands::today_epoch_day();
-    // Горизонт выборки: сегодня + 2 дня. Покрывает глобальные интервалы и
-    // свои значения notify_minutes до ~3 суток (задача на послезавтра с
-    // напоминанием «за сутки»/«за 2 суток» всё ещё в выборке).
-    let horizon_epoch = today_epoch + 2;
+    // Горизонт выборки: сегодня + 7 дней. Покрывает глобальные интервалы и
+    // свои значения notify_minutes до 7 суток (настройка «Уведомить» позволяет
+    // напоминать за неделю; задача на +7 дней с напоминанием «за 7 дней» всё
+    // ещё в выборке, когда приходит её момент).
+    let horizon_epoch = today_epoch + 7;
 
     // (id, title, time_minutes, date_epoch, travel_time, notify_minutes) — дата,
     // время в пути и своё уведомление нужны для расчёта due. travel_time может
@@ -342,7 +343,11 @@ fn check_reminders(app: &tauri::AppHandle, prefs: &NotifyPrefs, now: NaiveDateTi
                 continue;
             }
             let when = if rm >= 1440 {
-                "завтра".to_string()
+                if rm % 1440 == 0 {
+                    format!("за {} дн", rm / 1440)
+                } else {
+                    format!("за {} дн {} ч", rm / 1440, (rm % 1440) / 60)
+                }
             } else if rm >= 60 {
                 format!("через {} ч", rm / 60)
             } else {
