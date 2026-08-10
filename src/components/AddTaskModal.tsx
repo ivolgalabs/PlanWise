@@ -88,6 +88,10 @@ export function TaskFormFields({
     api.getSubtasks(initial.id).then(setSubItems).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initial?.id]);
+  // Авто-выполнение: время в прошлом → задача выполнена; в будущем —
+  // выполнение снимается (настройка «авто-выполнение»). Применяется только
+  // если время реально изменилось в карточке.
+  const { autoDonePastTime } = useStore();
   const { colorSets } = useStore();
   const sets = colorSets.filter((s) => s.id !== "cs-none");
 
@@ -115,6 +119,21 @@ export function TaskFormFields({
     try {
       if (editing && initial) {
         await api.upsertTask({ ...initial, ...payload });
+        // Авто-выполнение при смене времени (настройка): прошлое → выполнена,
+        // будущее → выполнение снимается. Только если время изменилось.
+        const timeChanged = initial.timeMinutes !== time;
+        if (autoDonePastTime && timeChanged && time != null) {
+          const now = new Date();
+          const today = Math.floor(
+            Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / 86_400_000,
+          );
+          const nowMin = now.getHours() * 60 + now.getMinutes();
+          const past = toEpochDay(day) < today || (toEpochDay(day) === today && time <= nowMin);
+          const future = toEpochDay(day) > today || (toEpochDay(day) === today && time > nowMin);
+          if (past || future) {
+            await api.upsertTask({ ...initial, ...payload, isDone: past });
+          }
+        }
         onChange?.();
       } else {
         // Новая задача + подзадачи (создаются с тем же текстом, что набрал

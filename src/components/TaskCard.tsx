@@ -4,7 +4,7 @@ import type { Task } from "../api";
 import { api, fromEpochDay } from "../api";
 import { COLORS, accentTint, argbToHex } from "../theme";
 import { useStore } from "../store";
-import { TimePicker } from "./TimePicker";
+import { formatMinutes } from "../date";
 import { SubtaskList } from "./SubtaskList";
 import { AddTaskModal } from "./AddTaskModal";
 import { Icon } from "./Icon";
@@ -15,8 +15,8 @@ interface Props {
   onChange: () => void;
   /** Создать новую пустую задачу сразу после этой (расширение по Enter). */
   onCreateNext?: (afterTaskId: string) => void;
-  /** Показывать ли пикер времени. По умолчанию true; компактная сетка недели
-   *  рендерит время в компактном виде (TimePicker compact). */
+  /** Показывать ли время задачи. По умолчанию true; компактная сетка недели
+   *  рендерит время в компактном виде. */
   showTime?: boolean;
   /** Компактный режим для узких колонок сетки недели: меньше накладные
    *  отступы ручки/полоски/чекбокса, чтобы влезало поле задачи (≥40px). */
@@ -24,12 +24,11 @@ interface Props {
 }
 
 /**
- * Строка задачи (tweek-style line): чекбокс + inline-текст + цветная полоска
- * слева. В строке ТОЛЬКО текст и время — все остальные настройки (приоритет,
- * категория, длительность, заметка, перенос, удаление, уведомление) собраны
- * в карточке задачи, которая открывается по нажатию на задачу. Заметка, если
- * есть, видна под текстом (настройка «Заметки»).
- * Перетаскивается через @dnd-kit (useDraggable) — drag за всю строку.
+ * Строка задачи: чекбокс + текст + время (ТОЛЬКО отображение) + цветной маркер
+ * приоритета и линия категории. Все настройки (время, приоритет, категория,
+ * длительность, заметка, перенос, удаление, уведомление) — в карточке задачи,
+ * которая открывается по нажатию на задачу. Заметка, если есть, видна под
+ * текстом (настройка «Заметки»). Перетаскивается через @dnd-kit.
  */
 export function TaskCard({ task, onChange, onCreateNext, showTime = true, compact = false }: Props) {
   const [title, setTitle] = useState(task.title);
@@ -43,7 +42,7 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
   // Защита от двойного save: Enter (onKeyDown) и следующий за ним blur
   // (onBlur) вызывают save дважды подряд — пропускаем повторный вызов.
   const savedRef = useRef<number>(0);
-  const { colorSets, visibility, tasks: allTasks, autoDonePastTime } = useStore();
+  const { colorSets, visibility, tasks: allTasks } = useStore();
   // На тач-устройствах время и мета собираются под текстом (компактно),
   // на десктопе — в ряд с текстом.
   const [isTouch, setTouch] = useState(
@@ -91,8 +90,7 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
     if (now - savedRef.current < 300) return task;
     savedRef.current = now;
     // Авто-удаление при пустом тексте — ТОЛЬКО если задача изначально была
-    // пустой (создана Enter-ом и забыта). Очистка заголовка у существующей
-    // задачи (Ctrl+A + Delete + blur) не должна её удалять.
+    // пустой (создана Enter-ом и забыта).
     if (!t) {
       if (!task.title) {
         try {
@@ -147,8 +145,6 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
       !task.title // удаляем только если задача была пустой
     ) {
       e.preventDefault();
-      // Удаление пустой строки: раньше удаляли задачу; теперь строка без
-      // текста просто очищается (удаление — в карточке задачи).
       if (!task.title) {
         try {
           const subs = await api.getSubtasks(task.id);
@@ -185,11 +181,10 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
   // одну минуту (мгновение). Одинаковое время двух задач = наложение.
   const intervalsOverlap = (m1: number, d1: number, m2: number, d2: number) =>
     m1 < m2 + Math.max(d2, 1) && m2 < m1 + Math.max(d1, 1);
-  /** Другая задача того же дня, пересекающаяся с временем m (или undefined).
-   *  dur — длительность для проверки (по умолчанию — текущая у задачи). */
-  const findOverlap = (m: number | null, dur?: number | null): Task | undefined => {
+  /** Другая задача того же дня, пересекающаяся с временем m. */
+  const findOverlap = (m: number | null): Task | undefined => {
     if (m == null) return undefined;
-    const d1 = dur ?? task.durationMinutes ?? 0;
+    const d1 = task.durationMinutes ?? 0;
     return allTasks.find(
       (t) =>
         t.id !== task.id &&
@@ -202,98 +197,20 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
     );
   };
   // Наложение: задача, чьё время пересекается с другой (видны и старые
-  // конфликты, независимо от настройки «запрещать наложения»). Подсветка —
-  // цветной фон строки и красное время, чтобы наложение было заметно.
+  // конфликты). Подсветка — цветной фон строки и красное время.
   const timeConflict =
     task.timeMinutes != null && !task.isDone && findOverlap(task.timeMinutes) !== undefined;
-  // Диалог «время занято»: Rust-команда вернула ошибку, показываем
-  // конфликтующую задачу и предлагаем добавить текущую как подзадачу.
-  const [conflictDlg, setConflictDlg] = useState<{ task: Task; time: number } | null>(null);
   // Карточка задачи (окно с полными настройками) — открывается по нажатию
-  // на задачу (текст/строку); у пустой строки-заглушки тап по-прежнему
-  // просто ставит курсор (быстрое добавление текстом).
+  // на задачу; у пустой строки-заглушки тап просто ставит курсор.
   const [cardOpen, setCardOpen] = useState(false);
   const openCard = () => {
     if (task.title.trim()) setCardOpen(true);
   };
 
-  const setTime = async (m: number | null) => {
-    try {
-      await api.upsertTask({ ...task, timeMinutes: m });
-      // Авто-выполнение: время в прошлом → задача выполнена; в будущем —
-      // выполнение снимается. Только при установке времени (настройка).
-      if (autoDonePastTime && m != null) {
-        const now = new Date();
-        const today = Math.floor(
-          Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / 86_400_000,
-        );
-        const nowMin = now.getHours() * 60 + now.getMinutes();
-        const past = task.date < today || (task.date === today && m <= nowMin);
-        const future = task.date > today || (task.date === today && m > nowMin);
-        if (past || future) {
-          await api.upsertTask({ ...task, timeMinutes: m, isDone: past });
-        }
-      }
-      onChange();
-    } catch {
-      // Rust-команда не дала сохранить: время занято другой задачей
-      // (настройка «запрещать наложения» включена) — показываем диалог.
-      const hit = findOverlap(m);
-      if (hit) setConflictDlg({ task: hit, time: m ?? 0 });
-    }
-  };
-  // «Добавить подзадачей»: подзадача с текущим текстом у конфликтующей
-  // задачи; время у текущей не сохраняется (остаётся «в течение дня»).
-  const addAsSubtask = async () => {
-    if (!conflictDlg) return;
-    const t = title.trim();
-    if (!t) return;
-    await api.upsertSubtask({ taskId: conflictDlg.task.id, title: t });
-    setConflictDlg(null);
-    onChange();
-  };
-  // Актуальные travel/duration — в ref: при быстрых кликах (выезд + длительность
-  // подряд) task из пропсов ещё не обновился, и второй upsert затирал бы
-  // значение первого. Мержим с ref-значениями.
-  const metaRef = useRef({ travel: task.travelTime ?? null, duration: task.durationMinutes ?? null });
-  metaRef.current = { travel: task.travelTime ?? null, duration: task.durationMinutes ?? null };
-  const setTravel = async (m: number | null) => {
-    metaRef.current = { ...metaRef.current, travel: m };
-    try {
-      await api.upsertTask({ ...task, travelTime: m, durationMinutes: metaRef.current.duration });
-      onChange();
-    } catch {
-      /* время/длительность не меняются — конфликт невозможен; тихо */
-    }
-  };
-  const setDuration = async (m: number | null) => {
-    metaRef.current = { ...metaRef.current, duration: m };
-    try {
-      await api.upsertTask({ ...task, durationMinutes: m, travelTime: metaRef.current.travel });
-      onChange();
-    } catch {
-      // Новый интервал пересекается с другой задачей — показываем диалог.
-      if (task.timeMinutes != null) {
-        const hit = findOverlap(task.timeMinutes, m);
-        if (hit) setConflictDlg({ task: hit, time: task.timeMinutes });
-      }
-    }
-  };
-
-  // Доп. время: «09:00 – 10:30» (длительность) и «выезд в 08:15» (в пути).
-  // Если длительность переваливает за полночь — помечаем «(+1 дн.)».
+  // Время в строке — ТОЛЬКО отображение (изменение — в карточке задачи).
+  // Формат: «09:00» + мета «09:00–10:30 · выезд в 08:15 (+1 дн.)».
   const fmt = (m: number) =>
     `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
-  const spanOf = (t: Task) => {
-    const s = t.timeMinutes ?? 0;
-    let out = fmt(s);
-    if (t.durationMinutes) {
-      const total = s + t.durationMinutes;
-      const days = Math.floor(total / (24 * 60));
-      out += `–${fmt(total % (24 * 60))}${days > 0 ? ` (+${days} дн.)` : ""}`;
-    }
-    return out;
-  };
   const timeMeta: string[] = [];
   if (task.timeMinutes != null && task.durationMinutes) {
     const total = task.timeMinutes + task.durationMinutes;
@@ -304,6 +221,20 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
     const dep = (task.timeMinutes - task.travelTime + 24 * 60) % (24 * 60);
     timeMeta.push(`выезд в ${fmt(dep)}`);
   }
+  // Статичный «бейдж» времени: выглядит как раньше, но это не кнопка —
+  // клик открывает карточку, где время настраивается.
+  const timeBadge = (
+    <span
+      className={`task-time${task.timeMinutes != null ? " has" : ""}${timeConflict ? " conflict" : ""}`}
+      title={timeConflict ? "Время пересекается с другой задачей" : task.timeMinutes != null ? "Нажмите, чтобы настроить время" : "Без привязки ко времени"}
+    >
+      {task.timeMinutes != null
+        ? formatMinutes(task.timeMinutes)
+        : compact
+          ? "в теч. дня"
+          : "в течение дня"}
+    </span>
+  );
 
   return (
     <div
@@ -331,9 +262,9 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
       }}
       title={timeConflict ? "Время пересекается с другой задачей" : undefined}
       onClick={(e) => {
-        // Клик по элементам управления (чекбокс, время, ручка, поле текста) —
-        // их собственные обработчики; открываем карточку по клику на любом
-        // другом месте строки.
+        // Клик по элементам управления (чекбокс, ручка, поле текста) — их
+        // собственные обработчики; открываем карточку по клику на любом
+        // другом месте строки (включая время).
         const t = e.target as HTMLElement;
         if (t.closest("input, button, label, select, textarea, .task-drag-hint")) return;
         openCard();
@@ -341,7 +272,7 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
       {...attributes}
     >
       {/* Ручка перетаскивания: ТОЛЬКО на ней listeners, чтобы клики по
-          чекбоксу внутри строки работали. Явная подсказка «тяни тут». */}
+          чекбоксу внутри строки работали. */}
       <span
         className="task-drag-hint"
         title="Зажмите и тяните на другой день"
@@ -386,8 +317,7 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
         />
       )}
       {/* Текст + время + заметка. На мобильном CSS время переводит в колонку
-          (под текстом); на десктопе — в ряд с текстом. Заметка всегда видна
-          под текстом, пока пользователь не скроет её настройкой. */}
+          (под текстом); на десктопе — в ряд с текстом. */}
       <div
         className="task-text-wrap"
         style={{
@@ -446,16 +376,7 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
               flexShrink: 0,
             }}
           >
-            <TimePicker
-              value={task.timeMinutes ?? null}
-              onChange={setTime}
-              compact={compact}
-              conflict={timeConflict}
-              travelTime={task.travelTime ?? null}
-              onChangeTravel={setTravel}
-              durationMinutes={task.durationMinutes ?? null}
-              onChangeDuration={setDuration}
-            />
+            {timeBadge}
             {timeMeta.length > 0 && !compact && (
               <span
                 style={{
@@ -481,16 +402,7 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
               margin: "1px 0 2px",
             }}
           >
-            <TimePicker
-              value={task.timeMinutes ?? null}
-              onChange={setTime}
-              compact
-              conflict={timeConflict}
-              travelTime={task.travelTime ?? null}
-              onChangeTravel={setTravel}
-              durationMinutes={task.durationMinutes ?? null}
-              onChangeDuration={setDuration}
-            />
+            {timeBadge}
             {timeMeta.length > 0 && (
               <span
                 style={{
@@ -528,8 +440,8 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
       <SubtaskList taskId={task.id} onOpenCard={openCard} />
     )}
     {/* Карточка задачи: окно с полными настройками (время, приоритет,
-        длительность, выезд, уведомление, категория, заметка, перенос,
-        удаление) — открывается по нажатию на задачу. */}
+        длительность, выезд, уведомление, категория, заметка, подзадачи,
+        перенос, удаление) — открывается по нажатию на задачу. */}
     {cardOpen && (
       <AddTaskModal
         day={fromEpochDay(task.date)}
@@ -537,77 +449,6 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
         onChange={onChange}
         onClose={() => setCardOpen(false)}
       />
-    )}
-    {/* Диалог «время занято»: запрет наложений не дал сохранить время —
-        предлагаем добавить текущую задачу как подзадачу к конфликтующей. */}
-    {conflictDlg && (
-      <div
-        onClick={() => setConflictDlg(null)}
-        style={{
-          position: "fixed", inset: 0, background: "var(--overlay)", zIndex: 200,
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }}
-      >
-        <div
-          onClick={(e) => e.stopPropagation()}
-          role="dialog"
-          aria-modal="true"
-          style={{
-            background: COLORS.card, border: `1px solid ${COLORS.cardBorder}`,
-            borderRadius: "var(--radius-md)", padding: "var(--sp-6)",
-            width: 340, maxWidth: "88vw", boxShadow: "var(--shadow-xl)",
-          }}
-        >
-          <div style={{ fontSize: "var(--fs-md)", fontWeight: 600, color: COLORS.text, marginBottom: "var(--sp-3)" }}>
-            Время {fmt(conflictDlg.time)} занято
-          </div>
-          <div style={{ fontSize: "var(--fs-sm)", color: COLORS.secondary, marginBottom: "var(--sp-5)" }}>
-            Задача «{conflictDlg.task.title}» ({spanOf(conflictDlg.task)}) уже стоит на
-            этом времени. Добавить текущую как подзадачу к ней?
-          </div>
-          {title.trim() ? (
-            <div style={{ display: "flex", gap: "var(--sp-2)" }}>
-              <button
-                className="modal-action-btn"
-                onClick={addAsSubtask}
-                autoFocus
-                style={{
-                  flex: 1, padding: "var(--sp-3) var(--sp-4)", cursor: "pointer",
-                  fontSize: "var(--fs-sm)", borderRadius: "var(--radius-md)",
-                  border: "none", background: COLORS.accent, color: "#fff",
-                }}
-              >
-                Добавить подзадачей
-              </button>
-              <button
-                className="modal-action-btn"
-                onClick={() => setConflictDlg(null)}
-                style={{
-                  flex: 1, padding: "var(--sp-3) var(--sp-4)", cursor: "pointer",
-                  fontSize: "var(--fs-sm)", borderRadius: "var(--radius-md)",
-                  border: `1px solid ${COLORS.cardBorder}`, background: "transparent",
-                  color: COLORS.text,
-                }}
-              >
-                Отмена
-              </button>
-            </div>
-          ) : (
-            <button
-              className="modal-action-btn"
-              onClick={() => setConflictDlg(null)}
-              style={{
-                width: "100%", padding: "var(--sp-3) var(--sp-4)", cursor: "pointer",
-                fontSize: "var(--fs-sm)", borderRadius: "var(--radius-md)",
-                border: `1px solid ${COLORS.cardBorder}`, background: "transparent",
-                color: COLORS.text,
-              }}
-            >
-              Отмена
-            </button>
-          )}
-        </div>
-      </div>
     )}
     </div>
   );

@@ -305,6 +305,29 @@ input[type="checkbox"] {
   border-top: 1px solid color-mix(in srgb, var(--text-primary) 9%, transparent);
 }
 
+/* Время в строке задачи — статичный бейдж (ТОЛЬКО отображение; изменение —
+   в карточке задачи). Единый стиль для дня, недели и сетки; конфликт по
+   времени — красный, чтобы наложение было заметно. */
+.task-time {
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--fs-2xs);
+  padding: 1px 6px;
+  border-radius: var(--radius-md);
+  white-space: nowrap;
+  color: var(--text-muted);
+  background: transparent;
+}
+.task-time.has {
+  color: var(--accent);
+  background: var(--bg-hover);
+}
+.task-time.conflict {
+  color: #e05252;
+  background: rgba(224, 82, 82, 0.14);
+  font-weight: 700;
+}
+
 /* === Меню выбора цвета === */
 .color-menu {
   position: absolute;

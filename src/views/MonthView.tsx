@@ -155,6 +155,8 @@ export function MonthView({ tasks, onSelectDay, onSelectWeek, onChange }: Props)
         >
           <div
             onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
             style={{
               background: COLORS.card,
               border: `1px solid ${COLORS.cardBorder}`,
