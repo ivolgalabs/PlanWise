@@ -42,6 +42,17 @@ export interface Subtask {
   createdAt: number;
 }
 
+/** Вложение заметки: файл, прикреплённый к задаче (хранится в приватном
+ *  каталоге приложения; в БД — метаданные). */
+export interface Attachment {
+  id: string;
+  taskId: string;
+  fileName: string;
+  mime: string;
+  size: number;
+  createdAt: number;
+}
+
 /** epoch-day <-> Date. Должно совпадать с Rust-логикой хранения. */
 export const toEpochDay = (d: Date): number => {
   const utc = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
@@ -123,4 +134,19 @@ export const api = {
   /** Сохранить настройку приложения в таблицу settings. */
   setSetting: (key: string, value: string) =>
     isTauri() ? invoke<void>("set_setting", { key, value }) : browserApi.setSetting(key, value),
+  /** Вложения заметок: список файлов задачи. */
+  listAttachments: (taskId: string) =>
+    isTauri() ? invoke<Attachment[]>("list_attachments", { taskId }) : Promise.resolve([]),
+  /** Добавить вложение: файл передаётся base64 (читает plugin-fs, т.к. на
+   *  Android диалог возвращает content://, который Rust не читает). */
+  addAttachment: (taskId: string, fileName: string, mime: string, dataB64: string) =>
+    isTauri()
+      ? invoke<Attachment>("add_attachment", { taskId, fileName, mime, dataB64 })
+      : Promise.reject(new Error("Доступно в приложении")),
+  /** Удалить вложение (строка + файл с диска). */
+  deleteAttachment: (id: string) =>
+    isTauri() ? invoke<void>("delete_attachment", { id }) : Promise.resolve(),
+  /** Абсолютный путь файла вложения — для открытия системным приложением. */
+  attachmentPath: (id: string) =>
+    isTauri() ? invoke<string>("attachment_path", { id }) : Promise.reject(new Error("Доступно в приложении")),
 };

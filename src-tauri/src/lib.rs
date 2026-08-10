@@ -12,6 +12,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let conn = db::init(app.handle());
             app.manage(Db(conn));
@@ -49,6 +50,12 @@ pub fn run() {
             // Настройки приложения (key/value) — в т.ч. запрет наложений.
             commands::get_setting,
             commands::set_setting,
+            // Вложения заметок (файлы): список, добавление (base64), удаление,
+            // путь для открытия системным приложением.
+            commands::list_attachments,
+            commands::add_attachment,
+            commands::delete_attachment,
+            commands::attachment_path,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

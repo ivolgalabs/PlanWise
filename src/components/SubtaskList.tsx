@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import type { Subtask } from "../api";
 import { api } from "../api";
@@ -79,6 +79,10 @@ export function SubtaskList({ taskId, onOpenCard }: Props) {
           onToggle={() => toggle(s)}
           onDelete={() => del(s.id)}
           onOpenCard={onOpenCard}
+          onRename={async (sub, title) => {
+            await api.upsertSubtask({ ...sub, title });
+            load();
+          }}
         />
       ))}
       {/* Форма: на мобильной клавиатуре кнопка «Далее/Готово» (enterKeyHint)
@@ -112,22 +116,49 @@ export function SubtaskList({ taskId, onOpenCard }: Props) {
 
 /** Строка подзадачи — draggable (можно перетащить в другой день → promote,
  *  или на другую задачу → сменить родителя). Нажатие на текст подзадачи
- *  открывает карточку родительской задачи. */
+ *  открывает карточку родительской задачи; на десктопе клик мышью по тексту
+ *  переводит строку в инлайн-редактирование (фокус + выделение, как у задач). */
 function SubtaskRow({
   subtask,
   onToggle,
   onDelete,
   onOpenCard,
+  onRename,
 }: {
   subtask: Subtask;
   onToggle: () => void;
   onDelete: () => void;
   onOpenCard?: () => void;
+  /** Переименовать подзадачу (Enter/blur в режиме редактирования). */
+  onRename?: (s: Subtask, title: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: subtaskDragId(subtask.id),
     data: { subtask },
   });
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(subtask.title);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Вход в редактирование: клик мышью по тексту подзадачи — фокус + выделение.
+  // Тач-тап по-прежнему открывает карточку родителя.
+  const startEdit = (e: React.PointerEvent) => {
+    if (e.pointerType !== "mouse") return;
+    e.preventDefault();
+    setValue(subtask.title);
+    setEditing(true);
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    });
+  };
+
+  const commit = () => {
+    const t = value.trim();
+    setEditing(false);
+    if (t && t !== subtask.title) onRename?.(subtask, t);
+  };
+
   return (
     <div
       ref={setNodeRef}
@@ -178,19 +209,46 @@ function SubtaskRow({
           style={{ margin: 0 }}
         />
       </label>
-      <span
-        style={{
-          flex: 1,
-          fontSize: "var(--fs-2xs)",
-          color: subtask.isDone ? COLORS.muted : COLORS.text,
-          textDecoration: subtask.isDone ? "line-through" : "none",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-        }}
-      >
-        {subtask.title}
-      </span>
+      {editing ? (
+        <input
+          ref={inputRef}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commit();
+            else if (e.key === "Escape") setEditing(false);
+          }}
+          onBlur={commit}
+          data-subtask-id={subtask.id}
+          style={{
+            flex: 1,
+            minWidth: 0,
+            fontSize: "var(--fs-2xs)",
+            background: "transparent",
+            border: "none",
+            outline: "none",
+            color: subtask.isDone ? COLORS.muted : COLORS.text,
+            textDecoration: subtask.isDone ? "line-through" : "none",
+          }}
+        />
+      ) : (
+        <span
+          onPointerDown={startEdit}
+          title={subtask.title || undefined}
+          style={{
+            flex: 1,
+            fontSize: "var(--fs-2xs)",
+            color: subtask.isDone ? COLORS.muted : COLORS.text,
+            textDecoration: subtask.isDone ? "line-through" : "none",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            cursor: "text",
+          }}
+        >
+          {subtask.title}
+        </span>
+      )}
       <button onClick={onDelete} className="chip-btn" title="Удалить">
         <Icon name="close" size={12} />
       </button>

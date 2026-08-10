@@ -41,6 +41,10 @@
 .settings-body {
   padding: var(--sp-6);
   overflow-y: auto;
+  /* Без min-height:0 flex-элемент не сжимается ниже содержимого — при
+     увеличенном масштабе/шрифте окно настроек обрезалось снизу, а скролл
+     не появлялся (классический баг flex + overflow). */
+  min-height: 0;
 }
 
 .settings-section {

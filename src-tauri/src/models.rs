@@ -50,6 +50,19 @@ pub struct Subtask {
     pub created_at: i64,
 }
 
+/// Вложение заметки: файл, прикреплённый к задаче. Сам файл лежит в
+/// app_data_dir/files/attachments/<stored_name>; в БД — метаданные.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Attachment {
+    pub id: String,
+    pub task_id: String,
+    pub file_name: String,
+    pub mime: String,
+    pub size: i64,
+    pub created_at: i64,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

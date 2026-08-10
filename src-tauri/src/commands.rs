@@ -1,5 +1,5 @@
 use crate::db::Db;
-use crate::models::{ColorSet, Subtask, Task};
+use crate::models::{Attachment, ColorSet, Subtask, Task};
 use chrono::{Datelike, Utc};
 use tauri::{Manager, State};
 use uuid::Uuid;
@@ -188,10 +188,32 @@ fn check_time_overlap(conn: &rusqlite::Connection, task: &Task) -> Result<(), St
 }
 
 #[tauri::command]
-pub fn delete_task(state: State<'_, Db>, id: String) -> Result<(), String> {
+pub fn delete_task(state: State<'_, Db>, app: tauri::AppHandle, id: String) -> Result<(), String> {
+    // Сначала соберём файлы вложений, чтобы удалить их с диска после
+    // удаления строки (строки attachments каскадом удалит сама БД).
+    let files: Vec<String> = {
+        let conn = state.0.lock().unwrap();
+        let mut stmt = conn
+            .prepare("SELECT stored_name FROM attachments WHERE task_id = ?1")
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([&id], |r| r.get::<_, String>(0))
+            .map_err(|e| e.to_string())?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r.map_err(|e| e.to_string())?);
+        }
+        out
+    };
     let conn = state.0.lock().unwrap();
-    conn.execute("DELETE FROM tasks WHERE id = ?1", [id])
+    conn.execute("DELETE FROM tasks WHERE id = ?1", [&id])
         .map_err(|e| e.to_string())?;
+    drop(conn);
+    // Файлы с диска — best effort: остатки (уже удалённые вручную) не страшны.
+    let dir = attachments_dir(&app);
+    for f in files {
+        let _ = std::fs::remove_file(dir.join(f));
+    }
     Ok(())
 }
 
@@ -733,4 +755,183 @@ pub fn refresh_widget(app: &tauri::AppHandle, state: &State<'_, Db>) -> Result<(
         serde_json::to_string(&payload).map_err(|e| e.to_string())?,
     )
     .map_err(|e| e.to_string())
+}
+
+// ── Вложения заметок (файлы) ──────────────────────────────────────────
+
+/// Каталог вложений: на Android app_data_dir/files/attachments (там же, где
+/// widget.json — context.filesDir), на десктопе — app_data_dir/attachments.
+#[cfg_attr(not(target_os = "android"), allow(unused_mut))]
+fn attachments_dir(app: &tauri::AppHandle) -> std::path::PathBuf {
+    let mut dir = app
+        .path()
+        .app_data_dir()
+        .unwrap_or_else(|_| std::path::PathBuf::from("."));
+    #[cfg(target_os = "android")]
+    {
+        dir = dir.join("files");
+    }
+    dir.join("attachments")
+}
+
+/// Расширение из имени файла (санитизированное, до 8 символов): "a.TXT" → "txt".
+fn safe_ext(file_name: &str) -> String {
+    let ext = file_name
+        .rsplit('.')
+        .next()
+        .unwrap_or("")
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .take(8)
+        .collect::<String>()
+        .to_ascii_lowercase();
+    if ext.is_empty() {
+        "bin".to_string()
+    } else {
+        ext
+    }
+}
+
+/// Максимальный размер вложения (байт) — 25 МБ: файл передаётся base64-строкой
+/// через IPC, слишком большие файлы съедают память WebView.
+const MAX_ATTACHMENT_BYTES: usize = 25 * 1024 * 1024;
+
+/// Список вложений задачи.
+#[tauri::command]
+pub fn list_attachments(state: State<'_, Db>, task_id: String) -> Result<Vec<Attachment>, String> {
+    let conn = state.0.lock().unwrap();
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, task_id, file_name, mime, size, created_at
+             FROM attachments WHERE task_id = ?1 ORDER BY created_at ASC",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([task_id], |r| {
+            Ok(Attachment {
+                id: r.get(0)?,
+                task_id: r.get(1)?,
+                file_name: r.get(2)?,
+                mime: r.get(3)?,
+                size: r.get(4)?,
+                created_at: r.get(5)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    let mut out = Vec::new();
+    for r in rows {
+        out.push(r.map_err(|e| e.to_string())?);
+    }
+    Ok(out)
+}
+
+/// Добавить вложение к задаче: файл приходит base64-строкой (на Android путь
+/// content:// из диалога умеет читать только фронтенд через plugin-fs), Rust
+/// декодирует и сохраняет в приватный каталог приложения.
+#[tauri::command]
+pub fn add_attachment(
+    app: tauri::AppHandle,
+    state: State<'_, Db>,
+    task_id: String,
+    file_name: String,
+    mime: String,
+    data_b64: String,
+) -> Result<Attachment, String> {
+    // Ограничение размера: 4 байта base64 ≈ 3 байта данных.
+    let approx = data_b64.len() / 4 * 3;
+    if approx > MAX_ATTACHMENT_BYTES {
+        return Err(format!(
+            "Файл больше 25 МБ ({:.1} МБ)",
+            approx as f64 / 1_048_576.0
+        ));
+    }
+    let data = base64::Engine::decode(
+        &base64::engine::general_purpose::STANDARD,
+        data_b64.as_bytes(),
+    )
+    .map_err(|e| format!("Не удалось декодировать файл: {e}"))?;
+    if data.is_empty() {
+        return Err("Пустой файл".to_string());
+    }
+
+    let id = Uuid::new_v4().to_string();
+    let stored = format!("{}.{}", Uuid::new_v4().simple(), safe_ext(&file_name));
+    let dir = attachments_dir(&app);
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    std::fs::write(dir.join(&stored), &data).map_err(|e| e.to_string())?;
+
+    let att = Attachment {
+        id: id.clone(),
+        task_id: task_id.clone(),
+        file_name: file_name.clone(),
+        mime,
+        size: data.len() as i64,
+        created_at: now_ms(),
+    };
+    let conn = state.0.lock().unwrap();
+    conn.execute(
+        "INSERT INTO attachments (id, task_id, file_name, mime, size, stored_name, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        rusqlite::params![
+            id,
+            task_id,
+            file_name,
+            att.mime,
+            att.size,
+            stored,
+            att.created_at
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(att)
+}
+
+/// Удалить вложение: строка из БД + файл с диска.
+#[tauri::command]
+pub fn delete_attachment(
+    app: tauri::AppHandle,
+    state: State<'_, Db>,
+    id: String,
+) -> Result<(), String> {
+    let stored: Option<String> = {
+        let conn = state.0.lock().unwrap();
+        conn.query_row(
+            "SELECT stored_name FROM attachments WHERE id = ?1",
+            [&id],
+            |r| r.get(0),
+        )
+        .map_err(|e| e.to_string())?
+    };
+    let conn = state.0.lock().unwrap();
+    conn.execute("DELETE FROM attachments WHERE id = ?1", [&id])
+        .map_err(|e| e.to_string())?;
+    drop(conn);
+    if let Some(f) = stored {
+        let _ = std::fs::remove_file(attachments_dir(&app).join(f));
+    }
+    Ok(())
+}
+
+/// Абсолютный путь файла вложения — для открытия системным приложением
+/// (tauri-plugin-opener: на Android через FileProvider, на десктопе напрямую).
+#[tauri::command]
+pub fn attachment_path(app: tauri::AppHandle, id: String) -> Result<String, String> {
+    let stored: Option<String> = {
+        let state = app.state::<Db>();
+        let conn = state.0.lock().unwrap();
+        conn.query_row(
+            "SELECT stored_name FROM attachments WHERE id = ?1",
+            [&id],
+            |r| r.get(0),
+        )
+        .map_err(|e| e.to_string())?
+    };
+    let Some(stored) = stored else {
+        return Err("Вложение не найдено".to_string());
+    };
+    let path = attachments_dir(&app).join(stored);
+    if !path.exists() {
+        return Err("Файл вложения не найден на диске".to_string());
+    }
+    Ok(path.to_string_lossy().into_owned())
 }

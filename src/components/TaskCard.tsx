@@ -334,7 +334,18 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
           onKeyDown={onKeyDown}
           onInput={(e) => growTitle(e.currentTarget)}
           onPointerDown={(e) => {
-            // Тап по тексту существующей задачи открывает карточку (окно
+            // Десктоп (мышь): клик по тексту задачи — фокус в поле и выделение
+            // текста (быстрое редактирование прямо в строке). Карточка при
+            // этом не открывается — её открывает клик по строке вне поля.
+            if (e.pointerType === "mouse") {
+              const el = e.currentTarget;
+              requestAnimationFrame(() => {
+                el.focus();
+                el.select();
+              });
+              return;
+            }
+            // Тач: тап по тексту существующей задачи открывает карточку (окно
             // с полными настройками); пустая строка — обычный ввод текста.
             if (task.title.trim()) {
               e.preventDefault();

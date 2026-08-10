@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import type { Subtask, Task } from "../api";
+import { open } from "@tauri-apps/plugin-dialog";
+import { readFile } from "@tauri-apps/plugin-fs";
+import { openPath } from "@tauri-apps/plugin-opener";
+import type { Attachment, Subtask, Task } from "../api";
 import { api, toEpochDay } from "../api";
 import { useStore } from "../store";
 import { COLORS, argbToHex } from "../theme";
@@ -86,6 +89,20 @@ export function TaskFormFields({
   useEffect(() => {
     if (!editing || !initial) return;
     api.getSubtasks(initial.id).then(setSubItems).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initial?.id]);
+  // Вложения (файлы) задачи: доступны у существующей задачи (карточка);
+  // при создании новой задачи id ещё нет — файлы добавит уже после сохранения.
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [attLoading, setAttLoading] = useState(false);
+  useEffect(() => {
+    if (!editing || !initial) return;
+    setAttLoading(true);
+    api
+      .listAttachments(initial.id)
+      .then(setAttachments)
+      .catch(() => {})
+      .finally(() => setAttLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initial?.id]);
   // Авто-выполнение: время в прошлом → задача выполнена; в будущем —
@@ -386,6 +403,110 @@ export function TaskFormFields({
           }}
         />
       </div>
+
+      {/* Файлы в заметке: прикреплённые файлы задачи (только у существующей
+          задачи — при создании id ещё нет, вложения добавят в карточке).
+          Системный диалог → файл копируется в приватное хранилище приложения;
+          тап по файлу открывает его системным приложением. */}
+      {editing && initial && (
+        <div style={{ ...fieldRow, alignItems: "flex-start" }}>
+          <span style={labelStyle}>Файлы</span>
+          <div style={{ flex: 1, minWidth: 180, display: "flex", flexDirection: "column", gap: 6 }}>
+            {attachments.length === 0 && !attLoading && (
+              <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted }}>
+                Нет файлов. Добавьте документы, фото, аудио — прикрепятся к задаче.
+              </span>
+            )}
+            {attachments.map((a) => (
+              <div
+                key={a.id}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "var(--sp-2)",
+                  border: `1px solid ${COLORS.cardBorder}`,
+                  borderRadius: "var(--radius-md)",
+                  padding: "4px 8px",
+                }}
+              >
+                <Icon name="file" size={14} />
+                <button
+                  type="button"
+                  className="file-name-btn"
+                  onClick={async () => {
+                    try {
+                      const p = await api.attachmentPath(a.id);
+                      await openPath(p);
+                    } catch {
+                      /* нет приложения для типа файла — молча */
+                    }
+                  }}
+                  title="Открыть файл"
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    textAlign: "left",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    fontSize: "var(--fs-xs)",
+                    color: COLORS.text,
+                    background: "transparent",
+                    border: "none",
+                    cursor: "pointer",
+                    padding: 0,
+                  }}
+                >
+                  {a.fileName}
+                </button>
+                <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted, flexShrink: 0 }}>
+                  {formatFileSize(a.size)}
+                </span>
+                <button
+                  type="button"
+                  className="chip-btn"
+                  title="Удалить файл"
+                  onClick={async () => {
+                    await api.deleteAttachment(a.id);
+                    setAttachments(await api.listAttachments(initial.id));
+                  }}
+                >
+                  <Icon name="close" size={12} />
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              className="chip-btn"
+              disabled={attLoading}
+              style={{ alignSelf: "flex-start" }}
+              onClick={async () => {
+                try {
+                  // Системный диалог выбора файла (на Android — любые файлы).
+                  const path = await open({ multiple: false });
+                  if (!path || Array.isArray(path)) return;
+                  const name = path.split("/").pop() || "file";
+                  // Читаем файл плагином fs (умеет content:// на Android),
+                  // в Rust отправляем base64 — он сохранит в приватный каталог.
+                  const data = await readFile(path);
+                  let bin = "";
+                  const CH = 0x8000;
+                  for (let i = 0; i < data.length; i += CH) {
+                    bin += String.fromCharCode(...data.subarray(i, i + CH));
+                  }
+                  const b64 = btoa(bin);
+                  const att = await api.addAttachment(initial.id, name, mimeOf(name), b64);
+                  setAttachments((prev) => [...prev, att]);
+                } catch {
+                  /* отмена выбора или ошибка — молча */
+                }
+              }}
+            >
+              <Icon name="plus" size={12} /> Файл
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Подзадачи: при создании — добавляются сразу (шестерёнка); в карточке
           существующей задачи — полный список с чекбоксами, удалением и полем. */}
@@ -703,4 +824,29 @@ export function AddTaskModal({
       </div>
     </div>
   );
+}
+
+/** MIME по расширению файла — для открытия системным приложением. */
+function mimeOf(name: string): string {
+  const ext = name.split(".").pop()?.toLowerCase() ?? "";
+  const map: Record<string, string> = {
+    txt: "text/plain", md: "text/markdown", pdf: "application/pdf",
+    jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", gif: "image/gif",
+    webp: "image/webp", svg: "image/svg+xml", heic: "image/heic",
+    mp3: "audio/mpeg", wav: "audio/wav", ogg: "audio/ogg", m4a: "audio/mp4",
+    mp4: "video/mp4", mov: "video/quicktime", mkv: "video/x-matroska", webm: "video/webm",
+    doc: "application/msword", docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    xls: "application/vnd.ms-excel", xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ppt: "application/vnd.ms-powerpoint", pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    zip: "application/zip", rar: "application/vnd.rar", "7z": "application/x-7z-compressed",
+    json: "application/json", csv: "text/csv", html: "text/html", apk: "application/vnd.android.package-archive",
+  };
+  return map[ext] ?? "application/octet-stream";
+}
+
+/** Размер файла человекочитаемо: «1.2 МБ», «340 КБ», «900 Б». */
+function formatFileSize(bytes: number): string {
+  if (bytes >= 1_048_576) return `${(bytes / 1_048_576).toFixed(1)} МБ`;
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)} КБ`;
+  return `${bytes} Б`;
 }

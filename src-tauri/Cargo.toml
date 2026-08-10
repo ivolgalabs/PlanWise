@@ -25,10 +25,12 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 refinery = { version = "0.8", features = ["rusqlite"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
+base64 = "0.22"
 
 # Общая библиотека воркспейса: fs для ensure_dir (вместо ручного std::fs).
 core_base = { path = "../../../Rust_Workspace/core_base", default-features = false, features = ["fs"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-notification = "2"
+tauri-plugin-opener = "2"
 
