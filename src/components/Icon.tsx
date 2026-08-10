@@ -8,7 +8,7 @@ export type IconName =
   | "search" | "calendar" | "gear" | "chevronL" | "chevronR" | "close"
   | "plus" | "drag" | "dots" | "clock" | "palette" | "grid"
   | "list" | "calendarHide" | "calendarCheck" | "sun" | "moon" | "monitor" | "trash"
-  | "save" | "note" | "zoom" | "upload" | "download" | "archive" | "copy" | "file";
+  | "save" | "note" | "zoom" | "upload" | "download" | "archive" | "copy" | "file" | "edit";
 
 const PATHS: Record<IconName, ReactNode> = {
   search: <><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></>,
@@ -42,6 +42,8 @@ const PATHS: Record<IconName, ReactNode> = {
   copy: <><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></>,
   // Скрепка — вложение файла к задаче.
   file: <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />,
+  // Карандаш — редактирование задачи (открыть карточку).
+  edit: <><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /><path d="m15 5 4 4" /></>,
 };
 
 export function Icon({ name, size = 16, title }: IconProps) {
