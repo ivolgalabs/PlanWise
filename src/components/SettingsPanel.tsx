@@ -16,7 +16,32 @@ import { DEFAULT_VISIBILITY } from "../store";
 import { parseTimeToMinutes, formatMinutes } from "../date";
 import { api, isTauri } from "../api";
 import { Icon, type IconName } from "./Icon";
+import { TimePicker } from "./TimePicker";
 import "./SettingsPanel.css";
+
+/** Приоритет шаблона: 0 = не задан, 1 = низкий, 2 = средний, 3 = высокий. */
+const PATTERN_PRIO = [
+  { v: 0, label: "—", color: "" },
+  { v: 1, label: "низкий", color: "#4caf50" },
+  { v: 2, label: "средний", color: "#ffb300" },
+  { v: 3, label: "высокий", color: "#e05252" },
+];
+/** Варианты уведомления шаблона (как в карточке задачи). */
+const PATTERN_NOTIFY: { v: number; label: string }[] = [
+  { v: -1, label: "По умолчанию (из настроек)" },
+  { v: 0, label: "Не уведомлять" },
+  { v: 15, label: "За 15 минут" },
+  { v: 30, label: "За 30 минут" },
+  { v: 60, label: "За 1 час" },
+  { v: 120, label: "За 2 часа" },
+  { v: 1440, label: "За 1 день" },
+];
+/** Быстрая палитра цветов категории + свой цвет системным пикером. */
+const CAT_PALETTE = [
+  "#e05252", "#f0a030", "#f5d547", "#9ccc65",
+  "#4caf50", "#26a69a", "#5b8def", "#4a76d9",
+  "#9b6de8", "#e07fb4", "#8a8a8a", "#795548",
+];
 
 // Кодирование TMT-кода (канон UUI): TMT-<тема с _ вместо ->-<accent>-<bgType L/O/D/T>-<bgHex>-<slot L/D/N>
 function encodePresetCode(p: ThemePreset): string {
@@ -143,16 +168,22 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskPatterns]);
 
-  const patchPattern = (clientKey: string, patch: Partial<TaskPattern>) =>
-    setPatternDrafts((ds) =>
-      ds.map((d) => (d.clientKey === clientKey ? { ...d, ...patch } : d)),
-    );
-
-  const addPatternDraft = () =>
-    setPatternDrafts((ds) => [
-      ...ds,
-      { id: "", clientKey: crypto.randomUUID(), title: "Новый шаблон", timeMinutes: null, difficulty: 0, durationMinutes: null },
-    ]);
+  const [patternModal, setPatternModal] = useState<(TaskPattern & { clientKey: string }) | null>(null);
+  const patchPatternModal = (patch: Partial<TaskPattern>) =>
+    setPatternModal((m) => (m ? { ...m, ...patch } : m));
+  const openPatternModal = (d?: TaskPattern & { clientKey: string }) => {
+    const draft = d ?? {
+      id: "",
+      clientKey: crypto.randomUUID(),
+      title: "",
+      timeMinutes: null,
+      difficulty: 0,
+      durationMinutes: null,
+      notifyMinutes: null,
+    };
+    if (!d) setPatternDrafts((ds) => [...ds, draft]);
+    setPatternModal(draft);
+  };
 
   const savePatternDraft = (d: TaskPattern & { clientKey: string }) => {
     const pat: TaskPattern = {
@@ -161,16 +192,23 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
       timeMinutes: d.timeMinutes,
       difficulty: d.difficulty,
       durationMinutes: d.durationMinutes,
+      notifyMinutes: d.notifyMinutes ?? null,
     };
     setTaskPatterns([...taskPatterns.filter((p) => p.id !== pat.id), pat]);
+    // Черновик обновляем или добавляем (для нового шаблона), чтобы он
+    // сразу появился в списке.
     setPatternDrafts((ds) =>
-      ds.map((x) => (x.clientKey === d.clientKey ? { ...x, id: pat.id, title: pat.title } : x)),
+      ds.some((x) => x.clientKey === d.clientKey)
+        ? ds.map((x) => (x.clientKey === d.clientKey ? { ...x, id: pat.id, title: pat.title } : x))
+        : [...ds, { ...d, id: pat.id, title: pat.title }],
     );
+    setPatternModal(null);
   };
 
   const removePatternDraft = (d: TaskPattern & { clientKey: string }) => {
     setTaskPatterns(taskPatterns.filter((p) => p.id !== d.id));
     setPatternDrafts((ds) => ds.filter((x) => x.clientKey !== d.clientKey));
+    setPatternModal((m) => (m?.clientKey === d.clientKey ? null : m));
   };
 
   // Быстрое время: новый пресет из системного input type=time.
@@ -1109,7 +1147,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
               </div>
               <button
                 className="preset-btn"
-                onClick={addPatternDraft}
+                onClick={() => openPatternModal()}
                 style={{ display: "inline-flex", alignItems: "center", gap: "var(--sp-3)" }}
               >
                 <Icon name="plus" size={14} /> Добавить
@@ -1117,56 +1155,29 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
             </div>
             <div className="set-list">
               {patternDrafts.map((d) => (
-                <div key={d.clientKey} className="set-row" style={{ flexWrap: "wrap" }}>
-                  <input
-                    type="text"
-                    value={d.title}
-                    onChange={(e) => patchPattern(d.clientKey, { title: e.target.value })}
-                    placeholder="Название задачи"
-                    className="set-name"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") savePatternDraft(d);
-                    }}
-                  />
-                  <input
-                    type="time"
-                    value={d.timeMinutes != null ? formatMinutes(d.timeMinutes) ?? "" : ""}
-                    onChange={(e) =>
-                      patchPattern(d.clientKey, { timeMinutes: parseTimeToMinutes(e.target.value) })
-                    }
-                    className="set-name"
-                    style={{ maxWidth: 110 }}
-                    title="Время начала (можно своё, системные часы)"
-                  />
-                  <input
-                    type="time"
-                    value={d.durationMinutes != null ? formatMinutes(d.durationMinutes) ?? "" : ""}
-                    onChange={(e) =>
-                      patchPattern(d.clientKey, { durationMinutes: parseTimeToMinutes(e.target.value) })
-                    }
-                    className="set-name"
-                    style={{ maxWidth: 110 }}
-                    title="Длительность — системные часы (01:30 = 90 мин)"
-                  />
-                  <select
-                    value={d.difficulty}
-                    onChange={(e) => patchPattern(d.clientKey, { difficulty: parseInt(e.target.value, 10) })}
-                    className="set-name"
-                    style={{ maxWidth: 130, background: "var(--bg-tertiary)" }}
-                    title="Приоритет"
-                  >
-                    <option value={0}>Приоритет —</option>
-                    <option value={1}>низкий</option>
-                    <option value={2}>средний</option>
-                    <option value={3}>высокий</option>
-                  </select>
+                <div key={d.clientKey} className="set-row" style={{ justifyContent: "space-between" }}>
                   <button
-                    className="preset-btn"
-                    onClick={() => savePatternDraft(d)}
-                    title="Сохранить шаблон"
-                    style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                    className="set-name"
+                    onClick={() => openPatternModal(d)}
+                    title="Изменить шаблон"
+                    style={{
+                      flex: 1,
+                      textAlign: "left",
+                      background: "transparent",
+                      border: "none",
+                      cursor: "pointer",
+                      color: "var(--text-primary)",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "var(--sp-2)",
+                    }}
                   >
-                    <Icon name="save" size={14} />
+                    <span style={{ fontWeight: 600 }}>{d.title || "Без названия"}</span>
+                    <span style={{ fontSize: "var(--fs-2xs)", color: "var(--text-muted)" }}>
+                      {d.timeMinutes != null ? `${formatMinutes(d.timeMinutes)} · ` : ""}
+                      {d.durationMinutes ? `${d.durationMinutes} мин` : "без длительности"}
+                      {d.notifyMinutes != null ? ` · напом. за ${d.notifyMinutes} мин` : ""}
+                    </span>
                   </button>
                   <button
                     className="preset-btn danger"
@@ -1202,9 +1213,14 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
             {notifyDaySummary && (
               <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)", padding: "0 0 var(--sp-2)" }}>
                 <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-muted)" }}>Время:</span>
-                <select
-                  value={notifyDayHour}
-                  onChange={(e) => setNotifyDayHour(parseInt(e.target.value, 10))}
+                {/* Час дайджеста — системными часами (любое время суток). */}
+                <input
+                  type="time"
+                  value={`${String(notifyDayHour).padStart(2, "0")}:00`}
+                  onChange={(e) => {
+                    const m = parseTimeToMinutes(e.target.value);
+                    if (m != null) setNotifyDayHour(Math.floor(m / 60));
+                  }}
                   style={{
                     background: "var(--bg-tertiary)",
                     border: "1px solid var(--border-color)",
@@ -1213,11 +1229,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
                     color: "var(--text-primary)",
                     fontSize: "var(--fs-xs)",
                   }}
-                >
-                  {[6, 7, 8, 9, 10, 11].map((h) => (
-                    <option key={h} value={h}>{`${h}:00`}</option>
-                  ))}
-                </select>
+                />
               </div>
             )}
             <label className="oled-toggle">
@@ -1241,6 +1253,26 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
                     {m < 60 ? `${m} мин` : m === 60 ? "1 час" : m === 120 ? "2 часа" : "за день"}
                   </button>
                 ))}
+                {/* Своё значение — системными часами (01:30 = за 1.5 часа):
+                    добавляет/убирает интервал из списка. */}
+                <input
+                  type="time"
+                  value=""
+                  onChange={(e) => {
+                    const m = parseTimeToMinutes(e.target.value);
+                    if (m != null && m > 0) setNotifyRemindMinutes(m);
+                  }}
+                  style={{
+                    background: "var(--bg-tertiary)",
+                    border: "1px solid var(--border-color)",
+                    borderRadius: 6,
+                    padding: "6px 10px",
+                    color: "var(--text-primary)",
+                    fontSize: "var(--fs-xs)",
+                    maxWidth: 110,
+                  }}
+                  title="Своё время напоминания (01:30 = за полтора часа)"
+                />
               </div>
             )}
             <p className="section-hint" style={{ marginTop: "var(--sp-2)" }}>
@@ -1342,14 +1374,60 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
             </div>
             <div className="set-list">
               {drafts.map((d) => (
-                <div key={d.clientKey} className="set-row">
-                  <input
-                    type="color"
-                    value={argbToHex(d.color)}
-                    onChange={(e) => patchDraft(d.clientKey, { color: hexToArgb(e.target.value) })}
-                    className="set-color"
-                    title="Цвет категории"
-                  />
+                <div key={d.clientKey} className="set-row" style={{ alignItems: "flex-start" }}>
+                  {/* Быстрая палитра цветов + свой цвет системным пикером. */}
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: 3,
+                      maxWidth: 170,
+                      paddingTop: 4,
+                    }}
+                  >
+                    {CAT_PALETTE.map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => patchDraft(d.clientKey, { color: hexToArgb(c) })}
+                        title="Выбрать цвет"
+                        style={{
+                          width: 20,
+                          height: 20,
+                          borderRadius: "50%",
+                          background: c,
+                          cursor: "pointer",
+                          border: `2px solid ${argbToHex(d.color) === c ? "var(--text-primary)" : "transparent"}`,
+                          padding: 0,
+                          flexShrink: 0,
+                        }}
+                      />
+                    ))}
+                    <label
+                      title="Свой цвет (системный пикер)"
+                      style={{
+                        width: 20,
+                        height: 20,
+                        borderRadius: "50%",
+                        border: "1px dashed var(--border-color)",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: "var(--fs-xs)",
+                        color: "var(--text-muted)",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <Icon name="plus" size={12} />
+                      <input
+                        type="color"
+                        value={argbToHex(d.color)}
+                        onChange={(e) => patchDraft(d.clientKey, { color: hexToArgb(e.target.value) })}
+                        style={{ position: "absolute", opacity: 0, width: 0, height: 0 }}
+                        title="Свой цвет"
+                      />
+                    </label>
+                  </div>
                   <input
                     type="text"
                     value={d.name}
@@ -1408,6 +1486,111 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
           </>)}
         </div>
       </div>
+
+      {/* Модальная карточка шаблона задачи — как окно «Новая задача»:
+          название, время (системные часы), приоритет, длительность, уведомление. */}
+      {patternModal && (
+        <div className="settings-overlay" onClick={() => setPatternModal(null)} style={{ zIndex: 300 }}>
+          <div
+            className="settings-window"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: 440, maxHeight: "88vh", overflowY: "auto" }}
+          >
+            <div className="settings-header">
+              <h2 className="settings-title">
+                <Icon name="gear" size={18} /> {patternModal.id ? "Шаблон задачи" : "Новый шаблон"}
+              </h2>
+              <button className="icon-btn" onClick={() => setPatternModal(null)}>
+                <Icon name="close" size={16} />
+              </button>
+            </div>
+            <div className="settings-body">
+              <input
+                type="text"
+                value={patternModal.title}
+                onChange={(e) => patchPatternModal({ title: e.target.value })}
+                placeholder="Название задачи"
+                className="set-name"
+                autoFocus
+              />
+              <div className="set-row" style={{ flexWrap: "wrap", margin: "var(--sp-3) 0" }}>
+                <span style={{ fontSize: "var(--fs-sm)", color: "var(--text-muted)", minWidth: 64 }}>Время</span>
+                <TimePicker
+                  value={patternModal.timeMinutes}
+                  onChange={(m) => patchPatternModal({ timeMinutes: m })}
+                  durationMinutes={patternModal.durationMinutes}
+                  onChangeDuration={(m) => patchPatternModal({ durationMinutes: m })}
+                  large
+                />
+              </div>
+              <div className="set-row" style={{ flexWrap: "wrap", margin: "var(--sp-3) 0" }}>
+                <span style={{ fontSize: "var(--fs-sm)", color: "var(--text-muted)", minWidth: 64 }}>Приоритет</span>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-2)" }}>
+                  {PATTERN_PRIO.map((p) => (
+                    <button
+                      key={p.v}
+                      type="button"
+                      onClick={() => patchPatternModal({ difficulty: p.v })}
+                      style={{
+                        display: "inline-flex", alignItems: "center", gap: "var(--sp-2)",
+                        fontSize: "var(--fs-2xs)", padding: "4px 8px", cursor: "pointer",
+                        borderRadius: "var(--radius-md)",
+                        border: `1px solid ${patternModal.difficulty === p.v ? "var(--accent, #4a90d9)" : "var(--border-color)"}`,
+                        background: "transparent", color: "var(--text-primary)",
+                      }}
+                    >
+                      <span style={{ width: 9, height: 9, borderRadius: "50%", background: p.color || "var(--text-muted)", display: "inline-block" }} />
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="set-row" style={{ flexWrap: "wrap", margin: "var(--sp-3) 0" }}>
+                <span style={{ fontSize: "var(--fs-sm)", color: "var(--text-muted)", minWidth: 64 }}>Уведомить</span>
+                <select
+                  value={patternModal.notifyMinutes == null ? -1 : patternModal.notifyMinutes}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    patchPatternModal({ notifyMinutes: v < 0 ? null : v });
+                  }}
+                  className="set-name"
+                  style={{ background: "var(--bg-tertiary)" }}
+                >
+                  {PATTERN_NOTIFY.map((o) => (
+                    <option key={o.v} value={o.v}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ display: "flex", gap: "var(--sp-2)" }}>
+                {patternModal.id && (
+                  <button
+                    className="preset-btn danger"
+                    onClick={() => removePatternDraft(patternModal)}
+                    title="Удалить шаблон"
+                  >
+                    <Icon name="close" size={14} /> Удалить
+                  </button>
+                )}
+                <button
+                  className="preset-btn"
+                  onClick={() => savePatternDraft(patternModal)}
+                  style={{ flex: 1, background: "var(--accent, #4a90d9)", color: "#fff", border: "none" }}
+                  title="Сохранить шаблон"
+                >
+                  Сохранить
+                </button>
+                <button
+                  className="preset-btn"
+                  onClick={() => setPatternModal(null)}
+                  title="Отмена"
+                >
+                  Отмена
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

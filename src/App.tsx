@@ -394,8 +394,10 @@ function App() {
       (ae === el || el.contains(ae));
     if (typing) return;
     // Ручка перетаскивания, колёсики времени, кнопки шапки — их свайп не
-    // трогает (ручка — drag, кнопки — тап, колёсики — свой скролл).
-    if (el.closest(".task-drag-hint, .time-wheel, .icon-btn")) return;
+    // трогает (ручка — drag, кнопки — тап, колёсики — свой скролл). Также
+    // исключаем окно настроек: листание списка настроек не должно
+    // переключать вид за оверлеем.
+    if (el.closest(".task-drag-hint, .time-wheel, .icon-btn, .settings-overlay")) return;
     const idx = ORDER.indexOf(view);
     if (dx < 0) setView(ORDER[(idx + 1) % ORDER.length]); // влево — следующий
     else setView(ORDER[(idx - 1 + ORDER.length) % ORDER.length]); // вправо — предыдущий
@@ -539,6 +541,11 @@ function App() {
                       onSelectDay={(d) => {
                         setSelectedDate(d);
                         setView("day");
+                      }}
+                      onSelectWeek={(d) => {
+                        setWeekDate(d);
+                        setSelectedDate(d);
+                        setView("week");
                       }}
                     />
                   )}

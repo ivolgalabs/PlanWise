@@ -1,13 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import type { Task } from "../api";
 import { api, fromEpochDay } from "../api";
-import { COLORS, accentTint, argbToHex, hexToArgb } from "../theme";
+import { COLORS, accentTint, argbToHex } from "../theme";
 import { useStore } from "../store";
 import { TimePicker } from "./TimePicker";
 import { SubtaskList } from "./SubtaskList";
-import { DatePickerModal } from "./DatePickerModal";
-import { ConfirmDialog } from "./ConfirmDialog";
 import { AddTaskModal } from "./AddTaskModal";
 import { Icon } from "./Icon";
 import { taskIdZone } from "../drag";
@@ -27,45 +25,27 @@ interface Props {
 
 /**
  * Строка задачи (tweek-style line): чекбокс + inline-текст + цветная полоска
- * слева. Enter в редактируемой строке сохраняет и создаёт новую строку ниже.
- * Перетаскивается через @dnd-kit (useDraggable) — drag за всю строку, активация
- * после сдвига мыши на 8px (обычный клик = ввод текста).
+ * слева. В строке ТОЛЬКО текст и время — все остальные настройки (приоритет,
+ * категория, длительность, заметка, перенос, удаление, уведомление) собраны
+ * в карточке задачи, которая открывается по нажатию на задачу. Заметка, если
+ * есть, видна под текстом (настройка «Заметки»).
+ * Перетаскивается через @dnd-kit (useDraggable) — drag за всю строку.
  */
 export function TaskCard({ task, onChange, onCreateNext, showTime = true, compact = false }: Props) {
   const [title, setTitle] = useState(task.title);
   const [editing, editingSetter] = useState(false);
-  const [colorMenu, setColorMenu] = useState(false);
-  const [newCatOpen, setNewCatOpen] = useState(false);
-  const [newCatName, setNewCatName] = useState("");
-  const [newCatColor, setNewCatColor] = useState("#7eb8c4");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   // Авто-высота textarea: растёт по контенту, максимум ~4 строки (96px).
   const growTitle = (el: HTMLTextAreaElement) => {
     el.style.height = "auto";
     el.style.height = Math.min(el.scrollHeight, 96) + "px";
   };
-  const newCatRef = useRef<HTMLInputElement>(null);
   // Защита от двойного save: Enter (onKeyDown) и следующий за ним blur
   // (onBlur) вызывают save дважды подряд — пропускаем повторный вызов.
   const savedRef = useRef<number>(0);
-  const [notesOpen, setNotesOpen] = useState(false);
-  const [notesValue, setNotesValue] = useState(task.notes);
-  const notesRef = useRef<HTMLTextAreaElement>(null);
-  // Мобильный перенос: выбор даты через DatePickerModal (drag на телефоне
-  // неудобен, кнопка видна только в тач-режиме — класс task-move-btn).
-  const [moveOpen, setMoveOpen] = useState(false);
-  // Подтверждение удаления: по кнопке «Удалить» показываем диалог.
-  const [confirmDel, setConfirmDel] = useState(false);
-  // Карточка задачи (окно с полными настройками) — открывается по нажатию
-  // на задачу (текст/строку); у пустой строки-заглушки тап по-прежнему
-  // просто ставит курсор (быстрое добавление текстом).
-  const [cardOpen, setCardOpen] = useState(false);
-  const openCard = () => {
-    if (task.title.trim()) setCardOpen(true);
-  };
-  const { colorSets, setColorSets, visibility, tasks: allTasks, autoDonePastTime } = useStore();
-  // На тач-устройствах время и кнопки действий собираются в одну строку под
-  // текстом задачи (компактно), а не в ряд с текстом.
+  const { colorSets, visibility, tasks: allTasks, autoDonePastTime } = useStore();
+  // На тач-устройствах время и мета собираются под текстом (компактно),
+  // на десктопе — в ряд с текстом.
   const [isTouch, setTouch] = useState(
     () => window.matchMedia("(pointer: coarse), (max-width: 560px)").matches,
   );
@@ -99,20 +79,10 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
     if (!editing) setTitle(task.title);
   }, [task.title, editing]);
 
-  // Синхронизируем локальный текст заметки, если задача изменилась извне.
-  useEffect(() => {
-    if (!notesOpen) setNotesValue(task.notes);
-  }, [task.notes, notesOpen]);
-
   // При изменении текста/открытии — подгоняем высоту textarea.
   useEffect(() => {
     if (textareaRef.current) growTitle(textareaRef.current);
   }, [title, compact]);
-
-  // При открытии панели растягиваем textarea под содержимое заметки.
-  useEffect(() => {
-    if (notesOpen && notesRef.current) growNotes(notesRef.current);
-  }, [notesOpen]);
 
   const save = async (): Promise<Task> => {
     const t = title.trim();
@@ -155,35 +125,6 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
     onChange();
   };
 
-  const setColor = async (id: string | null) => {
-    await api.upsertTask({ ...task, colorSetId: id });
-    setColorMenu(false);
-    onChange();
-  };
-
-  // Создать новую категорию прямо из меню и сразу применить к задаче.
-  const createCategory = async () => {
-    const name = newCatName.trim();
-    if (!name) return;
-    const created = await api.upsertColorSet({
-      name,
-      color: hexToArgb(newCatColor),
-    });
-    setNewCatName("");
-    setNewCatColor("#7eb8c4");
-    setNewCatOpen(false);
-    setColorMenu(false);
-    setColorSets(await api.getColorSets());
-    await api.upsertTask({ ...task, colorSetId: created.id });
-    onChange();
-  };
-
-  const del = async () => {
-    setConfirmDel(false);
-    await api.deleteTask(task.id);
-    onChange();
-  };
-
   const setEditing = (v: boolean) => editingSetter(v);
 
   const onKeyDown = async (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -206,11 +147,23 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
       !task.title // удаляем только если задача была пустой
     ) {
       e.preventDefault();
-      await del();
+      // Удаление пустой строки: раньше удаляли задачу; теперь строка без
+      // текста просто очищается (удаление — в карточке задачи).
+      if (!task.title) {
+        try {
+          const subs = await api.getSubtasks(task.id);
+          if (subs.length === 0) {
+            await api.deleteTask(task.id);
+            onChange();
+          }
+        } catch {
+          /* не критично */
+        }
+      }
     }
   };
 
-  // Цвет категории задачи из загруженных сетов (undefined = без категории).
+  // Цвет категории задачи (линия слева на весь блок).
   const taskSet = colorSets.find((s) => s.id === task.colorSetId);
   const setHex = taskSet ? argbToHex(taskSet.color) : undefined;
 
@@ -239,30 +192,20 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
         intervalsOverlap(m, d1, t.timeMinutes, t.durationMinutes ?? 0),
     );
   };
-  // Подсветка наложений: задача, чьё время пересекается с другой (видны
-  // и старые конфликты, независимо от настройки «запрещать наложения»).
+  // Наложение: задача, чьё время пересекается с другой (видны и старые
+  // конфликты, независимо от настройки «запрещать наложения»). Подсветка —
+  // цветной фон строки и красное время, чтобы наложение было заметно.
   const timeConflict =
     task.timeMinutes != null && !task.isDone && findOverlap(task.timeMinutes) !== undefined;
   // Диалог «время занято»: Rust-команда вернула ошибку, показываем
   // конфликтующую задачу и предлагаем добавить текущую как подзадачу.
   const [conflictDlg, setConflictDlg] = useState<{ task: Task; time: number } | null>(null);
-
-  // ── Приоритет задачи (0 = не задан, 1 = низкий, 2 = средний, 3 = высокий) ──
-  const PRIO = useMemo(
-    () => [
-      { label: "", short: "", color: "" },
-      { label: "низкий", short: "н", color: "#4caf50" },
-      { label: "средний", short: "с", color: "#ffb300" },
-      { label: "высокий", short: "в", color: "#e05252" },
-    ],
-    [],
-  );
-  const diff = task.difficulty ?? 0;
-  const diffMeta = PRIO[diff] ?? PRIO[0];
-  const cycleDifficulty = async () => {
-    const next = diff >= 3 ? 0 : diff + 1;
-    await api.upsertTask({ ...task, difficulty: next });
-    onChange();
+  // Карточка задачи (окно с полными настройками) — открывается по нажатию
+  // на задачу (текст/строку); у пустой строки-заглушки тап по-прежнему
+  // просто ставит курсор (быстрое добавление текстом).
+  const [cardOpen, setCardOpen] = useState(false);
+  const openCard = () => {
+    if (task.title.trim()) setCardOpen(true);
   };
 
   const setTime = async (m: number | null) => {
@@ -329,39 +272,29 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
   };
 
   // Доп. время: «09:00 – 10:30» (длительность) и «выезд в 08:15» (в пути).
+  // Если длительность переваливает за полночь — помечаем «(+1 дн.)».
   const fmt = (m: number) =>
     `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
-  // Диапазон «12:00–13:00» задачи (для текста конфликт-диалога).
   const spanOf = (t: Task) => {
     const s = t.timeMinutes ?? 0;
     let out = fmt(s);
     if (t.durationMinutes) {
-      out += `–${fmt((s + t.durationMinutes) % (24 * 60))}`;
+      const total = s + t.durationMinutes;
+      const days = Math.floor(total / (24 * 60));
+      out += `–${fmt(total % (24 * 60))}${days > 0 ? ` (+${days} дн.)` : ""}`;
     }
     return out;
   };
   const timeMeta: string[] = [];
   if (task.timeMinutes != null && task.durationMinutes) {
-    const end = (task.timeMinutes + task.durationMinutes) % (24 * 60);
-    timeMeta.push(`${fmt(task.timeMinutes)}–${fmt(end)}`);
+    const total = task.timeMinutes + task.durationMinutes;
+    const days = Math.floor(total / (24 * 60));
+    timeMeta.push(`${fmt(task.timeMinutes)}–${fmt(total % (24 * 60))}${days > 0 ? ` (+${days} дн.)` : ""}`);
   }
   if (task.timeMinutes != null && task.travelTime) {
     const dep = (task.timeMinutes - task.travelTime + 24 * 60) % (24 * 60);
     timeMeta.push(`выезд в ${fmt(dep)}`);
   }
-
-  const saveNotes = async () => {
-    if (notesValue !== task.notes) {
-      await api.upsertTask({ ...task, notes: notesValue });
-      onChange();
-    }
-  };
-
-  // Авто-высота textarea по контенту (без скроллбара).
-  const growNotes = (el: HTMLTextAreaElement) => {
-    el.style.height = "auto";
-    el.style.height = el.scrollHeight + "px";
-  };
 
   return (
     <div
@@ -370,26 +303,28 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
       style={{
         background: isDropTarget ? accentTint(0.08) : undefined,
         borderRadius: isDropTarget ? "var(--radius-sm)" : undefined,
+        // Цветная линия категории слева — на весь блок (задача + подзадачи):
+        // сразу видно, к какой категории относится задача.
+        borderLeft: `3px solid ${setHex ?? "transparent"}`,
+        paddingLeft: 4,
       }}
     >
     <div
       ref={setNodeRef}
-      className={`task-line${isDragging ? " dragging" : ""}`}
+      className={`task-line${isDragging ? " dragging" : ""}${timeConflict ? " time-conflict" : ""}`}
       style={{
         position: "relative",
         display: "flex",
         alignItems: "center",
-        background: "transparent",
+        background: timeConflict ? "rgba(224,82,82,0.09)" : "transparent",
         borderRadius: "var(--radius-sm)",
-        // Наложение по времени — красный маркер слева (видно в дне/неделе).
-        boxShadow: timeConflict ? "inset 4px 0 0 0 rgba(224,82,82,0.75)" : undefined,
         ...dragStyle,
       }}
       title={timeConflict ? "Время пересекается с другой задачей" : undefined}
       onClick={(e) => {
-        // Клик по элементам управления (кнопки, чекбокс, время, ручка, поле
-        // текста) — их собственные обработчики; открываем карточку по клику
-        // на любом другом месте строки.
+        // Клик по элементам управления (чекбокс, время, ручка, поле текста) —
+        // их собственные обработчики; открываем карточку по клику на любом
+        // другом месте строки.
         const t = e.target as HTMLElement;
         if (t.closest("input, button, label, select, textarea, .task-drag-hint")) return;
         openCard();
@@ -397,7 +332,7 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
       {...attributes}
     >
       {/* Ручка перетаскивания: ТОЛЬКО на ней listeners, чтобы клики по
-          чекбоксу/кнопкам внутри строки работали. Явная подсказка «тяни тут». */}
+          чекбоксу внутри строки работали. Явная подсказка «тяни тут». */}
       <span
         className="task-drag-hint"
         title="Зажмите и тяните на другой день"
@@ -418,17 +353,6 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
       >
         <Icon name="drag" size={16} />
       </span>
-      {/* Цветная полоска слева (маркер сета) — тонкая, чтобы не раздувать
-          строку лишней «колонкой»: 2px вместо 3. */}
-      <div
-        style={{
-          width: 2,
-          alignSelf: "stretch",
-          borderRadius: "var(--radius-xs)",
-          marginRight: compact ? 3 : 4,
-          background: task.colorSetId ? setHex : "transparent",
-        }}
-      />
       <label className="checkbox-hit" title={task.isDone ? "Отметить невыполненной" : "Отметить выполненной"}>
         <input
           type="checkbox"
@@ -437,10 +361,9 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
           style={{ flexShrink: 0 }}
         />
       </label>
-      {/* Инпут + время: в компактной сетке — колонкой (текст на всю ширину,
-          время мелкой строкой под ним, только если задано); в обычном виде —
-          в ряд, как раньше. На мобильном CSS переводит в колонку (task-text-wrap),
-          чтобы текст занимал всю ширину строки. */}
+      {/* Текст + время + заметка. На мобильном CSS время переводит в колонку
+          (под текстом); на десктопе — в ряд с текстом. Заметка всегда видна
+          под текстом, пока пользователь не скроет её настройкой. */}
       <div
         className="task-text-wrap"
         style={{
@@ -474,8 +397,6 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
           data-task-id={task.id}
           title={title || undefined}
           style={{
-            // flex-basis auto: flex-алгоритм учитывает высоту, заданную
-            // growTitle (с flex-basis 0% строка не росла бы).
             flex: "1 1 auto",
             width: "100%",
             fontSize: "inherit",
@@ -492,18 +413,25 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
           }}
         />
         {effectiveShowTime && !mobileRow && (!compact || task.timeMinutes != null) && (
-          <>
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              gap: "var(--sp-2)",
+              flexShrink: 0,
+            }}
+          >
             <TimePicker
               value={task.timeMinutes ?? null}
               onChange={setTime}
               compact={compact}
+              conflict={timeConflict}
               travelTime={task.travelTime ?? null}
               onChangeTravel={setTravel}
               durationMinutes={task.durationMinutes ?? null}
               onChangeDuration={setDuration}
             />
-            {/* Диапазон «09:00–10:30» / «выезд в 08:15» — мелкой подписью под
-                временем (длительность и время в пути). */}
             {timeMeta.length > 0 && !compact && (
               <span
                 style={{
@@ -516,11 +444,9 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
                 {timeMeta.join(" · ")}
               </span>
             )}
-          </>
+          </div>
         )}
-        {/* На мобильном время («09:00» или «в теч. дня») и мета
-            «09:00–10:30 · выезд в 08:15» — НИЖЕ текста задачи (как в сетке
-            недели), чтобы строка с длинным текстом не раздувалась в ряд. */}
+        {/* На мобильном время и мета — НИЖЕ текста (как в сетке недели). */}
         {mobileRow && effectiveShowTime && (
           <div
             style={{
@@ -535,6 +461,7 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
               value={task.timeMinutes ?? null}
               onChange={setTime}
               compact
+              conflict={timeConflict}
               travelTime={task.travelTime ?? null}
               onChangeTravel={setTravel}
               durationMinutes={task.durationMinutes ?? null}
@@ -554,285 +481,37 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
             )}
           </div>
         )}
-      </div>
-      {/* На мобильном справа от текста — приоритет, цвет и удаление;
-          время под текстом, а заметка/перенос — в ряду под строкой. */}
-      {mobileRow && visibility.taskActions && (
-        <div className="task-side">
-          {visibility.taskActions && (
-            <>
-              {/* Приоритет задачи: клик циклично меняет уровень. */}
-              <button
-                onClick={cycleDifficulty}
-                className="chip-btn"
-                title={
-                  diff
-                    ? `Приоритет: ${diffMeta.label}. Нажмите, чтобы изменить`
-                    : "Приоритет не задан. Нажмите, чтобы выбрать"
-                }
-                style={{
-                  background: diff ? diffMeta.color : "transparent",
-                  border: diff ? "none" : "1px solid " + COLORS.cardBorder,
-                  color: diff ? "#fff" : COLORS.muted,
-                  minWidth: 22,
-                  fontSize: "var(--fs-2xs)",
-                }}
-              >
-                {diff ? diffMeta.short : "⌀"}
-              </button>
-              <button
-                onClick={() => setColorMenu((v) => !v)}
-                className="chip-btn"
-                title="Цвет"
-                style={{
-                  background: task.colorSetId ? setHex : "transparent",
-                  border: task.colorSetId ? "none" : "1px solid " + COLORS.cardBorder,
-                }}
-              />
-              <button onClick={() => setConfirmDel(true)} className="chip-btn" title="Удалить">
-                <Icon name="close" size={13} />
-              </button>
-            </>
-          )}
-        </div>
-      )}
-      {/* Кнопки действий строки (десктоп): заметка, перенос, цвет/удаление.
-          На мобильном они в строке с подзадачами (task-under). */}
-      {!compact && !mobileRow && (
-        <div
-          className="task-chips"
-          style={{ display: "flex", alignItems: "center", gap: "var(--sp-3)", marginLeft: "var(--sp-3)", flexShrink: 0 }}
-        >
-          {/* Заметка — подсвечена, если текст непустой. */}
-          {showTime && visibility.notes && (
-            <button
-              className="chip-btn"
-              onClick={() => setNotesOpen((v) => !v)}
-              title="Заметка"
-              style={{
-                opacity: task.notes ? 1 : 0.5,
-                color: task.notes ? COLORS.accent : COLORS.muted,
-                flexShrink: 0,
-              }}
-            >
-              <Icon name="note" size={13} />
-            </button>
-          )}
-          {/* Перенос на другой день — только в тач-режиме. */}
-          <button
-            className="chip-btn task-move-btn"
-            onClick={() => setMoveOpen(true)}
-            title="Перенести на другой день"
-            style={{ flexShrink: 0 }}
-          >
-            <Icon name="calendarCheck" size={13} />
-          </button>
-          {/* Кнопки цвета/удаления — скрываются настройкой. */}
-          {visibility.taskActions && (
-            <div className="task-actions" style={{ display: "flex", gap: "var(--sp-3)" }}>
-              {/* Приоритет задачи: клик циклично меняет уровень. */}
-              <button
-                onClick={cycleDifficulty}
-                className="chip-btn"
-                title={
-                  diff
-                    ? `Приоритет: ${diffMeta.label}. Нажмите, чтобы изменить`
-                    : "Приоритет не задан. Нажмите, чтобы выбрать"
-                }
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "var(--sp-2)",
-                  color: diff ? diffMeta.color : COLORS.muted,
-                  flexShrink: 0,
-                }}
-              >
-                <span
-                  style={{
-                    width: 9,
-                    height: 9,
-                    borderRadius: "50%",
-                    background: diff ? diffMeta.color : COLORS.muted,
-                    display: "inline-block",
-                  }}
-                />
-                {diff ? diffMeta.label : "приоритет"}
-              </button>
-              <button
-                onClick={() => setColorMenu((v) => !v)}
-                className="chip-btn"
-                title="Цвет"
-                style={{
-                  background: task.colorSetId ? setHex : "transparent",
-                  border: task.colorSetId ? "none" : "1px solid " + COLORS.cardBorder,
-                }}
-              />
-              <button onClick={() => setConfirmDel(true)} className="chip-btn" title="Удалить">
-                <Icon name="close" size={14} />
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-      {/* Меню цвета живёт внутри блока кнопок действий — если кнопки
-          скрыты настройкой, меню тоже не показываем. */}
-      {visibility.taskActions && !compact && colorMenu && (
-        <div className="color-menu">
-          <button
-            className="color-option"
-            onClick={() => setColor(null)}
-            title="Без категории"
-          >
-            <span
-              className="color-swatch"
-              style={{ background: COLORS.tertiary }}
-            />
-            <span className="color-name">Без категории</span>
-            {!task.colorSetId && <span className="color-check">✓</span>}
-          </button>
-          {colorSets
-            .filter((s) => s.id !== "cs-none")
-            .map((s) => (
-              <button
-                key={s.id}
-                className="color-option"
-                onClick={() => setColor(s.id)}
-                title={s.name}
-              >
-                <span
-                  className="color-swatch"
-                  style={{ background: argbToHex(s.color) }}
-                />
-                <span className="color-name">{s.name}</span>
-                {task.colorSetId === s.id && (
-                  <span className="color-check">✓</span>
-                )}
-              </button>
-            ))}
-          <button
-            className="color-option"
-            onClick={() => {
-              setNewCatOpen(true);
-              requestAnimationFrame(() => newCatRef.current?.focus());
+        {/* Заметка — всегда под текстом, пока не скрыта настройкой. */}
+        {visibility.notes && task.notes && (
+          <div
+            style={{
+              fontSize: "var(--fs-2xs)",
+              color: COLORS.muted,
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+              padding: "0 0 2px",
+              maxWidth: "100%",
             }}
-            title="Добавить категорию"
           >
-            <span className="color-swatch color-swatch-add">+</span>
-            <span className="color-name">Новая категория</span>
-          </button>
-          {newCatOpen && (
-            <div
-              className="color-menu-new"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <input
-                ref={newCatRef}
-                value={newCatName}
-                onChange={(e) => setNewCatName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") createCategory();
-                  if (e.key === "Escape") setNewCatOpen(false);
-                }}
-                placeholder="Название категории"
-              />
-              <input
-                type="color"
-                value={newCatColor}
-                onChange={(e) => setNewCatColor(e.target.value)}
-              />
-              <button onClick={createCategory} title="Создать">
-                ✓
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-    {/* Панель заметки — раскрывается по клику на иконку, автосохранение
-        по blur; Escape сохраняет и сворачивает. */}
-    {showTime && visibility.notes && !compact && notesOpen && (
-      <div className="notes-panel">
-        <textarea
-          ref={notesRef}
-          value={notesValue}
-          onChange={(e) => setNotesValue(e.target.value)}
-          onInput={(e) => growNotes(e.currentTarget)}
-          onBlur={() => saveNotes()}
-          onKeyDown={(e) => {
-            if (
-              e.key === "Enter" &&
-              !e.shiftKey &&
-              !e.nativeEvent.isComposing // игнорируем Enter во время IME-композиции
-            ) {
-              // «Применить»: сохранить и закрыть панель заметки.
-              e.preventDefault();
-              saveNotes();
-              setNotesOpen(false);
-            } else if (e.key === "Escape") {
-              e.preventDefault();
-              saveNotes();
-              setNotesOpen(false);
-            }
-          }}
-          placeholder="Заметка…"
-          rows={2}
-          autoFocus
-        />
-      </div>
-    )}
-      {/* На мобильном: ряд действий (заметка, перенос) живёт в одной строке
-          с блоком подзадач — справа от него; сам блок обрезается по ширине
-          (flex:1), чтобы кнопки поместились. */}
-      {mobileRow ? (
-        <div className="task-under">
-          {visibility.subtasks && <SubtaskList taskId={task.id} />}
-          <div className="task-under-btns">
-            {showTime && visibility.notes && (
-              <button
-                className="chip-btn"
-                onClick={() => setNotesOpen((v) => !v)}
-                title="Заметка"
-                style={{
-                  opacity: task.notes ? 1 : 0.5,
-                  color: task.notes ? COLORS.accent : COLORS.muted,
-                  flexShrink: 0,
-                }}
-              >
-                <Icon name="note" size={13} />
-              </button>
-            )}
-            <button
-              className="chip-btn"
-              onClick={() => setMoveOpen(true)}
-              title="Перенести на другой день"
-              style={{ flexShrink: 0 }}
-            >
-              <Icon name="calendarCheck" size={13} />
-            </button>
+            {task.notes}
           </div>
-        </div>
-      ) : (
-        visibility.subtasks && <SubtaskList taskId={task.id} />
-      )}
-    {/* Модалка выбора даты для переноса (мобильный режим). */}
-    {moveOpen && (
-      <DatePickerModal
-        tasks={[]}
-        onPick={async (d) => {
-          await api.moveTask(task.id, d);
-          setMoveOpen(false);
-          onChange();
-        }}
-        onClose={() => setMoveOpen(false)}
-      />
+        )}
+      </div>
+    </div>
+    {/* Подзадачи под строкой (линия категории покрывает весь блок).
+        Тап по подзадаче открывает карточку родительской задачи. */}
+    {visibility.subtasks && (
+      <SubtaskList taskId={task.id} onOpenCard={openCard} />
     )}
-    {/* Подтверждение удаления задачи. */}
-    {confirmDel && (
-      <ConfirmDialog
-        title={`Удалить задачу?`}
-        confirmLabel="Удалить"
-        onConfirm={del}
-        onCancel={() => setConfirmDel(false)}
+    {/* Карточка задачи: окно с полными настройками (время, приоритет,
+        длительность, выезд, уведомление, категория, заметка, перенос,
+        удаление) — открывается по нажатию на задачу. */}
+    {cardOpen && (
+      <AddTaskModal
+        day={fromEpochDay(task.date)}
+        initial={task}
+        onChange={onChange}
+        onClose={() => setCardOpen(false)}
       />
     )}
     {/* Диалог «время занято»: запрет наложений не дал сохранить время —
@@ -905,17 +584,6 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
           )}
         </div>
       </div>
-    )}
-    {/* Карточка задачи: окно с полными настройками (время, приоритет,
-        длительность, выезд, уведомление, категория, заметка) — открывается
-        по нажатию на задачу. */}
-    {cardOpen && (
-      <AddTaskModal
-        day={fromEpochDay(task.date)}
-        initial={task}
-        onChange={onChange}
-        onClose={() => setCardOpen(false)}
-      />
     )}
     </div>
   );

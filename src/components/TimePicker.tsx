@@ -19,6 +19,9 @@ interface Props {
   /** Длительность выполнения (мин) — показ «09:00–10:30». */
   durationMinutes?: number | null;
   onChangeDuration?: (m: number | null) => void;
+  /** Наложение по времени с другой задачей: бейдж времени подсвечивается
+   *  красным, чтобы конфликт был заметен. */
+  conflict?: boolean;
 }
 
 /**
@@ -41,6 +44,7 @@ export function TimePicker({
   onChangeTravel,
   durationMinutes,
   onChangeDuration,
+  conflict = false,
 }: Props) {
   const [editing, setEditing] = useState(false);
   const { timePresets } = useStore();
@@ -204,14 +208,14 @@ export function TimePicker({
         type="button"
         onClick={() => setEditing((v) => !v)}
         style={{
-          ...badgeStyle(value !== null, large, compact),
+          ...badgeStyle(value !== null, large, compact, conflict),
           cursor: "pointer",
           border: "none",
           display: "inline-flex",
           alignItems: "center",
           gap: "var(--sp-3)",
         }}
-        title="Изменить время"
+        title={conflict ? "Время пересекается с другой задачей" : "Изменить время"}
       >
         {!compact && <Icon name="clock" size={large ? 16 : 13} />}
         {value !== null
@@ -250,15 +254,21 @@ function fmtDur(v: number): string {
 }
 
 const pickerStyle: React.CSSProperties = { position: "relative", display: "inline-flex" };
-function badgeStyle(hasTime: boolean, large = false, compact = false): React.CSSProperties {
+function badgeStyle(hasTime: boolean, large = false, compact = false, conflict = false): React.CSSProperties {
   return {
     fontSize: large ? "var(--fs-sm)" : "var(--fs-2xs)",
-    color: hasTime ? COLORS.accent : COLORS.muted,
-    background: hasTime ? accentTint(0.1) : "transparent",
+    // Наложение по времени — красное время, чтобы конфликт был заметен.
+    color: conflict ? "#e05252" : hasTime ? COLORS.accent : COLORS.muted,
+    background: conflict
+      ? "rgba(224,82,82,0.14)"
+      : hasTime
+        ? accentTint(0.1)
+        : "transparent",
     padding: large ? "4px 10px" : "1px 6px",
     borderRadius: "var(--radius-md)",
     minHeight: compact ? 26 : undefined,
     alignItems: compact ? "center" : undefined,
+    fontWeight: conflict ? 700 : undefined,
   };
 }
 const labelStyle: React.CSSProperties = {

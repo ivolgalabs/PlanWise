@@ -9,14 +9,17 @@ import { subtaskDragId } from "../drag";
 
 interface Props {
   taskId: string;
+  /** Открыть карточку родительской задачи (по нажатию на подзадачу). */
+  onOpenCard?: () => void;
 }
 
 /**
  * Чек-лист подзадач под задачей: всегда виден — заголовок (если есть подзадачи),
  * список (строки draggable) и поле ввода «+ подзадача». Поле всегда на месте,
- * поэтому добавить подзадачу можно в любом виде.
+ * поэтому добавить подзадачу можно в любом виде. Нажатие на подзадачу
+ * открывает карточку родительской задачи (там полные настройки).
  */
-export function SubtaskList({ taskId }: Props) {
+export function SubtaskList({ taskId, onOpenCard }: Props) {
   const [items, setItems] = useState<Subtask[]>([]);
   const [newTitle, setNewTitle] = useState("");
   // Версия списков подзадач: после promote/смены родителя (drag.tsx) список
@@ -75,6 +78,7 @@ export function SubtaskList({ taskId }: Props) {
           subtask={s}
           onToggle={() => toggle(s)}
           onDelete={() => del(s.id)}
+          onOpenCard={onOpenCard}
         />
       ))}
       {/* Форма: на мобильной клавиатуре кнопка «Далее/Готово» (enterKeyHint)
@@ -107,15 +111,18 @@ export function SubtaskList({ taskId }: Props) {
 }
 
 /** Строка подзадачи — draggable (можно перетащить в другой день → promote,
- *  или на другую задачу → сменить родителя). */
+ *  или на другую задачу → сменить родителя). Нажатие на текст подзадачи
+ *  открывает карточку родительской задачи. */
 function SubtaskRow({
   subtask,
   onToggle,
   onDelete,
+  onOpenCard,
 }: {
   subtask: Subtask;
   onToggle: () => void;
   onDelete: () => void;
+  onOpenCard?: () => void;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: subtaskDragId(subtask.id),
@@ -124,6 +131,13 @@ function SubtaskRow({
   return (
     <div
       ref={setNodeRef}
+      onClick={(e) => {
+        // Клик по чекбоксу/кнопке — их обработчики; остальное открывает
+        // карточку родительской задачи.
+        const t = e.target as HTMLElement;
+        if (t.closest("input, button, label")) return;
+        onOpenCard?.();
+      }}
       style={{
         display: "flex",
         alignItems: "center",

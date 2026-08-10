@@ -350,7 +350,8 @@
 }
 
 /* Вкладки настроек: лента групп поверх контента; на мобиле скроллится
-   горизонтально, чтобы поместились все группы. */
+   горизонтально, чтобы поместились все группы. Стиль — как у text-chip
+   остального приложения (без рамки-капсулы, hover-фон, активная — акцент). */
 .settings-tabs {
   display: flex;
   gap: var(--sp-2);
@@ -367,15 +368,18 @@
   flex-shrink: 0;
   font-size: var(--fs-2xs);
   padding: 6px 12px;
-  border-radius: 999px;
-  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  border: none;
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
 }
-.settings-tab.active {
-  border-color: var(--accent, #4a90d9);
-  background: color-mix(in srgb, var(--accent, #4a90d9) 12%, transparent);
+.settings-tab:hover {
+  background: var(--bg-hover);
   color: var(--text-primary);
-  font-weight: 600;
+}
+.settings-tab.active {
+  background: color-mix(in srgb, var(--accent, #4a90d9) 14%, transparent);
+  color: var(--accent, #4a90d9);
+  font-weight: 700;
 }

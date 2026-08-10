@@ -11,6 +11,8 @@ import { TaskFormFields } from "../components/AddTaskModal";
 interface Props {
   tasks: Task[];
   onSelectDay: (d: Date) => void;
+  /** Перейти к неделе с этим днём (кнопка «К неделе» в окне дня). */
+  onSelectWeek: (d: Date) => void;
   onChange: () => void;
 }
 
@@ -19,7 +21,7 @@ interface Props {
  * (текущая неделя) — заметно выше. Прошедшие дни — серее и компактнее.
  * Drag задач между днями — через @dnd-kit.
  */
-export function MonthView({ tasks, onSelectDay, onChange }: Props) {
+export function MonthView({ tasks, onSelectDay, onSelectWeek, onChange }: Props) {
   const { selectedDate, monthDate, setMonthDate, mondayFirst, colorSets, sortMode } = useStore();
   // Якорь месяца: фиксируем при первом открытии вида — выбор дня в «Дне»
   // не будет двигать месяц (см. store.ts monthDate).
@@ -246,20 +248,26 @@ export function MonthView({ tasks, onSelectDay, onChange }: Props) {
               }}
               onCancel={() => setMenuDay(null)}
             />
-            {/* Отдельная кнопка во всю ширину — не сливается с «Добавить/Отмена»
-                формы (раньше три flex-кнопки в одном ряду наслаивались). */}
-            <button
-              className="modal-action-btn"
-              onClick={() => openDay(menuDay)}
-              style={{
-                ...btnStyle(true),
-                width: "100%",
-                marginTop: "var(--sp-3)",
-                flex: "none",
-              }}
-            >
-              Перейти к дню
-            </button>
+            {/* Переход из месяца: в день или в неделю (с этим днём). */}
+            <div style={{ display: "flex", gap: "var(--sp-2)", marginTop: "var(--sp-3)" }}>
+              <button
+                className="modal-action-btn"
+                onClick={() => openDay(menuDay)}
+                style={btnStyle(true)}
+              >
+                К дню
+              </button>
+              <button
+                className="modal-action-btn"
+                onClick={() => {
+                  setMenuDay(null);
+                  onSelectWeek(menuDay);
+                }}
+                style={btnStyle(false)}
+              >
+                К неделе
+              </button>
+            </div>
           </div>
         </div>
       )}

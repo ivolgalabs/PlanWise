@@ -175,6 +175,7 @@ function DayRow({
       timeMinutes: p.timeMinutes,
       difficulty: p.difficulty,
       durationMinutes: p.durationMinutes,
+      notifyMinutes: p.notifyMinutes ?? null,
     });
     onChange();
   };

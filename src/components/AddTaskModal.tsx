@@ -6,6 +6,7 @@ import { COLORS, argbToHex } from "../theme";
 import { TimePicker } from "./TimePicker";
 import { Icon } from "./Icon";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { DatePickerModal } from "./DatePickerModal";
 
 /** Уровни приоритета: 0 = не задан, 1 = низкий, 2 = средний, 3 = высокий. */
 const PRIO = [
@@ -16,9 +17,10 @@ const PRIO = [
 ];
 
 /** Варианты «Уведомить»: по умолчанию (глобальные интервалы настроек),
- *  не уведомлять или своё значение за N минут до начала. */
-const NOTIFY_OPTS: { v: number | null; label: string }[] = [
-  { v: null, label: "По умолчанию (из настроек)" },
+ *  не уведомлять или своё значение за N минут до начала. Своё значение —
+ *  системными часами (02:30 = за 2.5 часа). */
+const NOTIFY_OPTS: { v: number; label: string }[] = [
+  { v: -1, label: "По умолчанию (из настроек)" },
   { v: 0, label: "Не уведомлять" },
   { v: 5, label: "За 5 минут" },
   { v: 15, label: "За 15 минут" },
@@ -27,7 +29,19 @@ const NOTIFY_OPTS: { v: number | null; label: string }[] = [
   { v: 120, label: "За 2 часа" },
   { v: 180, label: "За 3 часа" },
   { v: 1440, label: "За 1 день" },
+  { v: -2, label: "Своё значение…" },
 ];
+
+/** ЧЧ:ММ для input type=time (длительность напоминания). */
+const toHHMM = (m: number): string =>
+  `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+/** "ЧЧ:ММ" → минуты (02:30 = 150); пустое — null. */
+const fromHHMM = (t: string): number | null => {
+  if (!t) return null;
+  const [hh, mm] = t.split(":").map(Number);
+  if (Number.isFinite(hh) && Number.isFinite(mm)) return hh * 60 + mm;
+  return null;
+};
 
 interface FieldsProps {
   /** День, на который добавляется задача (для создания) или день задачи. */
@@ -38,18 +52,18 @@ interface FieldsProps {
   /** Автофокус на поле названия (в модалке дня удобно, в месяце — нет). */
   autoFocus?: boolean;
   /** Редактирование существующей задачи: поля заполняются из неё,
-   *  «Добавить» становится «Сохранить», появляется «Удалить». */
+   *  «Добавить» становится «Сохранить», появляются «Перенести» и «Удалить». */
   initial?: Task;
-  /** Перечитать список задач после сохранения/удаления. */
+  /** Перечитать список задач после сохранения/удаления/переноса. */
   onChange?: () => void;
 }
 
 /**
  * Поля формы «Новая задача» (без оверлея): название, время (системные часы +
  * пресеты), приоритет, длительность/выезд (системные селекты ч/мин),
- * уведомление, категория, заметка. Ошибка «время занято» от Rust показывается
- * в форме, окно не закрывается. Переиспользуется в модалке дня/недели,
- * в окне месяца и в карточке задачи (initial — редактирование).
+ * уведомление, категория, заметка и (при создании) подзадачи. Ошибка «время
+ * занято» от Rust показывается в форме, окно не закрывается. Переиспользуется
+ * в модалке дня/недели, в окне месяца и в карточке задачи (initial).
  */
 export function TaskFormFields({
   day,
@@ -67,12 +81,26 @@ export function TaskFormFields({
   const [travel, setTravel] = useState<number | null>(initial?.travelTime ?? null);
   const [color, setColor] = useState<string | null>(initial?.colorSetId ?? null);
   const [notes, setNotes] = useState(initial?.notes ?? "");
-  // null = по умолчанию (из настроек); select хранит -1 вместо null.
+  // Своё уведомление: null = по умолчанию; select хранит -1 для «по умолчанию»,
+  // -2 для «Своё значение…» (показывает системные часы).
   const [notify, setNotify] = useState<number | null>(initial?.notifyMinutes ?? null);
+  const [customNotify, setCustomNotify] = useState(false);
   const [error, setError] = useState("");
   const [confirmDel, setConfirmDel] = useState(false);
+  const [moveOpen, setMoveOpen] = useState(false);
+  // Подзадачи при создании: тексты добавляются в список и сохраняются
+  // вместе с задачей (в карточке существующей задачи подзадачи уже есть
+  // в списке под строкой).
+  const [subs, setSubs] = useState<string[]>([]);
+  const [newSub, setNewSub] = useState("");
   const { colorSets } = useStore();
   const sets = colorSets.filter((s) => s.id !== "cs-none");
+
+  const notifySelectValue = () => {
+    if (notify == null) return -1;
+    if (NOTIFY_OPTS.some((o) => o.v === notify)) return notify;
+    return -2; // своё значение, которого нет в списке
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -94,7 +122,13 @@ export function TaskFormFields({
         await api.upsertTask({ ...initial, ...payload });
         onChange?.();
       } else {
-        await api.upsertTask({ ...payload, date: toEpochDay(day) });
+        // Новая задача + подзадачи (создаются с тем же текстом, что набрал
+        // пользователь; пустые строки пропускаем).
+        const created = await api.upsertTask({ ...payload, date: toEpochDay(day) });
+        for (const s of subs) {
+          const st = s.trim();
+          if (st) await api.upsertSubtask({ taskId: created.id, title: st });
+        }
       }
       onAdded();
     } catch (err) {
@@ -110,6 +144,13 @@ export function TaskFormFields({
     await api.deleteTask(initial.id);
     onChange?.();
     onAdded();
+  };
+
+  const addSub = () => {
+    const s = newSub.trim();
+    if (!s) return;
+    setSubs((arr) => [...arr, s]);
+    setNewSub("");
   };
 
   const fieldRow: React.CSSProperties = {
@@ -198,14 +239,19 @@ export function TaskFormFields({
         </div>
       </div>
 
-      {/* Своё уведомление задачи: по умолчанию / не уведомлять / за N минут.
-          Подзадачи наследуют уведомление своей задачи. */}
+      {/* Своё уведомление задачи: по умолчанию / не уведомлять / за N минут /
+          своё значение системными часами. Подзадачи наследуют уведомление. */}
       <div style={fieldRow}>
         <span style={labelStyle}>Уведомить</span>
         <select
-          value={notify ?? -1}
+          value={notifySelectValue()}
           onChange={(e) => {
             const v = Number(e.target.value);
+            if (v === -2) {
+              setCustomNotify(true);
+              return;
+            }
+            setCustomNotify(false);
             setNotify(v < 0 ? null : v);
           }}
           style={{
@@ -220,14 +266,35 @@ export function TaskFormFields({
           }}
         >
           {NOTIFY_OPTS.map((o) => (
-            <option key={o.v ?? -1} value={o.v ?? -1}>
+            <option key={o.v} value={o.v}>
               {o.label}
             </option>
           ))}
         </select>
+        {customNotify && (
+          <input
+            type="time"
+            value={notify != null && notify > 0 ? toHHMM(notify) : ""}
+            onChange={(e) => {
+              const m = fromHHMM(e.target.value);
+              setNotify(m);
+            }}
+            style={{
+              fontSize: "var(--fs-sm)",
+              padding: "6px 8px",
+              border: `1px solid ${COLORS.cardBorder}`,
+              borderRadius: "var(--radius-md)",
+              background: "transparent",
+              color: COLORS.text,
+              outline: "none",
+              maxWidth: 110,
+            }}
+            title="Своё время напоминания (02:30 = за 2.5 часа)"
+          />
+        )}
       </div>
 
-      {/* Категория — свотчи с подписями (как в месяце). */}
+      {/* Категория — свотчи с подписями. */}
       <div style={fieldRow}>
         <span style={labelStyle}>Цвет</span>
         <button
@@ -291,7 +358,7 @@ export function TaskFormFields({
         ))}
       </div>
 
-      {/* Заметка к задаче (сворачивается; автосохранение при сохранении). */}
+      {/* Заметка к задаче. */}
       <div style={fieldRow}>
         <span style={labelStyle}>Заметка</span>
         <textarea
@@ -314,6 +381,82 @@ export function TaskFormFields({
         />
       </div>
 
+      {/* Подзадачи при создании: сразу можно добавить несколько пунктов. */}
+      {!editing && (
+        <div style={{ ...fieldRow, alignItems: "flex-start" }}>
+          <span style={labelStyle}>Подзадачи</span>
+          <div style={{ flex: 1, minWidth: 180 }}>
+            {subs.map((s, i) => (
+              <div
+                key={i}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "var(--sp-2)",
+                  fontSize: "var(--fs-sm)",
+                  color: COLORS.text,
+                }}
+              >
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: COLORS.muted, flexShrink: 0 }} />
+                <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {s}
+                </span>
+                <button
+                  type="button"
+                  className="chip-btn"
+                  onClick={() => setSubs((arr) => arr.filter((_, j) => j !== i))}
+                  title="Убрать"
+                >
+                  <Icon name="close" size={12} />
+                </button>
+              </div>
+            ))}
+            <div style={{ display: "flex", gap: "var(--sp-1)", alignItems: "center" }}>
+              <input
+                value={newSub}
+                onChange={(e) => setNewSub(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addSub();
+                  }
+                }}
+                placeholder="+ подзадача"
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  fontSize: "var(--fs-sm)",
+                  border: `1px dashed ${COLORS.cardBorder}`,
+                  borderRadius: "var(--radius-md)",
+                  padding: "6px 10px",
+                  background: "transparent",
+                  color: COLORS.text,
+                  outline: "none",
+                }}
+              />
+              <button
+                type="button"
+                className="modal-action-btn"
+                onClick={addSub}
+                title="Добавить подзадачу"
+                style={{
+                  flexShrink: 0,
+                  padding: "6px 10px",
+                  cursor: "pointer",
+                  fontSize: "var(--fs-sm)",
+                  borderRadius: "var(--radius-md)",
+                  border: "none",
+                  background: COLORS.accent,
+                  color: "#fff",
+                }}
+              >
+                +
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {error && (
         <div
           style={{
@@ -328,24 +471,44 @@ export function TaskFormFields({
 
       <div style={{ display: "flex", gap: "var(--sp-2)" }}>
         {editing && (
-          <button
-            type="button"
-            className="modal-action-btn"
-            onClick={() => setConfirmDel(true)}
-            title="Удалить задачу"
-            style={{
-              flexShrink: 0,
-              padding: "var(--sp-3) var(--sp-4)",
-              cursor: "pointer",
-              fontSize: "var(--fs-sm)",
-              borderRadius: "var(--radius-md)",
-              border: `1px solid rgba(224,82,82,0.6)`,
-              background: "transparent",
-              color: "#e05252",
-            }}
-          >
-            <Icon name="close" size={13} /> Удалить
-          </button>
+          <>
+            <button
+              type="button"
+              className="modal-action-btn"
+              onClick={() => setMoveOpen(true)}
+              title="Перенести на другой день"
+              style={{
+                flexShrink: 0,
+                padding: "var(--sp-3) var(--sp-4)",
+                cursor: "pointer",
+                fontSize: "var(--fs-sm)",
+                borderRadius: "var(--radius-md)",
+                border: `1px solid ${COLORS.cardBorder}`,
+                background: "transparent",
+                color: COLORS.text,
+              }}
+            >
+              <Icon name="calendarCheck" size={13} /> Перенести
+            </button>
+            <button
+              type="button"
+              className="modal-action-btn"
+              onClick={() => setConfirmDel(true)}
+              title="Удалить задачу"
+              style={{
+                flexShrink: 0,
+                padding: "var(--sp-3) var(--sp-4)",
+                cursor: "pointer",
+                fontSize: "var(--fs-sm)",
+                borderRadius: "var(--radius-md)",
+                border: `1px solid rgba(224,82,82,0.6)`,
+                background: "transparent",
+                color: "#e05252",
+              }}
+            >
+              <Icon name="close" size={13} /> Удалить
+            </button>
+          </>
         )}
         <button
           type="submit"
@@ -390,11 +553,23 @@ export function TaskFormFields({
           onCancel={() => setConfirmDel(false)}
         />
       )}
+      {moveOpen && initial && (
+        <DatePickerModal
+          tasks={[]}
+          onPick={async (d) => {
+            await api.moveTask(initial.id, d);
+            setMoveOpen(false);
+            onChange?.();
+            onAdded();
+          }}
+          onClose={() => setMoveOpen(false)}
+        />
+      )}
     </form>
   );
 }
 
-/** Модалка «Новая задача» — оверлей + форма (день/неделя). При initial —
+/** Модалка «Новая задача» — оверлей + форма (день/неделя/месяц). При initial —
  *  карточка задачи (редактирование): открывается по нажатию на задачу. */
 export function AddTaskModal({
   day,
@@ -409,6 +584,10 @@ export function AddTaskModal({
   initial?: Task;
 }) {
   const editing = initial !== undefined;
+  // Задача «Когда-нибудь» не привязана ко дню — заголовок без даты.
+  const head = editing && initial?.someday
+    ? "Когда-нибудь"
+    : day.toLocaleDateString("ru", { day: "numeric", month: "long", weekday: "long" });
   return (
     <div
       onClick={onClose}
@@ -447,17 +626,7 @@ export function AddTaskModal({
             textTransform: "capitalize",
           }}
         >
-          {editing
-            ? day.toLocaleDateString("ru", {
-                day: "numeric",
-                month: "long",
-                weekday: "long",
-              })
-            : day.toLocaleDateString("ru", {
-                day: "numeric",
-                month: "long",
-                weekday: "long",
-              })}
+          {head}
         </div>
         <TaskFormFields
           day={day}

@@ -17,6 +17,8 @@ export interface TaskPattern {
   /** Сложность: 0=не задана, 1=лёгкая, 2=средняя, 3=сложная. */
   difficulty: number;
   durationMinutes: number | null;
+  /** Своё уведомление шаблона (null = по умолчанию). */
+  notifyMinutes?: number | null;
 }
 
 /** Флаги видимости элементов интерфейса (настройки → «Интерфейс»). */
