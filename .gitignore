@@ -32,3 +32,6 @@ npm-debug.log*
 # Legacy Flutter artifacts (build cache)
 legacy/flutter-mvp/.dart_tool/
 legacy/flutter-mvp/build/
+
+# Сборочный каталог виджета (swiftc-артефакты .appex)
+src-tauri/build/

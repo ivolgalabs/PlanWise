@@ -964,26 +964,57 @@ pub fn write_widget_data(app: tauri::AppHandle, state: State<'_, Db>) -> Result<
 }
 
 /// Общая логика записи виджет-данных (без State — для вызова из планировщика).
+/// Формат один для Android- и macOS-виджетов: сегодня (`date`/`tasks`),
+/// неделя (`week` — 7 дней с сегодня) и «Когда-нибудь» (`someday`).
 pub fn refresh_widget(app: &tauri::AppHandle, state: &State<'_, Db>) -> Result<(), String> {
     let conn = state.lock();
     let today = today_epoch_day();
-    let tasks: Vec<serde_json::Value> = {
-        let mut stmt = conn
-            .prepare("SELECT title, time_minutes, is_done FROM tasks WHERE date = ?1 AND archived = 0 AND someday = 0 ORDER BY sort_order ASC LIMIT 8")
-            .map_err(|e| e.to_string())?;
-        stmt.query_map([today], |r| {
-            Ok(serde_json::json!({
-                "title": r.get::<_, String>(0)?,
-                "timeMinutes": r.get::<_, Option<i64>>(1)?,
-                "isDone": r.get::<_, i64>(2)? != 0,
-            }))
-        })
-        .and_then(|it| it.collect::<Result<Vec<_>, _>>())
-        .unwrap_or_default()
+    // Строка задачи в JSON: одинаковая для всех трёх выборок.
+    let task_row = |r: &rusqlite::Row| {
+        Ok(serde_json::json!({
+            "title": r.get::<_, String>(0)?,
+            "timeMinutes": r.get::<_, Option<i64>>(1)?,
+            "isDone": r.get::<_, i64>(2)? != 0,
+        }))
     };
+    // Задачи по одному аргументу-дате (someday-запрос параметров не имеет —
+    // для него отдельная ветка ниже).
+    let query_by_day = |conn: &rusqlite::Connection, sql: &str, day: i64| -> Vec<serde_json::Value> {
+        conn.prepare(sql)
+            .and_then(|mut stmt| {
+                stmt.query_map([day], task_row)
+                    .and_then(|it| it.collect::<Result<Vec<_>, _>>())
+            })
+            .unwrap_or_default()
+    };
+    // Сегодня — до 8 задач (Android-виджет и день на macOS).
+    let tasks = query_by_day(
+        &conn,
+        "SELECT title, time_minutes, is_done FROM tasks WHERE date = ?1 AND archived = 0 AND someday = 0 ORDER BY sort_order ASC LIMIT 8",
+        today,
+    );
+    // Неделя: 7 дней с сегодня, до 4 задач на день — для виджета «Неделя».
+    let week: Vec<serde_json::Value> = (0..7)
+        .map(|off| {
+            let day = today + off;
+            let day_tasks = query_by_day(
+                &conn,
+                "SELECT title, time_minutes, is_done FROM tasks WHERE date = ?1 AND archived = 0 AND someday = 0 ORDER BY sort_order ASC LIMIT 4",
+                day,
+            );
+            serde_json::json!({ "date": day, "tasks": day_tasks })
+        })
+        .collect();
+    // «Когда-нибудь» — задачи без даты, до 8 (без параметров).
+    let someday: Vec<serde_json::Value> = conn
+        .prepare("SELECT title, time_minutes, is_done FROM tasks WHERE someday = 1 AND archived = 0 ORDER BY sort_order ASC LIMIT 8")
+        .and_then(|mut stmt| stmt.query_map([], task_row).and_then(|it| it.collect::<Result<Vec<_>, _>>()))
+        .unwrap_or_default();
     let payload = serde_json::json!({
         "date": today,
         "tasks": tasks,
+        "week": week,
+        "someday": someday,
     });
     // На Android каталог data-файлов — data/files; на десктопе dir не меняется.
     #[cfg_attr(not(target_os = "android"), allow(unused_mut))]
@@ -1005,7 +1036,23 @@ pub fn refresh_widget(app: &tauri::AppHandle, state: &State<'_, Db>) -> Result<(
     let data = serde_json::to_string(&payload).map_err(|e| e.to_string())?;
     let tmp = dir.join("widget.json.tmp");
     std::fs::write(&tmp, &data).map_err(|e| e.to_string())?;
-    std::fs::rename(&tmp, dir.join("widget.json")).map_err(|e| e.to_string())
+    std::fs::rename(&tmp, dir.join("widget.json")).map_err(|e| e.to_string())?;
+    // macOS: дублируем в App Group контейнер — WidgetKit-расширение песочное
+    // и читает только свой контейнер группы (group.com.zkproject.dailyplanner).
+    #[cfg(target_os = "macos")]
+    {
+        let home = std::env::var("HOME").unwrap_or_default();
+        let group_dir = std::path::PathBuf::from(home)
+            .join("Library/Group Containers/group.com.zkproject.dailyplanner");
+        if !group_dir.as_os_str().is_empty() {
+            if let Ok(()) = std::fs::create_dir_all(&group_dir) {
+                let g_tmp = group_dir.join("widget.json.tmp");
+                let _ = std::fs::write(&g_tmp, &data);
+                let _ = std::fs::rename(&g_tmp, group_dir.join("widget.json"));
+            }
+        }
+    }
+    Ok(())
 }
 
 // ── Вложения заметок (файлы) ──────────────────────────────────────────

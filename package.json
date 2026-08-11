@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "build:macos": "bash scripts/bundle-macos.sh"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
