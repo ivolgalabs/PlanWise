@@ -287,33 +287,16 @@ export function TaskDndContext({ children, onChange }: TaskDndContextProps) {
             </p>
             <div style={{ display: "flex", gap: "var(--sp-2)" }}>
               <button
+                className="modal-action-btn"
                 onClick={() => setPending(null)}
-                style={{
-                  flex: 1,
-                  padding: "var(--sp-2) var(--sp-3)",
-                  cursor: "pointer",
-                  borderRadius: "var(--radius-md)",
-                  border: `1px solid ${COLORS.cardBorder}`,
-                  background: "transparent",
-                  color: COLORS.text,
-                  fontSize: "var(--fs-sm)",
-                }}
+                style={{ flex: 1 }}
               >
                 Отмена
               </button>
               <button
+                className="modal-action-btn primary"
                 onClick={confirmPromote}
-                style={{
-                  flex: 1,
-                  padding: "var(--sp-2) var(--sp-3)",
-                  cursor: "pointer",
-                  borderRadius: "var(--radius-md)",
-                  border: `1px solid ${COLORS.accent}`,
-                  background: COLORS.accent,
-                  color: "#fff",
-                  fontSize: "var(--fs-sm)",
-                  fontWeight: 600,
-                }}
+                style={{ flex: 1, fontWeight: 600 }}
               >
                 Сделать задачей
               </button>

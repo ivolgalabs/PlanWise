@@ -10,12 +10,13 @@ import { Icon } from "./Icon";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { DatePickerModal } from "./DatePickerModal";
 
-/** Уровни приоритета: 0 = не задан, 1 = низкий, 2 = средний, 3 = высокий. */
+/** Уровни приоритета: 0 = не задан, 1 = низкий, 2 = средний, 3 = высокий.
+ *  Цвета — глобальные CSS-переменные приоритета (themes.css). */
 const PRIO = [
   { v: 0, label: "—", color: "" },
-  { v: 1, label: "низкий", color: "#4caf50" },
-  { v: 2, label: "средний", color: "#ffb300" },
-  { v: 3, label: "высокий", color: "#e05252" },
+  { v: 1, label: "низкий", color: "var(--prio-low)" },
+  { v: 2, label: "средний", color: "var(--prio-med)" },
+  { v: 3, label: "высокий", color: "var(--prio-high)" },
 ];
 
 /** Варианты «Уведомить»: по умолчанию (глобальные интервалы настроек),
@@ -110,11 +111,26 @@ export function TaskFormFields({
   const [subs, setSubs] = useState<string[]>(templateMode ? (initialSubs ?? []) : []);
   const [newSub, setNewSub] = useState("");
   const [subItems, setSubItems] = useState<Subtask[]>([]);
-  useEffect(() => {
+  // Ошибка загрузки подзадач: раньше .catch(() => {}) молча оставлял пустой
+  // список — выглядело как «подзадач нет», хотя они есть. Теперь показываем
+  // сообщение и кнопку «Повторить».
+  const [subError, setSubError] = useState(false);
+  // Версия списков подзадач: после promote/смены родителя (drag.tsx) bump
+  // перезагружает подзадачи даже в открытой карточке (раньше список был
+  // залипшим, пока карточка не пересоздалась).
+  const subtaskRev = useStore((s) => s.subtaskRev);
+  const loadSubItems = () => {
     if (!editing || !initial) return;
-    api.getSubtasks(initial.id).then(setSubItems).catch(() => {});
+    setSubError(false);
+    api
+      .getSubtasks(initial.id)
+      .then(setSubItems)
+      .catch(() => setSubError(true));
+  };
+  useEffect(() => {
+    loadSubItems();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initial?.id]);
+  }, [initial?.id, subtaskRev]);
   // Вложения (файлы) задачи: доступны у существующей задачи (карточка);
   // при создании новой задачи id ещё нет — файлы добавит уже после сохранения.
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -308,7 +324,7 @@ export function TaskFormFields({
                 cursor: "pointer",
                 borderRadius: "var(--radius-md)",
                 border: `1px solid ${priority === p.v ? COLORS.accent : COLORS.cardBorder}`,
-                background: priority === p.v ? "rgba(0,0,0,0.06)" : "transparent",
+                background: priority === p.v ? "color-mix(in srgb, var(--text-primary) 6%, transparent)" : "transparent",
                 color: COLORS.text,
               }}
               title={p.label}
@@ -527,9 +543,9 @@ export function TaskFormFields({
             ))}
             <button
               type="button"
-              className="chip-btn"
+              className="text-chip"
               disabled={attLoading}
-              style={{ alignSelf: "flex-start" }}
+              style={{ alignSelf: "flex-start", padding: "4px 12px" }}
               onClick={() => fileInputRef.current?.click()}
               title="Выбрать файл (системный диалог)"
             >
@@ -572,7 +588,7 @@ export function TaskFormFields({
               }}
             />
             {attError && (
-              <span style={{ fontSize: "var(--fs-2xs)", color: "#d9534f" }}>
+              <span style={{ fontSize: "var(--fs-2xs)", color: "var(--danger)" }}>
                 {attError}
               </span>
             )}
@@ -656,6 +672,28 @@ export function TaskFormFields({
                   </button>
                 </div>
               ))}
+          {editing && subError && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "var(--sp-2)",
+                fontSize: "var(--fs-xs)",
+                color: "var(--danger)",
+                marginBottom: "var(--sp-2)",
+              }}
+            >
+              <span>Не удалось загрузить подзадачи</span>
+              <button
+                type="button"
+                className="text-chip"
+                onClick={loadSubItems}
+                style={{ fontSize: "var(--fs-2xs)" }}
+              >
+                Повторить
+              </button>
+            </div>
+          )}
           <div style={{ display: "flex", gap: "var(--sp-1)", alignItems: "center" }}>
             <input
               value={newSub}
@@ -682,19 +720,9 @@ export function TaskFormFields({
             />
             <button
               type="button"
-              className="modal-action-btn"
+              className="modal-action-btn primary compact"
               onClick={() => (editing ? addSubItem() : addSub())}
               title="Добавить подзадачу"
-              style={{
-                flexShrink: 0,
-                padding: "6px 10px",
-                cursor: "pointer",
-                fontSize: "var(--fs-sm)",
-                borderRadius: "var(--radius-md)",
-                border: "none",
-                background: COLORS.accent,
-                color: "#fff",
-              }}
             >
               +
             </button>
@@ -706,7 +734,7 @@ export function TaskFormFields({
         <div
           style={{
             fontSize: "var(--fs-sm)",
-            color: "#d9534f",
+            color: "var(--danger)",
             marginBottom: "var(--sp-3)",
           }}
         >
@@ -722,34 +750,16 @@ export function TaskFormFields({
               className="modal-action-btn"
               onClick={() => setMoveOpen(true)}
               title="Перенести на другой день"
-              style={{
-                flexShrink: 0,
-                padding: "var(--sp-3) var(--sp-4)",
-                cursor: "pointer",
-                fontSize: "var(--fs-sm)",
-                borderRadius: "var(--radius-md)",
-                border: `1px solid ${COLORS.cardBorder}`,
-                background: "transparent",
-                color: COLORS.text,
-              }}
+              style={{ flexShrink: 0 }}
             >
               <Icon name="calendarCheck" size={13} /> Перенести
             </button>
             <button
               type="button"
-              className="modal-action-btn"
+              className="modal-action-btn danger"
               onClick={() => setConfirmDel(true)}
               title="Удалить задачу"
-              style={{
-                flexShrink: 0,
-                padding: "var(--sp-3) var(--sp-4)",
-                cursor: "pointer",
-                fontSize: "var(--fs-sm)",
-                borderRadius: "var(--radius-md)",
-                border: `1px solid rgba(224,82,82,0.6)`,
-                background: "transparent",
-                color: "#e05252",
-              }}
+              style={{ flexShrink: 0 }}
             >
               <Icon name="close" size={13} /> Удалить
             </button>
@@ -757,17 +767,8 @@ export function TaskFormFields({
         )}
         <button
           type="submit"
-          className="modal-action-btn"
-          style={{
-            flex: 1,
-            padding: "var(--sp-3) var(--sp-4)",
-            cursor: "pointer",
-            fontSize: "var(--fs-sm)",
-            borderRadius: "var(--radius-md)",
-            border: "none",
-            background: COLORS.accent,
-            color: "#fff",
-          }}
+          className="modal-action-btn primary"
+          style={{ flex: 1 }}
         >
           {templateMode ? "Сохранить" : editing ? "Сохранить" : "Добавить"}
         </button>
@@ -775,16 +776,7 @@ export function TaskFormFields({
           type="button"
           className="modal-action-btn"
           onClick={onCancel}
-          style={{
-            flex: 1,
-            padding: "var(--sp-3) var(--sp-4)",
-            cursor: "pointer",
-            fontSize: "var(--fs-sm)",
-            borderRadius: "var(--radius-md)",
-            border: `1px solid ${COLORS.cardBorder}`,
-            background: "transparent",
-            color: COLORS.text,
-          }}
+          style={{ flex: 1 }}
         >
           Отмена
         </button>

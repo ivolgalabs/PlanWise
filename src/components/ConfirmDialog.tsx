@@ -56,35 +56,17 @@ export function ConfirmDialog({ title, confirmLabel = "Удалить", danger =
         </div>
         <div style={{ display: "flex", gap: "var(--sp-2)" }}>
           <button
-            className="modal-action-btn"
+            className={`modal-action-btn ${danger ? "danger" : "primary"}`}
             onClick={onConfirm}
             autoFocus
-            style={{
-              flex: 1,
-              padding: "var(--sp-3) var(--sp-4)",
-              cursor: "pointer",
-              fontSize: "var(--fs-sm)",
-              borderRadius: "var(--radius-md)",
-              border: "none",
-              background: danger ? "#d9534f" : COLORS.accent,
-              color: "#fff",
-            }}
+            style={{ flex: 1 }}
           >
             {confirmLabel}
           </button>
           <button
             className="modal-action-btn"
             onClick={onCancel}
-            style={{
-              flex: 1,
-              padding: "var(--sp-3) var(--sp-4)",
-              cursor: "pointer",
-              fontSize: "var(--fs-sm)",
-              borderRadius: "var(--radius-md)",
-              border: `1px solid ${COLORS.cardBorder}`,
-              background: "transparent",
-              color: COLORS.text,
-            }}
+            style={{ flex: 1 }}
           >
             Отмена
           </button>

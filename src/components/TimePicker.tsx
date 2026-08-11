@@ -307,9 +307,9 @@ function badgeStyle(hasTime: boolean, large = false, compact = false, conflict =
   return {
     fontSize: large ? "var(--fs-sm)" : "var(--fs-2xs)",
     // Наложение по времени — красное время, чтобы конфликт был заметен.
-    color: conflict ? "#e05252" : hasTime ? COLORS.accent : COLORS.muted,
+    color: conflict ? "var(--danger)" : hasTime ? COLORS.accent : COLORS.muted,
     background: conflict
-      ? "rgba(224,82,82,0.14)"
+      ? "color-mix(in srgb, var(--danger) 14%, transparent)"
       : hasTime
         ? accentTint(0.1)
         : "transparent",
@@ -327,7 +327,7 @@ const labelStyle: React.CSSProperties = {
 };
 const overlayStyle: React.CSSProperties = {
   position: "fixed", inset: 0, zIndex: 300,
-  background: "rgba(0,0,0,0.45)",
+  background: "var(--overlay)",
   display: "flex", alignItems: "center", justifyContent: "center",
 };
 const modalStyle: React.CSSProperties = {
@@ -372,6 +372,6 @@ const okBtnStyle: React.CSSProperties = {
 const submitStyle: React.CSSProperties = {
   display: "block", width: "100%", marginTop: "var(--sp-3)",
   fontSize: "var(--fs-xs)", padding: "8px 10px", cursor: "pointer",
-  border: `1px solid ${COLORS.accent}`, background: COLORS.accent, color: "#fff",
+  border: `1px solid ${COLORS.accent}`, background: COLORS.accent, color: "var(--text-on-accent)",
   borderRadius: "var(--radius-md)",
 };

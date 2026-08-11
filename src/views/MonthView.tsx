@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
-import type { Task } from "../api";
-import { fromEpochDay } from "../api";
+import type { Task, Subtask } from "../api";
+import { api, fromEpochDay } from "../api";
 import { startOfWeek, firstOfMonth, isSameDay, isToday, isPast, formatMinutes, sortTasksByMode } from "../date";
 import { COLORS, accentTint, setHex } from "../theme";
 import { useStore } from "../store";
@@ -191,60 +191,66 @@ export function MonthView({ tasks, onSelectDay, onSelectWeek, onChange }: Props)
                 </p>
               )}
               {tasksForDay(menuDay).map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => openDay(menuDay)}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "var(--sp-2)",
-                    textAlign: "left",
-                    padding: "var(--sp-2) var(--sp-3)",
-                    borderRadius: "var(--radius-sm)",
-                    border: "none",
-                    background: "transparent",
-                    cursor: "pointer",
-                    fontSize: "var(--fs-sm)",
-                    color: t.isDone ? COLORS.muted : COLORS.text,
-                    textDecoration: t.isDone ? "line-through" : "none",
-                  }}
-                >
-                  <span
+                <div key={t.id} style={{ borderRadius: "var(--radius-sm)" }}>
+                  <button
+                    onClick={() => openDay(menuDay)}
                     style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: "50%",
-                      flexShrink: 0,
-                      background:
-                        t.isDone || !t.colorSetId
-                          ? COLORS.muted
-                          : setHex(colorSets, t.colorSetId) ?? COLORS.muted,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "var(--sp-2)",
+                      textAlign: "left",
+                      padding: "var(--sp-2) var(--sp-3)",
+                      borderRadius: "var(--radius-sm)",
+                      border: "none",
+                      background: "transparent",
+                      cursor: "pointer",
+                      fontSize: "var(--fs-sm)",
+                      color: t.isDone ? COLORS.muted : COLORS.text,
+                      textDecoration: t.isDone ? "line-through" : "none",
+                      width: "100%",
+                      minWidth: 0,
                     }}
-                  />
-                  {t.timeMinutes != null && (
-                    <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted, flexShrink: 0 }}>
-                      {formatMinutes(t.timeMinutes)}
-                    </span>
-                  )}
-                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
-                    {t.title}
-                  </span>
-                  {/* Справа от задачи — время выполнения и выезд (если заданы):
-                      карточка широкая, место для всей информации есть. */}
-                  {timeMetaOf(t).length > 0 && (
+                  >
                     <span
                       style={{
-                        marginLeft: "auto",
+                        width: 8,
+                        height: 8,
+                        borderRadius: "50%",
                         flexShrink: 0,
-                        fontSize: "var(--fs-2xs)",
-                        color: COLORS.muted,
-                        whiteSpace: "nowrap",
+                        background:
+                          t.isDone || !t.colorSetId
+                            ? COLORS.muted
+                            : setHex(colorSets, t.colorSetId) ?? COLORS.muted,
                       }}
-                    >
-                      {timeMetaOf(t).join(" · ")}
+                    />
+                    {t.timeMinutes != null && (
+                      <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted, flexShrink: 0 }}>
+                        {formatMinutes(t.timeMinutes)}
+                      </span>
+                    )}
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
+                      {t.title}
                     </span>
-                  )}
-                </button>
+                    {/* Справа от задачи — время выполнения и выезд (если заданы):
+                        карточка широкая, место для всей информации есть. */}
+                    {timeMetaOf(t).length > 0 && (
+                      <span
+                        style={{
+                          marginLeft: "auto",
+                          flexShrink: 0,
+                          fontSize: "var(--fs-2xs)",
+                          color: COLORS.muted,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {timeMetaOf(t).join(" · ")}
+                      </span>
+                    )}
+                  </button>
+                  {/* Подзадачи задачи — компактным списком под строкой
+                      (в месяце их раньше не было вовсе). */}
+                  <DayTaskSubs taskId={t.id} done={t.isDone} />
+                </div>
               ))}
             </div>
 
@@ -262,9 +268,9 @@ export function MonthView({ tasks, onSelectDay, onSelectWeek, onChange }: Props)
             {/* Переход из месяца: в день или в неделю (с этим днём). */}
             <div style={{ display: "flex", gap: "var(--sp-2)", marginTop: "var(--sp-3)" }}>
               <button
-                className="modal-action-btn"
+                className="modal-action-btn primary"
                 onClick={() => openDay(menuDay)}
-                style={btnStyle(true)}
+                style={{ flex: 1 }}
               >
                 К дню
               </button>
@@ -274,7 +280,7 @@ export function MonthView({ tasks, onSelectDay, onSelectWeek, onChange }: Props)
                   setMenuDay(null);
                   onSelectWeek(menuDay);
                 }}
-                style={btnStyle(false)}
+                style={{ flex: 1 }}
               >
                 К неделе
               </button>
@@ -405,12 +411,55 @@ function CategoryBadges({ tasks }: { tasks: Task[] }) {
   );
 }
 
-function btnStyle(primary: boolean): React.CSSProperties {
-  return {
-    flex: 1, padding: "var(--sp-3) var(--sp-4)", cursor: "pointer",
-    fontSize: "var(--fs-sm)", borderRadius: "var(--radius-md)",
-    border: `1px solid ${primary ? COLORS.accent : COLORS.cardBorder}`,
-    background: primary ? COLORS.accent : "transparent",
-    color: primary ? "#fff" : COLORS.text,
-  };
+/** Подзадачи одной задачи в модалке дня (месяц). Раньше в месяце их не было
+ *  вовсе — теперь компактный список под строкой задачи. Клик по подзадаче
+ *  не нужен (переход к дню открывает карточку), поэтому без чекбоксов и drag. */
+function DayTaskSubs({ taskId, done }: { taskId: string; done: boolean }) {
+  const [subs, setSubs] = useState<Subtask[] | null>(null);
+  useEffect(() => {
+    let alive = true;
+    setSubs(null);
+    api
+      .getSubtasks(taskId)
+      .then((list) => {
+        if (alive) setSubs(list);
+      })
+      .catch(() => {
+        if (alive) setSubs([]); // ошибка — просто не показываем блок
+      });
+    return () => {
+      alive = false;
+    };
+  }, [taskId]);
+  if (!subs || subs.length === 0) return null;
+  return (
+    <div
+      style={{
+        margin: "0 var(--sp-3) var(--sp-1) calc(var(--sp-4) + 14px)",
+        display: "flex",
+        flexDirection: "column",
+        gap: 2,
+      }}
+    >
+      {subs.map((s) => (
+        <span
+          key={s.id}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "var(--sp-2)",
+            fontSize: "var(--fs-2xs)",
+            color: s.isDone || done ? COLORS.muted : COLORS.text,
+            textDecoration: s.isDone || done ? "line-through" : "none",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          <span style={{ width: 6, height: 6, borderRadius: "50%", background: COLORS.muted, flexShrink: 0 }} />
+          {s.title}
+        </span>
+      ))}
+    </div>
+  );
 }

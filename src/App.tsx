@@ -443,7 +443,7 @@ function App() {
       {loadError && (
         <div
           style={{
-            background: "rgba(224,82,82,0.12)",
+            background: "color-mix(in srgb, var(--danger) 12%, transparent)",
             color: COLORS.text,
             fontSize: "var(--fs-2xs)",
             padding: "var(--sp-2) var(--sp-8)",

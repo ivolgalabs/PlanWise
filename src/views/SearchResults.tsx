@@ -1,4 +1,5 @@
-import type { Task } from "../api";
+import { useEffect, useState } from "react";
+import type { Subtask, Task } from "../api";
 import { api, fromEpochDay } from "../api";
 import { COLORS, setHex } from "../theme";
 import { isToday, isPast } from "../date";
@@ -141,67 +142,131 @@ export function SearchResults({ tasks, query, color, period, status, sort, from,
             key={t.id}
             style={{
               display: "flex",
-              alignItems: "center",
-              gap: "var(--sp-2)",
+              flexDirection: "column",
               padding: "var(--sp-1) 0",
               borderBottom: `1px solid ${COLORS.cardBorder}`,
             }}
           >
             <div
               style={{
-                width: 3,
-                height: 20,
-                borderRadius: 2,
-                flexShrink: 0,
-                background: setHex(colorSets, t.colorSetId) ?? "transparent",
-              }}
-            />
-            <label className="checkbox-hit">
-              <input
-                type="checkbox"
-                checked={t.isDone}
-                onChange={() => toggleDone(t)}
-                style={{ flexShrink: 0 }}
-                title={t.isDone ? "Отметить невыполненной" : "Отметить выполненной"}
-              />
-            </label>
-            <span
-              style={{
-                flex: 1,
-                minWidth: 0,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-                color: t.isDone || past ? COLORS.muted : COLORS.text,
-                textDecoration: t.isDone ? "line-through" : "none",
-                fontSize: "var(--fs-sm)",
+                display: "flex",
+                alignItems: "center",
+                gap: "var(--sp-2)",
               }}
             >
-              {t.title || "(без названия)"}
-            </span>
-            {t.someday ? (
-              // «Когда-нибудь» — нет даты и перехода к дню.
-              <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted }}>
-                Когда-нибудь
-              </span>
-            ) : (
-              <button
-                className="icon-btn"
-                onClick={() => onJumpToDay(d)}
-                title="Перейти к этому дню"
-                style={{ fontSize: "var(--fs-2xs)", flexShrink: 0 }}
+              <div
+                style={{
+                  width: 3,
+                  height: 20,
+                  borderRadius: 2,
+                  flexShrink: 0,
+                  background: setHex(colorSets, t.colorSetId) ?? "transparent",
+                }}
+              />
+              <label className="checkbox-hit">
+                <input
+                  type="checkbox"
+                  checked={t.isDone}
+                  onChange={() => toggleDone(t)}
+                  style={{ flexShrink: 0 }}
+                  title={t.isDone ? "Отметить невыполненной" : "Отметить выполненной"}
+                />
+              </label>
+              <span
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                  color: t.isDone || past ? COLORS.muted : COLORS.text,
+                  textDecoration: t.isDone ? "line-through" : "none",
+                  fontSize: "var(--fs-sm)",
+                }}
               >
-                {d.toLocaleDateString("ru", {
-                  day: "numeric",
-                  month: "short",
-                  weekday: "short",
-                })}
-                {isToday(d) ? " · сегодня" : ""} →
-              </button>
-            )}
+                {t.title || "(без названия)"}
+              </span>
+              {t.someday ? (
+                // «Когда-нибудь» — нет даты и перехода к дню.
+                <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted }}>
+                  Когда-нибудь
+                </span>
+              ) : (
+                <button
+                  className="text-chip"
+                  onClick={() => onJumpToDay(d)}
+                  title="Перейти к этому дню"
+                  style={{ fontSize: "var(--fs-2xs)", flexShrink: 0 }}
+                >
+                  {d.toLocaleDateString("ru", {
+                    day: "numeric",
+                    month: "short",
+                    weekday: "short",
+                  })}
+                  {isToday(d) ? " · сегодня" : ""} →
+                </button>
+              )}
+            </div>
+            {/* Подзадачи задачи — компактной строкой под заголовком
+                (в поиске их раньше не было вовсе). */}
+            <SearchSubs taskId={t.id} done={t.isDone} />
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/** Подзадачи одной задачи в строке поиска. Показываем первые 3 + счётчик
+ *  остальных, чтобы строка не раздувалась. Ошибка загрузки — молча (блок
+ *  просто не нужен в результатах поиска). */
+function SearchSubs({ taskId, done }: { taskId: string; done: boolean }) {
+  const [subs, setSubs] = useState<Subtask[] | null>(null);
+  useEffect(() => {
+    let alive = true;
+    setSubs(null);
+    api
+      .getSubtasks(taskId)
+      .then((list) => {
+        if (alive) setSubs(list);
+      })
+      .catch(() => {
+        if (alive) setSubs([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [taskId]);
+  if (!subs || subs.length === 0) return null;
+  const shown = subs.slice(0, 3);
+  const rest = subs.length - shown.length;
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "var(--sp-2)",
+        marginLeft: "calc(var(--sp-4) + 14px)",
+        fontSize: "var(--fs-2xs)",
+        color: COLORS.muted,
+        overflow: "hidden",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {shown.map((s) => (
+        <span
+          key={s.id}
+          style={{
+            textDecoration: s.isDone || done ? "line-through" : "none",
+            color: s.isDone || done ? COLORS.muted : COLORS.secondary,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {s.title}
+        </span>
+      ))}
+      {rest > 0 && <span>+{rest}</span>}
     </div>
   );
 }

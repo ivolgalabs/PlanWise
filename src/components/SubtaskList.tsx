@@ -22,12 +22,20 @@ interface Props {
 export function SubtaskList({ taskId, onOpenCard }: Props) {
   const [items, setItems] = useState<Subtask[]>([]);
   const [newTitle, setNewTitle] = useState("");
+  // Ошибка загрузки: раньше unhandled rejection молча оставлял пустой список
+  // (выглядело как «подзадач нет»). Теперь показываем сообщение с ретраем.
+  const [loadError, setLoadError] = useState(false);
   // Версия списков подзадач: после promote/смены родителя (drag.tsx) список
   // должен перечитаться — иначе удалённая подзадача «висит» у старого родителя.
   const subtaskRev = useStore((s) => s.subtaskRev);
 
   const load = async () => {
-    setItems(await api.getSubtasks(taskId));
+    try {
+      setLoadError(false);
+      setItems(await api.getSubtasks(taskId));
+    } catch {
+      setLoadError(true);
+    }
   };
 
   useEffect(() => {
@@ -85,6 +93,24 @@ export function SubtaskList({ taskId, onOpenCard }: Props) {
           }}
         />
       ))}
+      {/* Ошибка загрузки — не молчим (раньше пустой список читался как
+          «подзадач нет»). Поле «+ подзадача» остаётся на месте. */}
+      {loadError && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "var(--sp-2)",
+            fontSize: "var(--fs-2xs)",
+            color: "var(--danger)",
+          }}
+        >
+          <span>Не удалось загрузить подзадачи</span>
+          <button className="text-chip" onClick={load} style={{ fontSize: "var(--fs-2xs)" }}>
+            Повторить
+          </button>
+        </div>
+      )}
       {/* Форма: на мобильной клавиатуре кнопка «Далее/Готово» (enterKeyHint)
           срабатывает как Enter — добавляет подзадачу. */}
       <form

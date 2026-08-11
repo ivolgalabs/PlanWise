@@ -166,11 +166,12 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
   const setHex = taskSet ? argbToHex(taskSet.color) : undefined;
 
   // Приоритет задачи — цветной маркер в строке (не редактируется здесь,
-  // меняется в карточке).
+  // меняется в карточке). Цвета — глобальные CSS-переменные приоритета
+  // (themes.css), адаптируются к теме как остальная палитра.
   const PRIO_META: Record<number, { label: string; color: string }> = {
-    1: { label: "низкий", color: "#4caf50" },
-    2: { label: "средний", color: "#ffb300" },
-    3: { label: "высокий", color: "#e05252" },
+    1: { label: "низкий", color: "var(--prio-low)" },
+    2: { label: "средний", color: "var(--prio-med)" },
+    3: { label: "высокий", color: "var(--prio-high)" },
   };
   const prioMeta = PRIO_META[task.difficulty ?? 0];
 
@@ -262,7 +263,7 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
         // становится выше, и центрирование «утапливало» чекбокс/ручку вниз —
         // ряд выглядел разъехавшимся.
         alignItems: compact ? "flex-start" : "center",
-        background: timeConflict ? "rgba(224,82,82,0.09)" : "transparent",
+        background: timeConflict ? "color-mix(in srgb, var(--danger) 9%, transparent)" : "transparent",
         borderRadius: "var(--radius-sm)",
         ...dragStyle,
       }}

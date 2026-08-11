@@ -126,16 +126,11 @@ export function TopBar({
       <ViewSwitcher view={view} onChange={onViewChanged} />
       {showWeekToggle && onToggleWeekOrientation && (
         <button
-          className="icon-btn week-toggle-btn"
+          className="text-chip week-toggle-btn"
           onClick={onToggleWeekOrientation}
           title={weekVertical ? "Сетка (горизонтально)" : "Список (вертикально)"}
           aria-label={weekVertical ? "Показать неделю сеткой" : "Показать неделю списком"}
-          style={{
-            fontSize: "var(--fs-xs)",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "var(--sp-3)",
-          }}
+          style={{ fontSize: "var(--fs-xs)" }}
         >
           {weekVertical ? (
             <><Icon name="grid" size={14} /> сеткой</>

@@ -158,7 +158,7 @@ export function MiniCalendar({ tasks, large, onSelect, droppable = true, fill = 
       {/* Быстрый возврат к сегодняшнему дню/месяцу. */}
       {!collapsed && (
         <button
-          className="icon-btn"
+          className="text-chip"
           onClick={() => {
             const today = new Date();
             setCalMonth(firstOfMonth(today));
@@ -167,7 +167,6 @@ export function MiniCalendar({ tasks, large, onSelect, droppable = true, fill = 
           style={{
             fontSize: "var(--fs-2xs)",
             marginBottom: "var(--sp-2)",
-            padding: "2px 6px",
             alignSelf: "flex-start",
           }}
           title="Перейти к сегодняшнему дню"
