@@ -111,6 +111,26 @@ export function TaskFormFields({
   const [subs, setSubs] = useState<string[]>(templateMode ? (initialSubs ?? []) : []);
   const [newSub, setNewSub] = useState("");
   const [subItems, setSubItems] = useState<Subtask[]>([]);
+  // Инлайн-редактирование текста подзадачи в карточке: клик/тап по тексту
+  // переводит строку в поле ввода (как в списке под задачей).
+  const [editSubId, setEditSubId] = useState<string | null>(null);
+  const [editSubVal, setEditSubVal] = useState("");
+  const editSubInputRef = useRef<HTMLInputElement>(null);
+  const startEditSub = (s: Subtask) => {
+    setEditSubId(s.id);
+    setEditSubVal(s.title);
+    requestAnimationFrame(() => editSubInputRef.current?.focus());
+  };
+  const commitEditSub = async (s: Subtask) => {
+    const t = editSubVal.trim();
+    setEditSubId(null);
+    if (!t || t === s.title) return;
+    await api.upsertSubtask({ ...s, title: t });
+    setSubItems(await api.getSubtasks(s.taskId));
+    // Bump: списки подзадач под задачей перечитаются сразу (а не после
+    // перезагрузки), иначе переименование «зависало» до перезапуска.
+    useStore.getState().bumpSubtasks();
+  };
   // Ошибка загрузки подзадач: раньше .catch(() => {}) молча оставлял пустой
   // список — выглядело как «подзадач нет», хотя они есть. Теперь показываем
   // сообщение и кнопку «Повторить».
@@ -622,18 +642,50 @@ export function TaskFormFields({
                     }}
                     style={{ margin: 0 }}
                   />
-                  <span
-                    style={{
-                      flex: 1,
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                      textDecoration: s.isDone ? "line-through" : "none",
-                      color: s.isDone ? COLORS.muted : COLORS.text,
-                    }}
-                  >
-                    {s.title}
-                  </span>
+                  {editSubId === s.id ? (
+                    <input
+                      ref={editSubInputRef}
+                      value={editSubVal}
+                      onChange={(e) => setEditSubVal(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") commitEditSub(s);
+                        else if (e.key === "Escape") setEditSubId(null);
+                      }}
+                      onBlur={() => commitEditSub(s)}
+                      data-subtask-edit-id={s.id}
+                      style={{
+                        flex: 1,
+                        minWidth: 0,
+                        fontSize: "var(--fs-sm)",
+                        background: "transparent",
+                        border: "none",
+                        borderBottom: "1px solid var(--accent)",
+                        outline: "none",
+                        color: COLORS.text,
+                      }}
+                    />
+                  ) : (
+                    <span
+                      onPointerDown={(e) => {
+                        // Мышь: preventDefault, чтобы не выделять текст span;
+                        // на таче нативный фокус ставит курсор в поле.
+                        if (e.pointerType === "mouse") e.preventDefault();
+                        startEditSub(s);
+                      }}
+                      title={s.title || undefined}
+                      style={{
+                        flex: 1,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                        textDecoration: s.isDone ? "line-through" : "none",
+                        color: s.isDone ? COLORS.muted : COLORS.text,
+                        cursor: "text",
+                      }}
+                    >
+                      {s.title}
+                    </span>
+                  )}
                   <button
                     type="button"
                     className="chip-btn"

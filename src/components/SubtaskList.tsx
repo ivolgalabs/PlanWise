@@ -9,17 +9,17 @@ import { subtaskDragId } from "../drag";
 
 interface Props {
   taskId: string;
-  /** Открыть карточку родительской задачи (по нажатию на подзадачу). */
-  onOpenCard?: () => void;
 }
 
 /**
  * Чек-лист подзадач под задачей: всегда виден — заголовок (если есть подзадачи),
  * список (строки draggable) и поле ввода «+ подзадача». Поле всегда на месте,
- * поэтому добавить подзадачу можно в любом виде. Нажатие на подзадачу
- * открывает карточку родительской задачи (там полные настройки).
+ * поэтому добавить подзадачу можно в любом виде.
+ * Текст подзадачи редактируется прямо в строке (как текст задачи) — тап/клик
+ * по тексту переводит строку в инлайн-редактирование. Карточка родительской
+ * задачи открывается ТОЛЬКО кнопкой «✎» в строке задачи.
  */
-export function SubtaskList({ taskId, onOpenCard }: Props) {
+export function SubtaskList({ taskId }: Props) {
   const [items, setItems] = useState<Subtask[]>([]);
   const [newTitle, setNewTitle] = useState("");
   // Ошибка загрузки: раньше unhandled rejection молча оставлял пустой список
@@ -86,7 +86,6 @@ export function SubtaskList({ taskId, onOpenCard }: Props) {
           subtask={s}
           onToggle={() => toggle(s)}
           onDelete={() => del(s.id)}
-          onOpenCard={onOpenCard}
           onRename={async (sub, title) => {
             await api.upsertSubtask({ ...sub, title });
             load();
@@ -141,20 +140,19 @@ export function SubtaskList({ taskId, onOpenCard }: Props) {
 }
 
 /** Строка подзадачи — draggable (можно перетащить в другой день → promote,
- *  или на другую задачу → сменить родителя). Нажатие на текст подзадачи
- *  открывает карточку родительской задачи; на десктопе клик мышью по тексту
- *  переводит строку в инлайн-редактирование (фокус + выделение, как у задач). */
+ *  или на другую задачу → сменить родителя). Текст подзадачи редактируется
+ *  прямо в строке (как текст задачи): клик/тап по тексту переводит строку
+ *  в инлайн-редактирование (фокус + выделение на десктопе). Карточка
+ *  родительской задачи — ТОЛЬКО кнопкой «✎» в строке задачи. */
 function SubtaskRow({
   subtask,
   onToggle,
   onDelete,
-  onOpenCard,
   onRename,
 }: {
   subtask: Subtask;
   onToggle: () => void;
   onDelete: () => void;
-  onOpenCard?: () => void;
   /** Переименовать подзадачу (Enter/blur в режиме редактирования). */
   onRename?: (s: Subtask, title: string) => void;
 }) {
@@ -166,17 +164,24 @@ function SubtaskRow({
   const [value, setValue] = useState(subtask.title);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Вход в редактирование: клик мышью по тексту подзадачи — фокус + выделение.
-  // Тач-тап по-прежнему открывает карточку родителя.
+  // При переходе в редактирование — фокус на поле (после монтирования input).
+  useEffect(() => {
+    if (editing) {
+      requestAnimationFrame(() => inputRef.current?.focus());
+    }
+  }, [editing]);
+
+  // Вход в редактирование: клик/тап по тексту подзадачи — фокус + выделение
+  // (как у задач). preventDefault только для мыши, чтобы не выделять текст
+  // на span; на таче нативный фокус ставит курсор в место тапа.
   const startEdit = (e: React.PointerEvent) => {
-    if (e.pointerType !== "mouse") return;
-    e.preventDefault();
+    if (e.pointerType === "mouse") e.preventDefault();
     setValue(subtask.title);
     setEditing(true);
-    requestAnimationFrame(() => {
-      inputRef.current?.focus();
-      inputRef.current?.select();
-    });
+    // На десктопе сразу выделяем весь текст (как у задач).
+    if (e.pointerType === "mouse") {
+      requestAnimationFrame(() => inputRef.current?.select());
+    }
   };
 
   const commit = () => {
@@ -188,13 +193,6 @@ function SubtaskRow({
   return (
     <div
       ref={setNodeRef}
-      onClick={(e) => {
-        // Клик по чекбоксу/кнопке — их обработчики; остальное открывает
-        // карточку родительской задачи.
-        const t = e.target as HTMLElement;
-        if (t.closest("input, button, label")) return;
-        onOpenCard?.();
-      }}
       style={{
         display: "flex",
         alignItems: "center",
