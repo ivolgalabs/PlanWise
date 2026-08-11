@@ -179,7 +179,9 @@ function DayRow({
 
   // Шаблон задач: кнопка создаёт задачу на этот день с параметрами шаблона.
   const addPattern = async (p: TaskPattern) => {
-    await api.upsertTask({
+    // Задача из шаблона получает ВСЕ его параметры, включая категорию,
+    // заметку и подзадачи (как в карточке).
+    const created = await api.upsertTask({
       title: p.title,
       date: ed,
       timeMinutes: p.timeMinutes,
@@ -187,7 +189,13 @@ function DayRow({
       durationMinutes: p.durationMinutes,
       notifyMinutes: p.notifyMinutes ?? null,
       travelTime: p.travelTime ?? null,
+      colorSetId: p.colorSetId ?? null,
+      notes: p.notes ?? "",
     });
+    for (const s of p.subtasks ?? []) {
+      const st = s.trim();
+      if (st) await api.upsertSubtask({ taskId: created.id, title: st });
+    }
     onChange();
   };
 

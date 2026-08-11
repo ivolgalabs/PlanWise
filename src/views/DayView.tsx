@@ -186,7 +186,9 @@ function DayTasksArea({
     const ed = Math.floor(
       Date.UTC(day.getFullYear(), day.getMonth(), day.getDate()) / 86_400_000,
     );
-    await api.upsertTask({
+    // Задача из шаблона получает ВСЕ его параметры, включая категорию,
+    // заметку и подзадачи (как в карточке).
+    const created = await api.upsertTask({
       title: p.title,
       date: ed,
       timeMinutes: p.timeMinutes,
@@ -194,7 +196,13 @@ function DayTasksArea({
       durationMinutes: p.durationMinutes,
       notifyMinutes: p.notifyMinutes ?? null,
       travelTime: p.travelTime ?? null,
+      colorSetId: p.colorSetId ?? null,
+      notes: p.notes ?? "",
     });
+    for (const s of p.subtasks ?? []) {
+      const st = s.trim();
+      if (st) await api.upsertSubtask({ taskId: created.id, title: st });
+    }
     onChange();
   };
   return (

@@ -17,47 +17,11 @@ import { parseTimeToMinutes, formatMinutes } from "../date";
 import { api, isTauri } from "../api";
 import { useMediaQuery } from "../useMediaQuery";
 import { Icon, type IconName } from "./Icon";
-import { TimePicker, DurationSelect } from "./TimePicker";
+import { DurationSelect } from "./TimePicker";
+import { TaskFormFields } from "./AddTaskModal";
+import type { Task } from "../api";
 import "./SettingsPanel.css";
 
-/** Приоритет шаблона: 0 = не задан, 1 = низкий, 2 = средний, 3 = высокий. */
-const PATTERN_PRIO = [
-  { v: 0, label: "—", color: "" },
-  { v: 1, label: "низкий", color: "#4caf50" },
-  { v: 2, label: "средний", color: "#ffb300" },
-  { v: 3, label: "высокий", color: "#e05252" },
-];
-/** Варианты уведомления шаблона (как в карточке задачи). */
-const PATTERN_NOTIFY: { v: number; label: string }[] = [
-  { v: -1, label: "По умолчанию (из настроек)" },
-  { v: 0, label: "Не уведомлять" },
-  { v: 15, label: "За 15 минут" },
-  { v: 30, label: "За 30 минут" },
-  { v: 60, label: "За 1 час" },
-  { v: 120, label: "За 2 часа" },
-  { v: 1440, label: "За 1 день" },
-];
-/** Значение селекта «Уведомить» шаблона: -1 = по умолчанию, -2 = «Своё
- *  значение…» (если заданного числа нет в списке). Как в карточке задачи. */
-function patternNotifyValue(p: TaskPattern): number {
-  const n = p.notifyMinutes;
-  if (n == null) return -1;
-  if (PATTERN_NOTIFY.some((o) => o.v === n)) return n;
-  return -2;
-}
-/** Строка поля в карточке шаблона (как в карточке задачи). */
-const patternRow: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: "var(--sp-2)",
-  marginBottom: "var(--sp-3)",
-  flexWrap: "wrap",
-};
-const patternLabel: React.CSSProperties = {
-  fontSize: "var(--fs-sm)",
-  color: COLORS.muted,
-  minWidth: "var(--island-h)",
-};
 /** Быстрая палитра цветов категории + свой цвет системным пикером. */
 const CAT_PALETTE = [
   "#e05252", "#f0a030", "#f5d547", "#9ccc65",
@@ -206,9 +170,6 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
 
   const [patternModal, setPatternModal] = useState<(TaskPattern & { clientKey: string }) | null>(null);
   // «Своё значение…» уведомления шаблона (показывает числовые поля ч/мин).
-  const [patternCustomNotify, setPatternCustomNotify] = useState(false);
-  const patchPatternModal = (patch: Partial<TaskPattern>) =>
-    setPatternModal((m) => (m ? { ...m, ...patch } : m));
   const openPatternModal = (d?: TaskPattern & { clientKey: string }) => {
     const draft = d ?? {
       id: "",
@@ -219,34 +180,69 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
       durationMinutes: null,
       notifyMinutes: null,
       travelTime: null,
+      colorSetId: null,
+      notes: "",
+      subtasks: [],
     };
     if (!d) setPatternDrafts((ds) => [...ds, draft]);
-    setPatternCustomNotify(false);
     setPatternModal(draft);
   };
 
-  const savePatternDraft = (d: TaskPattern & { clientKey: string }) => {
+  /** Сохранить шаблон из данных карточки (TaskFormFields в режиме шаблона):
+   *  пишем в store и в список-черновик (все поля, чтобы не терялись). */
+  const commitPattern = (data: {
+    title: string;
+    timeMinutes: number | null;
+    difficulty: number;
+    durationMinutes: number | null;
+    travelTime: number | null;
+    notifyMinutes: number | null;
+    colorSetId: string | null;
+    notes: string;
+    subs: string[];
+  }) => {
+    if (!patternModal) return;
     const pat: TaskPattern = {
-      id: d.id || crypto.randomUUID(),
-      title: d.title.trim() || "Без названия",
-      timeMinutes: d.timeMinutes,
-      difficulty: d.difficulty,
-      durationMinutes: d.durationMinutes,
-      notifyMinutes: d.notifyMinutes ?? null,
-      travelTime: d.travelTime ?? null,
+      id: patternModal.id || crypto.randomUUID(),
+      title: data.title.trim() || "Без названия",
+      timeMinutes: data.timeMinutes,
+      difficulty: data.difficulty,
+      durationMinutes: data.durationMinutes,
+      notifyMinutes: data.notifyMinutes,
+      travelTime: data.travelTime,
+      colorSetId: data.colorSetId,
+      notes: data.notes,
+      subtasks: data.subs,
     };
     setTaskPatterns([...taskPatterns.filter((p) => p.id !== pat.id), pat]);
-    // Черновик обновляем или добавляем (для нового шаблона), чтобы он
-    // сразу появился в списке. ВАЖНО: обновляем ВСЕ поля (раньше только
-    // id/title — время/выезд/длительность, изменённые в карточке, терялись
-    // из списка и при повторном открытии).
     setPatternDrafts((ds) =>
-      ds.some((x) => x.clientKey === d.clientKey)
-        ? ds.map((x) => (x.clientKey === d.clientKey ? { ...pat, clientKey: x.clientKey } : x))
-        : [...ds, { ...pat, clientKey: d.clientKey }],
+      ds.some((x) => x.clientKey === patternModal.clientKey)
+        ? ds.map((x) => (x.clientKey === patternModal.clientKey ? { ...pat, clientKey: x.clientKey } : x))
+        : [...ds, { ...pat, clientKey: patternModal.clientKey }],
     );
     setPatternModal(null);
   };
+
+  /** Шаблон → псевдо-задача: поля карточки заполняются из шаблона. */
+  const patternToTask = (p: TaskPattern): Task => ({
+    id: p.id || "",
+    title: p.title,
+    date: 0,
+    isDone: false,
+    colorSetId: p.colorSetId ?? null,
+    sortOrder: 0,
+    createdAt: 0,
+    updatedAt: 0,
+    deviceId: "",
+    timeMinutes: p.timeMinutes,
+    notes: p.notes ?? "",
+    someday: false,
+    archived: false,
+    travelTime: p.travelTime ?? null,
+    durationMinutes: p.durationMinutes,
+    difficulty: p.difficulty,
+    notifyMinutes: p.notifyMinutes ?? null,
+  });
 
   const removePatternDraft = (d: TaskPattern & { clientKey: string }) => {
     setTaskPatterns(taskPatterns.filter((p) => p.id !== d.id));
@@ -1153,6 +1149,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
                         ? ` · выезд в ${formatMinutes((d.timeMinutes - d.travelTime + 1440) % 1440)}`
                         : ""}
                       {d.notifyMinutes != null ? ` · напом. за ${d.notifyMinutes} мин` : ""}
+                      {d.subtasks && d.subtasks.length > 0 ? ` · ${d.subtasks.length} подзадач` : ""}
                     </span>
                   </button>
                   <button
@@ -1530,12 +1527,12 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
         </div>
       </div>
 
-      {/* Модальная карточка шаблона задачи — ТА ЖЕ, что обычная карточка
-          задачи (AddTaskModal): название, время + выезд + длительность,
-          приоритет, уведомление со «Своим значением…». Клик по подложке
-          закрывает ТОЛЬКО модалку (stopPropagation), а не всю панель
-          настроек — иначе всплытие до внешнего settings-overlay закрывало
-          бы всё окно. */}
+      {/* Модальная карточка шаблона — ПОЛНАЯ карточка задачи (TaskFormFields):
+          время+выезд+длительность, приоритет, категория, заметка, подзадачи,
+          уведомление со «Своим значением…». Сохранение отдаёт данные через
+          onCollect (шаблон, а не задача). Оверлею нужны инлайн-стили: у класса
+          .modal-overlay в CSS нет позиционирования (он только для исключения
+          свайпа), без них модалка открывалась бы сбоку в потоке документа. */}
       {patternModal && (
         <div
           className="modal-overlay"
@@ -1544,9 +1541,6 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
             setPatternModal(null);
           }}
           style={{
-            // Полный набор стилей оверлея: у класса .modal-overlay в CSS НЕТ
-            // позиционирования (он используется только для исключения свайпа),
-            // без этих стилей модалка открывалась сбоку в потоке документа.
             position: "fixed",
             inset: 0,
             background: "var(--overlay)",
@@ -1582,173 +1576,27 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
             >
               {patternModal.id ? "Шаблон задачи" : "Новый шаблон"}
             </div>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                savePatternDraft(patternModal);
-              }}
-            >
-              <input
-                value={patternModal.title}
-                onChange={(e) => patchPatternModal({ title: e.target.value })}
-                placeholder="Название задачи"
-                autoFocus
-                style={{
-                  width: "100%",
-                  fontSize: "var(--fs-md)",
-                  border: `1px solid ${COLORS.cardBorder}`,
-                  borderRadius: "var(--radius-md)",
-                  padding: "10px 12px",
-                  marginBottom: "var(--sp-4)",
-                  background: "transparent",
-                  color: COLORS.text,
-                  outline: "none",
-                }}
-              />
-
-              {/* Время + выезд заранее + длительность — как в карточке задачи. */}
-              <div style={patternRow}>
-                <span style={patternLabel}>Время</span>
-                <TimePicker
-                  value={patternModal.timeMinutes}
-                  onChange={(m) => patchPatternModal({ timeMinutes: m })}
-                  travelTime={patternModal.travelTime ?? null}
-                  onChangeTravel={(m) => patchPatternModal({ travelTime: m })}
-                  durationMinutes={patternModal.durationMinutes}
-                  onChangeDuration={(m) => patchPatternModal({ durationMinutes: m })}
-                  large
-                />
-              </div>
-
-              {/* Приоритет — кнопки как в карточке задачи. */}
-              <div style={patternRow}>
-                <span style={patternLabel}>Приоритет</span>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-2)" }}>
-                  {PATTERN_PRIO.map((p) => (
-                    <button
-                      key={p.v}
-                      type="button"
-                      onClick={() => patchPatternModal({ difficulty: p.v })}
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "var(--sp-2)",
-                        fontSize: "var(--fs-2xs)",
-                        padding: "4px 8px",
-                        cursor: "pointer",
-                        borderRadius: "var(--radius-md)",
-                        border: `1px solid ${patternModal.difficulty === p.v ? COLORS.accent : COLORS.cardBorder}`,
-                        background: "transparent",
-                        color: COLORS.text,
-                      }}
-                      title={p.label}
-                    >
-                      <span
-                        style={{
-                          width: 9,
-                          height: 9,
-                          borderRadius: "50%",
-                          background: p.color || COLORS.muted,
-                          display: "inline-block",
-                        }}
-                      />
-                      {p.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Уведомить — селект + «Своё значение…» (как в карточке). */}
-              <div style={patternRow}>
-                <span style={patternLabel}>Уведомить</span>
-                <select
-                  value={patternNotifyValue(patternModal)}
-                  onChange={(e) => {
-                    const v = Number(e.target.value);
-                    if (v === -2) {
-                      setPatternCustomNotify(true);
-                      return;
-                    }
-                    setPatternCustomNotify(false);
-                    patchPatternModal({ notifyMinutes: v < 0 ? null : v });
-                  }}
-                  style={{
-                    fontSize: "var(--fs-sm)",
-                    padding: "6px 8px",
-                    border: `1px solid ${COLORS.cardBorder}`,
-                    borderRadius: "var(--radius-md)",
-                    background: "transparent",
-                    color: COLORS.text,
-                    outline: "none",
-                    maxWidth: "100%",
-                  }}
-                >
-                  {PATTERN_NOTIFY.map((o) => (
-                    <option key={o.v} value={o.v}>
-                      {o.label}
-                    </option>
-                  ))}
-                  <option value={-2}>Своё значение…</option>
-                </select>
-                {patternCustomNotify && (
-                  <DurationSelect
-                    value={
-                      patternModal.notifyMinutes != null && patternModal.notifyMinutes > 0
-                        ? patternModal.notifyMinutes
-                        : null
-                    }
-                    onChange={(m) => patchPatternModal({ notifyMinutes: m })}
-                    maxHours={168}
-                  />
-                )}
-              </div>
-
-              <div style={{ display: "flex", gap: "var(--sp-2)" }}>
-                {patternModal.id && (
-                  <button
-                    type="button"
-                    className="preset-btn danger"
-                    onClick={() => removePatternDraft(patternModal)}
-                    title="Удалить шаблон"
-                  >
-                    <Icon name="close" size={14} /> Удалить
-                  </button>
-                )}
-                <button
-                  type="submit"
-                  style={{
-                    flex: 1,
-                    background: COLORS.accent,
-                    color: "#fff",
-                    border: "none",
-                    padding: "var(--sp-3) var(--sp-4)",
-                    cursor: "pointer",
-                    fontSize: "var(--fs-sm)",
-                    borderRadius: "var(--radius-md)",
-                  }}
-                  title="Сохранить шаблон"
-                >
-                  Сохранить
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPatternModal(null)}
-                  style={{
-                    flex: 1,
-                    padding: "var(--sp-3) var(--sp-4)",
-                    cursor: "pointer",
-                    fontSize: "var(--fs-sm)",
-                    borderRadius: "var(--radius-md)",
-                    border: `1px solid ${COLORS.cardBorder}`,
-                    background: "transparent",
-                    color: COLORS.text,
-                  }}
-                  title="Отмена"
-                >
-                  Отмена
-                </button>
-              </div>
-            </form>
+            <TaskFormFields
+              key={patternModal.clientKey}
+              day={new Date()}
+              templateMode
+              initial={patternToTask(patternModal)}
+              initialSubs={patternModal.subtasks ?? []}
+              onCollect={commitPattern}
+              onAdded={() => {}}
+              onCancel={() => setPatternModal(null)}
+              onChange={() => {}}
+            />
+            {patternModal.id && (
+              <button
+                className="preset-btn danger"
+                onClick={() => removePatternDraft(patternModal)}
+                title="Удалить шаблон"
+                style={{ marginTop: "var(--sp-3)", display: "inline-flex", alignItems: "center", gap: "var(--sp-2)" }}
+              >
+                <Icon name="close" size={14} /> Удалить шаблон
+              </button>
+            )}
           </div>
         </div>
       )}

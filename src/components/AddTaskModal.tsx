@@ -47,6 +47,24 @@ interface FieldsProps {
   initial?: Task;
   /** Перечитать список задач после сохранения/удаления/переноса. */
   onChange?: () => void;
+  /** Режим шаблона задачи: полная карточка (время, приоритет, категория,
+   *  заметка, подзадачи), но без файлов/переноса/удаления — сохранение
+   *  отдаёт данные через onCollect вместо записи задачи. */
+  templateMode?: boolean;
+  /** Начальные подзадачи (для шаблона: просто тексты, как при создании). */
+  initialSubs?: string[];
+  /** Вместо сохранения задачи — отдать собранные данные наружу (шаблон). */
+  onCollect?: (data: {
+    title: string;
+    timeMinutes: number | null;
+    difficulty: number;
+    durationMinutes: number | null;
+    travelTime: number | null;
+    notifyMinutes: number | null;
+    colorSetId: string | null;
+    notes: string;
+    subs: string[];
+  }) => void;
 }
 
 /**
@@ -55,6 +73,8 @@ interface FieldsProps {
  * уведомление, категория, заметка и (при создании) подзадачи. Ошибка «время
  * занято» от Rust показывается в форме, окно не закрывается. Переиспользуется
  * в модалке дня/недели, в окне месяца и в карточке задачи (initial).
+ * В режиме templateMode — это карточка шаблона (те же поля, сохранение через
+ * onCollect).
  */
 export function TaskFormFields({
   day,
@@ -63,8 +83,13 @@ export function TaskFormFields({
   autoFocus = false,
   initial,
   onChange,
+  templateMode = false,
+  initialSubs,
+  onCollect,
 }: FieldsProps) {
-  const editing = initial !== undefined;
+  // В режиме шаблона это НЕ редактирование задачи: без «Перенести»/«Удалить»,
+  // без файлов и авто-выполнения, подзадачи — простые тексты (как при создании).
+  const editing = initial !== undefined && !templateMode;
   const [title, setTitle] = useState(initial?.title ?? "");
   const [time, setTime] = useState<number | null>(initial?.timeMinutes ?? null);
   const [priority, setPriority] = useState(initial?.difficulty ?? 0);
@@ -79,10 +104,10 @@ export function TaskFormFields({
   const [error, setError] = useState("");
   const [confirmDel, setConfirmDel] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
-  // Подзадачи: при создании — тексты, которые сохранятся вместе с задачей;
-  // при редактировании — реальные подзадачи задачи (чекбоксы, удаление,
-  // добавление сразу).
-  const [subs, setSubs] = useState<string[]>([]);
+  // Подзадачи: при создании и в шаблоне — тексты, которые сохранятся вместе
+  // с задачей/шаблоном; при редактировании — реальные подзадачи задачи
+  // (чекбоксы, удаление, добавление сразу).
+  const [subs, setSubs] = useState<string[]>(templateMode ? (initialSubs ?? []) : []);
   const [newSub, setNewSub] = useState("");
   const [subItems, setSubItems] = useState<Subtask[]>([]);
   useEffect(() => {
@@ -139,6 +164,15 @@ export function TaskFormFields({
       notes,
       notifyMinutes: notify,
     };
+    // Шаблон задачи: задачу не сохраняем — отдаём собранные данные наружу
+    // (родитель пишет их в шаблон).
+    if (templateMode) {
+      onCollect?.({
+        ...payload,
+        subs: subs.map((s) => s.trim()).filter(Boolean),
+      });
+      return;
+    }
     try {
       if (editing && initial) {
         await api.upsertTask({ ...initial, ...payload });
@@ -735,7 +769,7 @@ export function TaskFormFields({
             color: "#fff",
           }}
         >
-          {editing ? "Сохранить" : "Добавить"}
+          {templateMode ? "Сохранить" : editing ? "Сохранить" : "Добавить"}
         </button>
         <button
           type="button"
