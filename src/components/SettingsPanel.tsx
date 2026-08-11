@@ -1109,60 +1109,6 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
             <p className="section-hint">«По приоритету» — высокие задачи сначала</p>
           </section>
 
-          {/* ── Время ── */}
-          </>)}
-          {settingsTab === "time" && (
-          <>
-          {/* ── Быстрое время ── */}
-          <section className="settings-section">
-            <div className="section-head">
-              <div>
-                <h3 className="section-title">Быстрое время</h3>
-                <p className="section-hint">
-                  Кнопки быстрого выбора времени в карточке задачи (свой список)
-                </p>
-              </div>
-            </div>
-            {timePresets.length > 0 && (
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-2)", marginBottom: "var(--sp-2)" }}>
-                {timePresets.map((m) => (
-                  <span key={m} className="preset-chip">
-                    {formatMinutes(m)}
-                    <button
-                      className="preset-chip-x"
-                      onClick={() => toggleTimePreset(m)}
-                      title="Убрать"
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-            {timePresets.length === 0 && (
-              <p className="section-hint">Список пуст — добавьте свои варианты времени.</p>
-            )}
-            <div style={{ display: "flex", gap: "var(--sp-2)", alignItems: "center" }}>
-              <input
-                type="time"
-                value={newPreset}
-                onChange={(e) => setNewPreset(e.target.value)}
-                style={{
-                  background: "var(--bg-tertiary)",
-                  border: "1px solid var(--border-color)",
-                  borderRadius: 6,
-                  padding: "6px 10px",
-                  color: "var(--text-primary)",
-                  fontSize: "var(--fs-xs)",
-                }}
-                title="Свое время — системные часы"
-              />
-              <button className="preset-btn" onClick={addPreset} title="Добавить время">
-                Добавить
-              </button>
-            </div>
-          </section>
-
           {/* ── Шаблоны задач ── */}
           <section className="settings-section">
             <div className="section-head">
@@ -1222,6 +1168,60 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
               {patternDrafts.length === 0 && (
                 <p className="section-hint">Шаблонов пока нет — добавьте первый.</p>
               )}
+            </div>
+          </section>
+
+          {/* ── Время ── */}
+          </>)}
+          {settingsTab === "time" && (
+          <>
+          {/* ── Быстрое время ── */}
+          <section className="settings-section">
+            <div className="section-head">
+              <div>
+                <h3 className="section-title">Быстрое время</h3>
+                <p className="section-hint">
+                  Кнопки быстрого выбора времени в карточке задачи (свой список)
+                </p>
+              </div>
+            </div>
+            {timePresets.length > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-2)", marginBottom: "var(--sp-2)" }}>
+                {timePresets.map((m) => (
+                  <span key={m} className="preset-chip">
+                    {formatMinutes(m)}
+                    <button
+                      className="preset-chip-x"
+                      onClick={() => toggleTimePreset(m)}
+                      title="Убрать"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            {timePresets.length === 0 && (
+              <p className="section-hint">Список пуст — добавьте свои варианты времени.</p>
+            )}
+            <div style={{ display: "flex", gap: "var(--sp-2)", alignItems: "center" }}>
+              <input
+                type="time"
+                value={newPreset}
+                onChange={(e) => setNewPreset(e.target.value)}
+                style={{
+                  background: "var(--bg-tertiary)",
+                  border: "1px solid var(--border-color)",
+                  borderRadius: 6,
+                  padding: "6px 10px",
+                  color: "var(--text-primary)",
+                  fontSize: "var(--fs-xs)",
+                }}
+                title="Свое время — системные часы"
+              />
+              <button className="preset-btn" onClick={addPreset} title="Добавить время">
+                Добавить
+              </button>
             </div>
           </section>
 
@@ -1543,7 +1543,18 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
             e.stopPropagation();
             setPatternModal(null);
           }}
-          style={{ zIndex: 300 }}
+          style={{
+            // Полный набор стилей оверлея: у класса .modal-overlay в CSS НЕТ
+            // позиционирования (он используется только для исключения свайпа),
+            // без этих стилей модалка открывалась сбоку в потоке документа.
+            position: "fixed",
+            inset: 0,
+            background: "var(--overlay)",
+            zIndex: 300,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
         >
           <div
             role="dialog"
