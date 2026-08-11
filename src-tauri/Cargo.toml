@@ -14,6 +14,16 @@ edition = "2021"
 name = "daily_planner_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+# Релизный профиль: без strip/LTO библиотека весила ~15 МБ на ABI.
+# strip — выкидывает отладочные символы; lto+codegen-units=1 — сквозная
+# оптимизация; opt-level="z" — размер вместо скорости (для планировщика
+# скорость не критична, а APK на телефоне ощутимо худеет).
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1
+opt-level = "z"
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
