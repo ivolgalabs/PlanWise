@@ -70,7 +70,9 @@ class WidgetProvider : AppWidgetProvider() {
           t.optString("title")
         }
         views.setTextViewText(ids[i], label)
-        views.setInt(ids[i], "setAlpha", if (done) 100 else 255)
+        // setAlpha(int) удалён в Android 15+ (остался только float-вариант) —
+        // RemoteViews искал бы отсутствующий метод и рушил inflate виджета.
+        views.setFloat(ids[i], "setAlpha", if (done) 0.4f else 1.0f)
         views.setViewVisibility(ids[i], android.view.View.VISIBLE)
       } else {
         views.setViewVisibility(ids[i], android.view.View.GONE)
