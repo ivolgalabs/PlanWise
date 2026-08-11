@@ -19,6 +19,10 @@ const PRIO = [
   { v: 3, label: "высокий", color: "var(--prio-high)" },
 ];
 
+/** Лимит вложения (совпадает с Rust: 25 МБ на команду) — отсекаем файлы
+ *  сразу при выборе, чтобы не читать в base64 то, что всё равно не сохранится. */
+const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
+
 /** Варианты «Уведомить»: по умолчанию (глобальные интервалы настроек),
  *  не уведомлять или своё значение — КОЛИЧЕСТВО времени до начала
  *  (селекты «часы»/«минуты», системный барабан). */
@@ -151,13 +155,22 @@ export function TaskFormFields({
     loadSubItems();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initial?.id, subtaskRev]);
-  // Вложения (файлы) задачи: доступны у существующей задачи (карточка);
-  // при создании новой задачи id ещё нет — файлы добавит уже после сохранения.
+  // Вложения (файлы) задачи: у существующей задачи (карточка) — реальные
+  // файлы; при создании новой задачи id ещё нет, поэтому выбранные файлы
+  // буферизуем и прикрепляем сразу после создания задачи в submit.
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [attLoading, setAttLoading] = useState(false);
   // Ошибка прикрепления файла — показываем рядом с кнопкой «Файл» (раньше
   // ошибки молча глотались: «не все файлы прикрепляются» без объяснения).
   const [attError, setAttError] = useState("");
+  // Буфер файлов для новой задачи (ключ — стабильный для React-списка; сам
+  // File в ключе нельзя — это объект, а не строка/число).
+  const [pendingFiles, setPendingFiles] = useState<{ key: number; file: File }[]>([]);
+  const pendingKeyRef = useRef(0);
+  // Созданная задача при повторной попытке: если прикрепление файла не
+  // удалось, форма остаётся открытой, а повторный «Добавить» не должен
+  // создавать дубликат задачи — только до-прикрепить файлы.
+  const createdTaskRef = useRef<Task | null>(null);
   // Скрытое поле выбора файла: на Android системный пикер открывает сам
   // WebView (плагин-диалог там не работает — ActivityResultLauncher не
   // регистрируется), на десктопе — нативный диалог WKWebView/Chromium.
@@ -237,12 +250,45 @@ export function TaskFormFields({
         }
         onChange?.();
       } else {
-        // Новая задача + подзадачи (создаются с тем же текстом, что набрал
-        // пользователь; пустые строки пропускаем).
-        const created = await api.upsertTask({ ...payload, date: toEpochDay(day) });
-        for (const s of subs) {
-          const st = s.trim();
-          if (st) await api.upsertSubtask({ taskId: created.id, title: st });
+        // Новая задача + подзадачи + файлы. Сначала создаём задачу (id нужен
+        // для вложений), потом прикрепляем выбранные файлы.
+        let created = createdTaskRef.current;
+        if (!created) {
+          created = await api.upsertTask({ ...payload, date: toEpochDay(day) });
+          createdTaskRef.current = created;
+          for (const s of subs) {
+            const st = s.trim();
+            if (st) await api.upsertSubtask({ taskId: created.id, title: st });
+          }
+        } else {
+          // Повторная попытка после ошибки прикрепления: задача уже создана,
+          // дубликат не создаём, но обновляем поля (подзадачи уже добавлены).
+          created = await api.upsertTask({ ...created, ...payload });
+          createdTaskRef.current = created;
+        }
+        // Файлы из буфера прикрепляем по одному; прикреплённые убираем из
+        // буфера, чтобы повторная попытка (после ошибки) не создала дубликат
+        // вложения. Если какой-то не прикрепился — показываем ошибку и
+        // остаёмся в форме (задача уже создана, повторный «Добавить» не
+        // создаст дубликат задачи — createdTaskRef).
+        for (const pf of pendingFiles) {
+          try {
+            const b64 = await fileToBase64(pf.file);
+            await api.addAttachment(
+              created.id,
+              pf.file.name,
+              pf.file.type || mimeOf(pf.file.name),
+              b64,
+            );
+            setPendingFiles((arr) => arr.filter((f) => f.key !== pf.key));
+          } catch (err) {
+            setError(
+              typeof err === "string"
+                ? err
+                : `Не удалось прикрепить «${pf.file.name}»`,
+            );
+            return;
+          }
         }
       }
       onAdded();
@@ -490,77 +536,127 @@ export function TaskFormFields({
         />
       </div>
 
-      {/* Файлы в заметке: прикреплённые файлы задачи (только у существующей
-          задачи — при создании id ещё нет, вложения добавят в карточке).
+      {/* Файлы: при создании — выбранные файлы буферизуются и прикрепятся к
+          задаче при сохранении; у существующей задачи — прикреплённые файлы.
           Системный диалог → файл копируется в приватное хранилище приложения;
           тап по файлу открывает его системным приложением. */}
-      {editing && initial && (
+      {!templateMode && (
         <div style={{ ...fieldRow, alignItems: "flex-start" }}>
           <span style={labelStyle}>Файлы</span>
           <div style={{ flex: 1, minWidth: 180, display: "flex", flexDirection: "column", gap: 6 }}>
-            {attachments.length === 0 && !attLoading && (
-              <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted }}>
-                Нет файлов. Добавьте документы, фото, аудио — прикрепятся к задаче.
-              </span>
-            )}
-            {attachments.map((a) => (
-              <div
-                key={a.id}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "var(--sp-2)",
-                  border: `1px solid ${COLORS.cardBorder}`,
-                  borderRadius: "var(--radius-md)",
-                  padding: "4px 8px",
-                }}
-              >
-                <Icon name="file" size={14} />
-                <button
-                  type="button"
-                  className="file-name-btn"
-                  onClick={async () => {
-                    try {
-                      const p = await api.attachmentPath(a.id);
-                      await openPath(p);
-                    } catch {
-                      /* нет приложения для типа файла — молча */
-                    }
-                  }}
-                  title="Открыть файл"
+            {editing
+              ? attachments.length === 0 && !attLoading && (
+                  <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted }}>
+                    Нет файлов. Добавьте документы, фото, аудио — прикрепятся к задаче.
+                  </span>
+                )
+              : pendingFiles.length === 0 && (
+                  <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted }}>
+                    Нет файлов. Добавьте документы, фото, аудио — прикрепятся при сохранении.
+                  </span>
+                )}
+            {editing &&
+              attachments.map((a) => (
+                <div
+                  key={a.id}
                   style={{
-                    flex: 1,
-                    minWidth: 0,
-                    textAlign: "left",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                    fontSize: "var(--fs-xs)",
-                    color: COLORS.text,
-                    background: "transparent",
-                    border: "none",
-                    cursor: "pointer",
-                    padding: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "var(--sp-2)",
+                    border: `1px solid ${COLORS.cardBorder}`,
+                    borderRadius: "var(--radius-md)",
+                    padding: "4px 8px",
                   }}
                 >
-                  {a.fileName}
-                </button>
-                <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted, flexShrink: 0 }}>
-                  {formatFileSize(a.size)}
-                </span>
-                <button
-                  type="button"
-                  className="chip-btn"
-                  title="Удалить файл"
-                  onClick={async () => {
-                    await api.deleteAttachment(a.id);
-                    setAttachments(await api.listAttachments(initial.id));
+                  <Icon name="file" size={14} />
+                  <button
+                    type="button"
+                    className="file-name-btn"
+                    onClick={async () => {
+                      try {
+                        const p = await api.attachmentPath(a.id);
+                        await openPath(p);
+                      } catch {
+                        /* нет приложения для типа файла — молча */
+                      }
+                    }}
+                    title="Открыть файл"
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      textAlign: "left",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      fontSize: "var(--fs-xs)",
+                      color: COLORS.text,
+                      background: "transparent",
+                      border: "none",
+                      cursor: "pointer",
+                      padding: 0,
+                    }}
+                  >
+                    {a.fileName}
+                  </button>
+                  <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted, flexShrink: 0 }}>
+                    {formatFileSize(a.size)}
+                  </span>
+                  <button
+                    type="button"
+                    className="chip-btn"
+                    title="Удалить файл"
+                    onClick={async () => {
+                      await api.deleteAttachment(a.id);
+                      setAttachments(await api.listAttachments(initial.id));
+                    }}
+                  >
+                    <Icon name="close" size={12} />
+                  </button>
+                </div>
+              ))}
+            {!editing &&
+              pendingFiles.map((pf) => (
+                <div
+                  key={pf.key}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "var(--sp-2)",
+                    border: `1px solid ${COLORS.cardBorder}`,
+                    borderRadius: "var(--radius-md)",
+                    padding: "4px 8px",
                   }}
                 >
-                  <Icon name="close" size={12} />
-                </button>
-              </div>
-            ))}
+                  <Icon name="file" size={14} />
+                  <span
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      fontSize: "var(--fs-xs)",
+                      color: COLORS.text,
+                    }}
+                    title={pf.file.name}
+                  >
+                    {pf.file.name}
+                  </span>
+                  <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted, flexShrink: 0 }}>
+                    {formatFileSize(pf.file.size)}
+                  </span>
+                  <button
+                    type="button"
+                    className="chip-btn"
+                    title="Убрать файл"
+                    onClick={() =>
+                      setPendingFiles((arr) => arr.filter((f) => f.key !== pf.key))
+                    }
+                  >
+                    <Icon name="close" size={12} />
+                  </button>
+                </div>
+              ))}
             <button
               type="button"
               className="text-chip"
@@ -573,7 +669,8 @@ export function TaskFormFields({
             </button>
             {/* Скрытый input: системный выбор файла на всех платформах. Содержимое
                 читаем FileReader-ом прямо в WebView (без плагинов-диалогов) и
-                отправляем в Rust base64-строкой. */}
+                отправляем в Rust base64-строкой. При создании файл лишь
+                буферизуем — прикрепится в submit после создания задачи. */}
             <input
               ref={fileInputRef}
               type="file"
@@ -582,9 +679,24 @@ export function TaskFormFields({
                 const file = e.target.files?.[0];
                 // Сброс value: повторный выбор того же файла снова сработает.
                 e.target.value = "";
-                if (!file || !initial) return;
-                setAttLoading(true);
+                if (!file) return;
                 setAttError("");
+                // Лимит Rust-команды (25 МБ): отсекаем сразу, чтобы не читать
+                // файл в base64 и не буферизовать заведомо несохраняемый файл.
+                if (file.size > MAX_ATTACHMENT_BYTES) {
+                  setAttError("Файл больше 25 МБ — не прикрепится");
+                  return;
+                }
+                if (!editing || !initial) {
+                  // Новая задача: id ещё нет — файл буферизуем, прикрепим
+                  // при сохранении.
+                  setPendingFiles((arr) => [
+                    ...arr,
+                    { key: ++pendingKeyRef.current, file },
+                  ]);
+                  return;
+                }
+                setAttLoading(true);
                 try {
                   // Blob → base64 порциями (избегаем переполнения стека для
                   // больших файлов; 25 МБ — лимит Rust-команды).
