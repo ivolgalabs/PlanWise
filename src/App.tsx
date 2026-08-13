@@ -201,9 +201,20 @@ function App() {
     setSearchPeriodTo(null);
   };
 
-  // Тема: применяем разрешённый id, при system — следим за ОС.
+  // Тема: применяем разрешённый id, при system — следим за ОС. При смене
+  // темы сразу обновляем виджет (dark-флаг) — иначе виджет оставался бы
+  // в старой теме до следующего изменения задач.
   useEffect(() => {
-    const apply = () => applyTheme(resolveActiveTheme());
+    const apply = () => {
+      applyTheme(resolveActiveTheme());
+      if (isTauri()) {
+        import("@tauri-apps/api/core")
+          .then(({ invoke }) =>
+            invoke("write_widget_data", { dark: isDarkTheme() }),
+          )
+          .catch(() => {});
+      }
+    };
     apply();
     if (themeMode !== "system") return;
     return watchSystemTheme(apply);
