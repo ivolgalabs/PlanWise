@@ -1039,12 +1039,14 @@ pub fn refresh_widget(
 ) -> Result<(), String> {
     let conn = state.lock();
     let today = today_epoch_day();
-    // Строка задачи в JSON: одинаковая для всех трёх выборок.
+    // Строка задачи в JSON: одинаковая для всех выборок. id нужен виджету,
+    // чтобы отмечать задачу выполненной тапом по строке (UPDATE по id).
     let task_row = |r: &rusqlite::Row| {
         Ok(serde_json::json!({
-            "title": r.get::<_, String>(0)?,
-            "timeMinutes": r.get::<_, Option<i64>>(1)?,
-            "isDone": r.get::<_, i64>(2)? != 0,
+            "id": r.get::<_, String>(0)?,
+            "title": r.get::<_, String>(1)?,
+            "timeMinutes": r.get::<_, Option<i64>>(2)?,
+            "isDone": r.get::<_, i64>(3)? != 0,
         }))
     };
     // Задачи по одному аргументу-дате (someday-запрос параметров не имеет —
@@ -1058,21 +1060,23 @@ pub fn refresh_widget(
                 })
                 .unwrap_or_default()
         };
-    // Сегодня — до 8 задач (Android-виджет и день на macOS). Tie-break
-    // created_at: задачи, созданные в одну миллисекунду, не перескакивают
-    // между обновлениями виджета.
+    // Сегодня — до 8 задач (Android-виджет и день на macOS). Порядок — как
+    // просил пользователь: сначала задачи С временем (по времени), затем без
+    // времени по приоритету (difficulty), tie-break — ручной порядок.
+    // Лимит 4 в неделе: остальное — в приложении.
     let tasks = query_by_day(
         &conn,
-        "SELECT title, time_minutes, is_done FROM tasks WHERE date = ?1 AND archived = 0 AND someday = 0 ORDER BY sort_order ASC, created_at ASC LIMIT 8",
+        "SELECT id, title, time_minutes, is_done FROM tasks WHERE date = ?1 AND archived = 0 AND someday = 0 ORDER BY (time_minutes IS NULL) ASC, time_minutes ASC, difficulty DESC, sort_order ASC, created_at ASC LIMIT 8",
         today,
     );
-    // Неделя: 7 дней с сегодня, до 4 задач на день — для виджета «Неделя».
+    // Неделя: 7 дней с сегодня, до 4 задач на день (самые значимые: сначала
+    // с временем, затем по приоритету) — для виджета «Неделя».
     let week: Vec<serde_json::Value> = (0..7)
         .map(|off| {
             let day = today + off;
             let day_tasks = query_by_day(
                 &conn,
-                "SELECT title, time_minutes, is_done FROM tasks WHERE date = ?1 AND archived = 0 AND someday = 0 ORDER BY sort_order ASC, created_at ASC LIMIT 4",
+                "SELECT id, title, time_minutes, is_done FROM tasks WHERE date = ?1 AND archived = 0 AND someday = 0 ORDER BY (time_minutes IS NULL) ASC, time_minutes ASC, difficulty DESC, sort_order ASC, created_at ASC LIMIT 4",
                 day,
             );
             serde_json::json!({ "date": day, "tasks": day_tasks })
@@ -1080,14 +1084,30 @@ pub fn refresh_widget(
         .collect();
     // «Когда-нибудь» — задачи без даты, до 8 (без параметров).
     let someday: Vec<serde_json::Value> = conn
-        .prepare("SELECT title, time_minutes, is_done FROM tasks WHERE someday = 1 AND archived = 0 ORDER BY sort_order ASC, created_at ASC LIMIT 8")
+        .prepare("SELECT id, title, time_minutes, is_done FROM tasks WHERE someday = 1 AND archived = 0 ORDER BY (time_minutes IS NULL) ASC, time_minutes ASC, difficulty DESC, sort_order ASC, created_at ASC LIMIT 8")
         .and_then(|mut stmt| stmt.query_map([], task_row).and_then(|it| it.collect::<Result<Vec<_>, _>>()))
         .unwrap_or_default();
+    // Окно дней для интерактивного виджета «День»: вчера..+13, до 8 задач на
+    // день. Стрелки ‹ › в виджете переключают показанный день без захода
+    // в приложение; данные уже все в файле, запрос не нужен. +13 — чтобы
+    // задачи, добавленные через «Другая дата», были видны в виджете.
+    let day_window: Vec<serde_json::Value> = (-1..=13)
+        .map(|off| {
+            let day = today + off;
+            let day_tasks = query_by_day(
+                &conn,
+                "SELECT id, title, time_minutes, is_done FROM tasks WHERE date = ?1 AND archived = 0 AND someday = 0 ORDER BY (time_minutes IS NULL) ASC, time_minutes ASC, difficulty DESC, sort_order ASC, created_at ASC LIMIT 8",
+                day,
+            );
+            serde_json::json!({ "date": day, "tasks": day_tasks })
+        })
+        .collect();
     let payload = serde_json::json!({
         "date": today,
         "tasks": tasks,
         "week": week,
         "someday": someday,
+        "dayWindow": day_window,
         "dark": dark,
     });
     // На Android каталог data-файлов — data/files; на десктопе dir не меняется.
@@ -1364,4 +1384,3 @@ pub fn attachment_path(app: tauri::AppHandle, id: String) -> Result<String, Stri
     }
     Ok(path.to_string_lossy().into_owned())
 }
-

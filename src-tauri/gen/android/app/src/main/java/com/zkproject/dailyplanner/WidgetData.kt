@@ -15,17 +15,20 @@ import java.util.UUID
 /**
  * Данные виджетов: чтение/запись files/widget.json (пишет Rust-команда
  * write_widget_data), генерация из SQLite (для быстрого добавления задачи
- * без запуска приложения) и палитра Universal UI.
+ * без запуска приложения), отметка «выполнено» тапом по строке и палитра
+ * Universal UI.
  *
  * Формат widget.json — общий с Rust и macOS-виджетами:
  *   {"date": N, "dark": bool,
- *    "tasks": [{title, timeMinutes, isDone}],          // сегодня (≤8)
- *    "week":  [{date, tasks: [...]}],                  // 7 дней (≤4/день)
- *    "someday": [{title, timeMinutes, isDone}]}         // без даты (≤8)
+ *    "tasks": [{id, title, timeMinutes, isDone}],   // сегодня (≤8)
+ *    "week":  [{date, tasks: [...]}],               // 7 дней (≤4/день)
+ *    "someday": [...],                               // без даты (≤8)
+ *    "dayWindow": [{date, tasks: [...]}]}            // вчера..+5 (≤8/день)
+ * id нужен виджету, чтобы отмечать задачу выполненной (UPDATE по id).
  */
 object WidgetData {
 
-  data class WTask(val title: String, val timeMinutes: Int?, val isDone: Boolean)
+  data class WTask(val id: String, val title: String, val timeMinutes: Int?, val isDone: Boolean)
   data class WDay(val date: Long, val tasks: List<WTask>)
   data class Payload(
     val date: Long,
@@ -33,6 +36,7 @@ object WidgetData {
     val tasks: List<WTask>,
     val week: List<WDay>,
     val someday: List<WTask>,
+    val dayWindow: List<WDay>,
   )
 
   /** Путь к БД приложения: <data>/daily_planner.sqlite (см. db.rs в Rust). */
@@ -68,6 +72,7 @@ object WidgetData {
         val tm = t.opt("timeMinutes")
         out.add(
           WTask(
+            t.optString("id"),
             t.optString("title"),
             if (tm == null || JSONObject.NULL == tm) null else (tm as Number).toInt(),
             t.optBoolean("isDone"),
@@ -76,20 +81,22 @@ object WidgetData {
       }
       return out
     }
-    val week = mutableListOf<WDay>()
-    val wa = o.optJSONArray("week")
-    if (wa != null) {
-      for (i in 0 until wa.length()) {
-        val d = wa.getJSONObject(i)
-        week.add(WDay(d.optLong("date"), tasks(d.optJSONArray("tasks"))))
+    fun days(a: JSONArray?): List<WDay> {
+      if (a == null) return emptyList()
+      val out = mutableListOf<WDay>()
+      for (i in 0 until a.length()) {
+        val d = a.getJSONObject(i)
+        out.add(WDay(d.optLong("date"), tasks(d.optJSONArray("tasks"))))
       }
+      return out
     }
     return Payload(
       o.optLong("date"),
       o.optBoolean("dark"),
       tasks(o.optJSONArray("tasks")),
-      week,
+      days(o.optJSONArray("week")),
       tasks(o.optJSONArray("someday")),
+      days(o.optJSONArray("dayWindow")),
     )
   }
 
@@ -107,6 +114,7 @@ object WidgetData {
       val arr = JSONArray()
       for (t in a) {
         val o = JSONObject()
+        o.put("id", t.id)
         o.put("title", t.title)
         if (t.timeMinutes != null) o.put("timeMinutes", t.timeMinutes)
         o.put("isDone", t.isDone)
@@ -114,19 +122,23 @@ object WidgetData {
       }
       return arr
     }
+    fun days(a: List<WDay>): JSONArray {
+      val arr = JSONArray()
+      for (d in a) {
+        val w = JSONObject()
+        w.put("date", d.date)
+        w.put("tasks", tasks(d.tasks))
+        arr.put(w)
+      }
+      return arr
+    }
     val o = JSONObject()
     o.put("date", p.date)
     o.put("dark", p.dark)
     o.put("tasks", tasks(p.tasks))
-    val week = JSONArray()
-    for (d in p.week) {
-      val w = JSONObject()
-      w.put("date", d.date)
-      w.put("tasks", tasks(d.tasks))
-      week.put(w)
-    }
-    o.put("week", week)
+    o.put("week", days(p.week))
     o.put("someday", tasks(p.someday))
+    o.put("dayWindow", days(p.dayWindow))
     return o
   }
 
@@ -148,16 +160,17 @@ object WidgetData {
   }
 
   /** Режим даты быстрого добавления (совпадает с чипами в диалоге). */
-  enum class QuickMode { TODAY, TOMORROW, SOMEDAY }
+  enum class QuickMode { TODAY, TOMORROW, SOMEDAY, EXACT }
 
   /**
    * Добавить задачу напрямую в SQLite (те же defaults, что у Rust-команды
    * upsert_task), перегенерировать widget.json и обновить виджеты.
+   * exactDay — epoch-day для режима EXACT (чип «Другая дата»).
    * Возвращает null при успехе или текст ошибки (показываем тостом).
    * Код "DB_MISSING" — БД ещё не создана приложением (миграции накатывает
    * только Rust) — Activity переводит его в понятную подсказку.
    */
-  fun addQuickTask(context: Context, title: String, mode: QuickMode): String? {
+  fun addQuickTask(context: Context, title: String, mode: QuickMode, exactDay: Long? = null): String? {
     val dbFile = dbFile(context)
     if (!dbFile.exists()) return DB_MISSING
     return try {
@@ -167,11 +180,18 @@ object WidgetData {
         db.rawQuery("PRAGMA busy_timeout=5000", null).use { }
         if (!schemaReady(db)) return DB_MISSING
         val now = System.currentTimeMillis()
+        val today = todayEpochDay()
         val someday = mode == QuickMode.SOMEDAY
+        val date = when (mode) {
+          QuickMode.TODAY -> today
+          QuickMode.TOMORROW -> today + 1
+          QuickMode.SOMEDAY -> 0L
+          QuickMode.EXACT -> exactDay ?: today
+        }
         val cv = android.content.ContentValues().apply {
           put("id", UUID.randomUUID().toString())
           put("title", title)
-          put("date", if (someday) 0L else todayEpochDay() + if (mode == QuickMode.TOMORROW) 1 else 0)
+          put("date", date)
           put("is_done", 0)
           putNull("color_set_id")
           put("sort_order", now.toDouble())
@@ -206,13 +226,54 @@ object WidgetData {
     }
   }
 
+  /**
+   * Отметить задачу выполненной/невыполненной тапом по строке в виджете:
+   * UPDATE в SQLite (как upsert_task в Rust), затем перегенерация widget.json
+   * и обновление виджетов. Возвращает null при успехе или текст ошибки —
+   * вызывается из BroadcastReceiver, ошибку тихо логируем.
+   */
+  fun toggleTaskDone(context: Context, taskId: String): String? {
+    val dbFile = dbFile(context)
+    if (!dbFile.exists()) return DB_MISSING
+    return try {
+      val db = SQLiteDatabase.openDatabase(dbFile.path, null, SQLiteDatabase.OPEN_READWRITE)
+      try {
+        db.rawQuery("PRAGMA busy_timeout=5000", null).use { }
+        if (!schemaReady(db)) return DB_MISSING
+        // Текущее значение нужно, чтобы переключить 1-is_done (UPDATE с
+        // выражением через ContentValues не сделать).
+        var current = 0
+        db.rawQuery("SELECT is_done FROM tasks WHERE id = ?", arrayOf(taskId)).use { c ->
+          if (c.moveToFirst()) current = c.getInt(0)
+        }
+        val cv = android.content.ContentValues().apply {
+          put("is_done", if (current == 0) 1 else 0)
+          put("updated_at", System.currentTimeMillis())
+        }
+        db.update("tasks", cv, "id = ?", arrayOf(taskId))
+      } finally {
+        db.close()
+      }
+      // Задача могла исчезнуть (удалена в приложении) — всё равно
+      // перегенерируем файл, виджет покажет актуальное состояние.
+      val payload = generateFromDb(context) ?: return DB_MISSING
+      writeFile(context, payload)
+      WidgetProvider.updateAll(context)
+      null
+    } catch (e: Exception) {
+      e.printStackTrace()
+      "Не удалось обновить задачу"
+    }
+  }
+
   /** БД ещё не создана приложением (или схема устарела). */
   const val DB_MISSING = "DB_MISSING"
 
   /**
    * Генерирует widget.json прямо из SQLite — та же логика, что refresh_widget
-   * в Rust (сегодня ≤8, неделя 7×≤4, «Когда-нибудь» ≤8). Тему (dark) берём из
-   * текущего файла, чтобы быстрый ввод не переключал виджет на светлую тему.
+   * в Rust (сегодня ≤8, неделя 7×≤4, «Когда-нибудь» ≤8, окно вчера..+5 ≤8).
+   * Тему (dark) берём из текущего файла, чтобы быстрый ввод не переключал
+   * виджет на светлую тему.
    */
   fun generateFromDb(context: Context): Payload? {
     val dbFile = dbFile(context)
@@ -228,30 +289,42 @@ object WidgetData {
           return cur.use { c ->
             val out = mutableListOf<WTask>()
             while (c.moveToNext()) {
-              val tm = if (c.isNull(1)) null else c.getInt(1)
-              out.add(WTask(c.getString(0), tm, c.getInt(2) != 0))
+              val tm = if (c.isNull(2)) null else c.getInt(2)
+              out.add(WTask(c.getString(0), c.getString(1), tm, c.getInt(3) != 0))
             }
             out
           }
         }
         val tasks = queryTasks(
-          "SELECT title, time_minutes, is_done FROM tasks WHERE date=? AND archived=0 AND someday=0 ORDER BY sort_order ASC, created_at ASC LIMIT 8",
+          "SELECT id, title, time_minutes, is_done FROM tasks WHERE date=? AND archived=0 AND someday=0 ORDER BY (time_minutes IS NULL) ASC, time_minutes ASC, difficulty DESC, sort_order ASC, created_at ASC LIMIT 8",
           today,
         )
         val week = (0 until 7).map { off ->
           WDay(
             today + off,
             queryTasks(
-              "SELECT title, time_minutes, is_done FROM tasks WHERE date=? AND archived=0 AND someday=0 ORDER BY sort_order ASC, created_at ASC LIMIT 4",
+              "SELECT id, title, time_minutes, is_done FROM tasks WHERE date=? AND archived=0 AND someday=0 ORDER BY (time_minutes IS NULL) ASC, time_minutes ASC, difficulty DESC, sort_order ASC, created_at ASC LIMIT 4",
               today + off,
             ),
           )
         }
         val someday = queryTasks(
-          "SELECT title, time_minutes, is_done FROM tasks WHERE someday=1 AND archived=0 ORDER BY sort_order ASC, created_at ASC LIMIT 8",
+          "SELECT id, title, time_minutes, is_done FROM tasks WHERE someday=1 AND archived=0 ORDER BY (time_minutes IS NULL) ASC, time_minutes ASC, difficulty DESC, sort_order ASC, created_at ASC LIMIT 8",
           null,
         )
-        Payload(today, dark, tasks, week, someday)
+        // Окно дней для интерактивного виджета «День» (стрелки ‹ ›):
+        // вчера..+13, до 8 задач на день — как dayWindow в Rust. +13 — чтобы
+        // задачи из «Другая дата» были видны в виджете.
+        val dayWindow = (0 until 15).map { off ->
+          WDay(
+            today - 1 + off,
+            queryTasks(
+              "SELECT id, title, time_minutes, is_done FROM tasks WHERE date=? AND archived=0 AND someday=0 ORDER BY (time_minutes IS NULL) ASC, time_minutes ASC, difficulty DESC, sort_order ASC, created_at ASC LIMIT 8",
+              today - 1 + off,
+            ),
+          )
+        }
+        Payload(today, dark, tasks, week, someday, dayWindow)
       } finally {
         db.close()
       }
@@ -286,15 +359,15 @@ object WidgetData {
     )
   }
 
-  /** «N задач / задача / задачи» — русские правила множественного числа. */
-  fun plural(n: Int): String {
-    val word = when {
-      n % 10 == 1 && n % 100 != 11 -> "задача"
-      n % 10 in 2..4 && n % 100 !in 12..14 -> "задачи"
-      else -> "задач"
-    }
-    return "$n $word"
+  /** «задача / задачи / задач» — русские правила множественного числа. */
+  fun pluralShort(n: Int): String = when {
+    n % 10 == 1 && n % 100 != 11 -> "задача"
+    n % 10 in 2..4 && n % 100 !in 12..14 -> "задачи"
+    else -> "задач"
   }
+
+  /** «N задач / задача / задачи» — с числом, для подписей виджета. */
+  fun plural(n: Int): String = "$n ${pluralShort(n)}"
 
   private val RU = Locale("ru")
 

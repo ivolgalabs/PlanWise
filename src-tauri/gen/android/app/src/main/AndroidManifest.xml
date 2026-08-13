@@ -57,8 +57,16 @@
             android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize" />
 
-        <!-- Три виджета: «Сегодня» (2×2–4×4), «Неделя» (4×3–4×4),
-             «Когда-нибудь» (2×2–4×4). Читают files/widget.json (пишет Rust).
+        <!-- Действия виджетов (тайный receiver): отметка «выполнено» тапом по
+             строке, стрелки ‹ › переключения дня, возврат на сегодня.
+             exported=false: только PendingIntent'ы из своих виджетов. -->
+        <receiver
+            android:name=".WidgetActionReceiver"
+            android:exported="false" />
+
+        <!-- Пять виджетов: «Сегодня» (2×2–4×4, стрелки ‹ ›), «Неделя»
+             (4×2–4×4), «Когда-нибудь» (2×2–4×4), «Следующая задача» (2×1),
+             «Мини-счётчик» (1×1). Читают files/widget.json (пишет Rust).
              label — имя в галерее виджетов; BOOT_COMPLETED — восстановление
              самообновления после перезагрузки. -->
         <receiver
@@ -107,6 +115,38 @@
           <meta-data
             android:name="android.appwidget.provider"
             android:resource="@xml/widget_someday_info" />
+        </receiver>
+
+        <receiver
+          android:name=".NextWidgetProvider"
+          android:exported="true"
+          android:label="@string/widget_next_label">
+          <intent-filter>
+            <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+          </intent-filter>
+          <intent-filter>
+            <action android:name="android.intent.action.BOOT_COMPLETED" />
+            <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+          </intent-filter>
+          <meta-data
+            android:name="android.appwidget.provider"
+            android:resource="@xml/widget_next_info" />
+        </receiver>
+
+        <receiver
+          android:name=".CounterWidgetProvider"
+          android:exported="true"
+          android:label="@string/widget_counter_label">
+          <intent-filter>
+            <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+          </intent-filter>
+          <intent-filter>
+            <action android:name="android.intent.action.BOOT_COMPLETED" />
+            <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+          </intent-filter>
+          <meta-data
+            android:name="android.appwidget.provider"
+            android:resource="@xml/widget_counter_info" />
         </receiver>
     </application>
 </manifest>

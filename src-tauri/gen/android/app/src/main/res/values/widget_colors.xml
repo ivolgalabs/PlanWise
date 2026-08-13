@@ -16,6 +16,8 @@
     <color name="widget_chip_light">#E2E6EB</color>
     <color name="widget_chip_dark">#2A2B33</color>
     <color name="widget_on_accent">#FFFFFF</color>
+    <!-- Трек полосы прогресса «Сегодня» (заполнение — widget_accent). -->
+    <color name="widget_progress_track">#EEF1F4</color>
 
     <!-- Диалог быстрого добавления: DayNight (значения для тёмного — values-night). -->
     <color name="qa_bg">#FFFFFF</color>

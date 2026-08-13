@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- «Неделя»: от 4×3 до 4×4, семь дней с количеством задач. -->
+<!-- «Неделя»: ставится компактно (4×2, 7 дней в 11sp), расширяется до 4×4. -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:minWidth="250dp"
-    android:minHeight="180dp"
+    android:minHeight="140dp"
     android:targetCellWidth="4"
-    android:targetCellHeight="3"
+    android:targetCellHeight="2"
     android:updatePeriodMillis="1800000"
     android:initialLayout="@layout/widget_week"
     android:previewLayout="@layout/widget_week"

@@ -8,4 +8,7 @@
 -keep class com.zkproject.dailyplanner.DayWidgetProvider { *; }
 -keep class com.zkproject.dailyplanner.WeekWidgetProvider { *; }
 -keep class com.zkproject.dailyplanner.SomedayWidgetProvider { *; }
+-keep class com.zkproject.dailyplanner.NextWidgetProvider { *; }
+-keep class com.zkproject.dailyplanner.CounterWidgetProvider { *; }
+-keep class com.zkproject.dailyplanner.WidgetActionReceiver { *; }
 -keep class com.zkproject.dailyplanner.QuickAddActivity { *; }

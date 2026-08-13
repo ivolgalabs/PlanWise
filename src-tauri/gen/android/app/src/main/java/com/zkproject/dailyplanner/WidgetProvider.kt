@@ -15,8 +15,10 @@ import android.widget.RemoteViews
  * write_widget_data), рендерит по теме приложения (dark из JSON, а не по
  * системной теме) и самообновляется каждые 15 минут через AlarmManager —
  * когда процесс приложения убит, виджет всё равно получает свежие данные
- * (например, после смены дня). Три виджета: «Сегодня», «Неделя»,
- * «Когда-нибудь» — тонкие наследники с собственным layout.
+ * (например, после смены дня). Пять виджетов: «Сегодня» (интерактивный —
+ * стрелки ‹ › переключают день, тап по строке отмечает выполненной),
+ * «Неделя», «Когда-нибудь», «Следующая задача», «Мини-счётчик» — тонкие
+ * наследники с собственным layout.
  *
  * Все виджеты АДАПТИВНЫ: содержимое подстраивается под фактический размер
  * (onAppWidgetOptionsChanged / getAppWidgetOptions) — в маленьком виде меньше
@@ -31,19 +33,21 @@ abstract class WidgetProvider : AppWidgetProvider() {
   protected abstract val refreshAction: String
 
   /** Собрать RemoteViews из данных (или состояния «нет данных»).
-   *  widthDp/heightDp — фактический размер виджета в dp (клетки лаунчера). */
+   *  widthDp/heightDp — фактический размер виджета в dp (клетки лаунчера);
+   *  appWidgetId — для индивидуальных настроек виджета (показанный день). */
   protected abstract fun buildViews(
     context: Context,
     data: WidgetData.Payload?,
     widthDp: Int,
     heightDp: Int,
+    appWidgetId: Int,
   ): RemoteViews
 
   override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
     val data = WidgetData.readFile(context)
     for (id in ids) {
       val (w, h) = widgetSize(manager, id)
-      manager.updateAppWidget(id, buildViews(context, data, w, h))
+      manager.updateAppWidget(id, buildViews(context, data, w, h, id))
     }
     scheduleSelfRefresh(context)
   }
@@ -58,7 +62,7 @@ abstract class WidgetProvider : AppWidgetProvider() {
     // Пользователь растянул/сжал виджет — пересобираем под новый размер.
     val w = newOptions.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 250)
     val h = newOptions.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 110)
-    manager.updateAppWidget(appWidgetId, buildViews(context, WidgetData.readFile(context), w, h))
+    manager.updateAppWidget(appWidgetId, buildViews(context, WidgetData.readFile(context), w, h, appWidgetId))
   }
 
   override fun onEnabled(context: Context) {
@@ -124,18 +128,76 @@ abstract class WidgetProvider : AppWidgetProvider() {
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
       )
 
-    /** Кнопка «＋»: диалог быстрого добавления с предвыбранной датой. */
+    /** Кнопка «＋»: диалог быстрого добавления с предвыбранной датой.
+     *  date — показанный в виджете день (epoch-day), если виджет умеет
+     *  переключать дни (стрелки ‹ ›); null — дефолт по чипу. */
     @JvmStatic
-    fun quickAddPendingIntent(context: Context, mode: String): PendingIntent {
+    fun quickAddPendingIntent(context: Context, mode: String, date: Long? = null): PendingIntent {
       val i = Intent(context, QuickAddActivity::class.java).putExtra(QuickAddActivity.EXTRA_MODE, mode)
+      if (date != null) i.putExtra(QuickAddActivity.EXTRA_DATE, date)
       return PendingIntent.getActivity(
         context, mode.hashCode(), i,
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
       )
     }
 
-    /** Перечитать widget.json и обновить ВСЕ виджеты всех трёх типов.
-     *  Вызывается из push-плагина (Rust) и после быстрого добавления. */
+    /** Тап по строке задачи = отметить выполненной/невыполненной. Receiver
+     *  делает UPDATE в SQLite и перерисовывает виджеты. data-URI различает
+     *  PendingIntent'ы строк (иначе последняя строка перезаписала бы все). */
+    @JvmStatic
+    fun togglePendingIntent(context: Context, taskId: String): PendingIntent {
+      val i = Intent(context, WidgetActionReceiver::class.java)
+        .setAction(WidgetActionReceiver.ACTION_TOGGLE)
+        .putExtra(WidgetActionReceiver.EXTRA_TASK_ID, taskId)
+        .setData(android.net.Uri.parse("task://$taskId"))
+      return PendingIntent.getBroadcast(
+        context, taskId.hashCode(), i,
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+      )
+    }
+
+    /** Стрелка «‹ ›»: сдвинуть показанный день конкретного виджета. */
+    @JvmStatic
+    fun dayNavPendingIntent(context: Context, appWidgetId: Int, delta: Int): PendingIntent {
+      val i = Intent(context, WidgetActionReceiver::class.java)
+        .setAction(WidgetActionReceiver.ACTION_DAY_NAV)
+        .putExtra(WidgetActionReceiver.EXTRA_APPWIDGET_ID, appWidgetId)
+        .putExtra(WidgetActionReceiver.EXTRA_DELTA, delta)
+      return PendingIntent.getBroadcast(
+        context, 20000 + appWidgetId * 4 + delta + 1, i,
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+      )
+    }
+
+    /** Тап по дате в заголовке «Дня»: вернуться на сегодня (offset = 0). */
+    @JvmStatic
+    fun dayResetPendingIntent(context: Context, appWidgetId: Int): PendingIntent {
+      val i = Intent(context, WidgetActionReceiver::class.java)
+        .setAction(WidgetActionReceiver.ACTION_DAY_RESET)
+        .putExtra(WidgetActionReceiver.EXTRA_APPWIDGET_ID, appWidgetId)
+      return PendingIntent.getBroadcast(
+        context, 30000 + appWidgetId, i,
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+      )
+    }
+
+    /** Сдвиг показанного дня виджета «День» (0 = сегодня, -1 = вчера…).
+     *  Хранится в SharedPreferences по appWidgetId — стрелки не переключают
+     *  другие экземпляры виджета. */
+    @JvmStatic
+    fun dayOffset(context: Context, appWidgetId: Int): Int =
+      context.getSharedPreferences("widget_day", Context.MODE_PRIVATE)
+        .getInt("off_$appWidgetId", 0)
+
+    @JvmStatic
+    fun setDayOffset(context: Context, appWidgetId: Int, off: Int) {
+      context.getSharedPreferences("widget_day", Context.MODE_PRIVATE)
+        .edit().putInt("off_$appWidgetId", off).apply()
+    }
+
+    /** Перечитать widget.json и обновить ВСЕ виджеты всех типов.
+     *  Вызывается из push-плагина (Rust), после быстрого добавления
+     *  и после действий receiver'а (выполнено/стрелки). */
     @JvmStatic
     fun updateAll(context: Context) {
       val manager = AppWidgetManager.getInstance(context)
@@ -144,6 +206,8 @@ abstract class WidgetProvider : AppWidgetProvider() {
         DayWidgetProvider::class.java,
         WeekWidgetProvider::class.java,
         SomedayWidgetProvider::class.java,
+        NextWidgetProvider::class.java,
+        CounterWidgetProvider::class.java,
       )
       for (cls in providers) {
         val ids = manager.getAppWidgetIds(ComponentName(context, cls))
@@ -151,7 +215,7 @@ abstract class WidgetProvider : AppWidgetProvider() {
         val provider = cls.getDeclaredConstructor().newInstance() as WidgetProvider
         for (id in ids) {
           val (w, h) = widgetSize(manager, id)
-          manager.updateAppWidget(id, provider.buildViews(context, data, w, h))
+          manager.updateAppWidget(id, provider.buildViews(context, data, w, h, id))
         }
       }
     }
@@ -183,7 +247,9 @@ abstract class WidgetProvider : AppWidgetProvider() {
     }
 
     /** Строка задачи: время (акцент) + название; done — зачёркнуто/приглушено.
-     *  showTime=false (маленький виджет) — время скрыто, название на всю ширину. */
+     *  showTime=false (маленький виджет) — время скрыто, название на всю ширину.
+     *  clickPi — тап по строке отмечает задачу выполненной (виджеты «День»
+     *  и «Когда-нибудь»); null — строка не кликабельна. */
     @JvmStatic
     protected fun applyTaskRow(
       v: RemoteViews,
@@ -191,8 +257,9 @@ abstract class WidgetProvider : AppWidgetProvider() {
       titleId: Int,
       task: WidgetData.WTask?,
       pal: WidgetData.Palette,
-      context: Context,
+      _context: Context,
       showTime: Boolean = true,
+      clickPi: PendingIntent? = null,
     ) {
       if (task == null) {
         v.setViewVisibility(timeId, android.view.View.GONE)
@@ -201,6 +268,11 @@ abstract class WidgetProvider : AppWidgetProvider() {
       }
       v.setViewVisibility(timeId, if (showTime && task.timeMinutes != null) android.view.View.VISIBLE else android.view.View.GONE)
       v.setViewVisibility(titleId, android.view.View.VISIBLE)
+      if (clickPi != null) {
+        // Клик по тексту строки (время + название) = переключить «выполнено».
+        v.setOnClickPendingIntent(timeId, clickPi)
+        v.setOnClickPendingIntent(titleId, clickPi)
+      }
       if (showTime && task.timeMinutes != null) {
         v.setTextViewText(timeId, WidgetData.timeLabel(task.timeMinutes))
         v.setTextColor(timeId, pal.accent)

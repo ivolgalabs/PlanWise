@@ -31,6 +31,8 @@
         android:imeOptions="actionDone"
         android:maxLines="1" />
 
+    <!-- Чипы даты: 4 режима в две строки («Когда-нибудь»/«Другая дата» не
+         влезают в одну строку на узких экранах). -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -58,8 +60,14 @@
             android:text="@string/quick_add_tomorrow"
             android:textSize="12sp"
             android:textColor="@color/qa_secondary"
-            android:gravity="center"
-            android:layout_marginEnd="6dp" />
+            android:gravity="center" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:orientation="horizontal">
 
         <TextView
             android:id="@+id/qa_chip_someday"
@@ -68,6 +76,18 @@
             android:layout_weight="1"
             android:background="@drawable/widget_chip"
             android:text="@string/quick_add_someday"
+            android:textSize="12sp"
+            android:textColor="@color/qa_secondary"
+            android:gravity="center"
+            android:layout_marginEnd="6dp" />
+
+        <TextView
+            android:id="@+id/qa_chip_date"
+            android:layout_width="0dp"
+            android:layout_height="34dp"
+            android:layout_weight="1"
+            android:background="@drawable/widget_chip"
+            android:text="@string/quick_add_other_date"
             android:textSize="12sp"
             android:textColor="@color/qa_secondary"
             android:gravity="center" />

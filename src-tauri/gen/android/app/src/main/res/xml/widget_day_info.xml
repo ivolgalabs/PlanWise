@@ -1,12 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- «Сегодня»: от 2×2 до 4×4, содержимое адаптируется к размеру
+<!-- «Сегодня» (интерактивный «День»): ставится на экран маленьким (2×2)
+     и расширяется до 4×4+; содержимое адаптируется к размеру
      (2/4/6 строк, время — в широких размерах). previewLayout — как виджет
      выглядит в галерее на Android 12+. -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
-    android:minWidth="110dp"
-    android:minHeight="110dp"
-    android:targetCellWidth="4"
-    android:targetCellHeight="3"
+    android:minWidth="140dp"
+    android:minHeight="140dp"
+    android:targetCellWidth="2"
+    android:targetCellHeight="2"
     android:updatePeriodMillis="1800000"
     android:initialLayout="@layout/widget_day"
     android:previewLayout="@layout/widget_day"

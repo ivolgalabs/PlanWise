@@ -7,4 +7,6 @@
     <color name="qa_hint">#6B6F78</color>
     <color name="qa_chip">#2A2B33</color>
     <color name="qa_input_bg">#2A2B33</color>
+    <!-- Тёмный трек полосы прогресса виджета. -->
+    <color name="widget_progress_track">#2A2B33</color>
 </resources>

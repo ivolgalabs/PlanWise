@@ -5,8 +5,9 @@ import android.widget.RemoteViews
 
 /**
  * Виджет «Когда-нибудь»: задачи без даты, адаптация к размеру как у «Сегодня»
- * (2×2 — 2 строки, 4×2 — 5 строк, 4×3+ — 7 строк). Кнопка «＋» открывает
- * быстрый ввод сразу с выбранным чипом «Когда-нибудь».
+ * (2×2 — 2 строки, 4×2 — 5 строк, 4×3+ — 7 строк). Тап по строке отмечает
+ * задачу выполненной. Кнопка «＋» открывает быстрый ввод сразу с выбранным
+ * чипом «Когда-нибудь».
  */
 class SomedayWidgetProvider : WidgetProvider() {
 
@@ -18,6 +19,7 @@ class SomedayWidgetProvider : WidgetProvider() {
     data: WidgetData.Payload?,
     widthDp: Int,
     heightDp: Int,
+    appWidgetId: Int,
   ): RemoteViews {
     val v = RemoteViews(context.packageName, layoutRes)
     applyCommon(v, context, data)
@@ -46,7 +48,7 @@ class SomedayWidgetProvider : WidgetProvider() {
     val rows = when {
       widthDp >= 240 && heightDp >= 170 -> 7
       widthDp >= 240 -> 5
-      widthDp >= 150 -> 3
+      heightDp >= 170 -> 3
       else -> 2
     }
     val showTime = widthDp >= 240
@@ -65,7 +67,10 @@ class SomedayWidgetProvider : WidgetProvider() {
     for (i in timeIds.indices) {
       if (i < rows) {
         val task = data.someday.getOrNull(i)
-        applyTaskRow(v, timeIds[i], titleIds[i], task, pal, context, showTime)
+        applyTaskRow(
+          v, timeIds[i], titleIds[i], task, pal, context, showTime,
+          clickPi = if (task != null) togglePendingIntent(context, task.id) else null,
+        )
       } else {
         v.setViewVisibility(timeIds[i], android.view.View.GONE)
         v.setViewVisibility(titleIds[i], android.view.View.GONE)

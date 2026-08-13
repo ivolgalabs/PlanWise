@@ -19,6 +19,7 @@ class WeekWidgetProvider : WidgetProvider() {
     data: WidgetData.Payload?,
     widthDp: Int,
     heightDp: Int,
+    appWidgetId: Int,
   ): RemoteViews {
     val v = RemoteViews(context.packageName, layoutRes)
     applyCommon(v, context, data)
