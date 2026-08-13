@@ -1,18 +1,25 @@
 package com.zkproject.dailyplanner
 
 import android.content.Context
+import android.util.TypedValue
 import android.widget.RemoteViews
 
 /**
- * Виджет «Неделя» (4×4): 7 строк «Пн 11 · 3 задачи». Сегодня — акцент +
- * жирный, прошедшие дни — приглушённые. Кнопка «＋» добавляет на сегодня.
+ * Виджет «Неделя»: 7 строк «Пн 11 · 3 задачи». Сегодня — акцент, прошедшие
+ * дни — приглушённые. Кнопка «＋» добавляет на сегодня. В компактной высоте
+ * (4×3) шрифт и отступы меньше, чтобы все 7 строк помещались.
  */
 class WeekWidgetProvider : WidgetProvider() {
 
   override val layoutRes: Int = R.layout.widget_week
   override val refreshAction: String = REFRESH_ACTION
 
-  override fun buildViews(context: Context, data: WidgetData.Payload?): RemoteViews {
+  override fun buildViews(
+    context: Context,
+    data: WidgetData.Payload?,
+    widthDp: Int,
+    heightDp: Int,
+  ): RemoteViews {
     val v = RemoteViews(context.packageName, layoutRes)
     applyCommon(v, context, data)
     v.setOnClickPendingIntent(R.id.widget_add, quickAddPendingIntent(context, "today"))
@@ -38,6 +45,19 @@ class WeekWidgetProvider : WidgetProvider() {
     val today = WidgetData.todayEpochDay()
     val first = data.week.first().date
     val last = data.week.last().date
+    // Компакт (4×3): меньше шрифт и отступы, чтобы влезли все 7 строк.
+    val compact = heightDp < 240
+    if (compact) {
+      v.setTextViewTextSize(R.id.widget_title, TypedValue.COMPLEX_UNIT_SP, 13f)
+      for (id in labelIds) {
+        v.setTextViewTextSize(id, TypedValue.COMPLEX_UNIT_SP, 11f)
+        v.setViewPadding(id, 0, WidgetData.dp(context, 2f), 0, 0)
+      }
+      for (id in countIds) {
+        v.setTextViewTextSize(id, TypedValue.COMPLEX_UNIT_SP, 11f)
+        v.setViewPadding(id, 0, WidgetData.dp(context, 2f), 0, 0)
+      }
+    }
     v.setTextViewText(R.id.widget_subtitle, "${WidgetData.formatDay(first)} – ${WidgetData.formatDay(last)}")
 
     for (i in labelIds.indices) {

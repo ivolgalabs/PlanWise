@@ -57,12 +57,14 @@
             android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize" />
 
-        <!-- Три виджета: «Сегодня» (4×2), «Неделя» (4×4), «Когда-нибудь» (4×2).
-             Читают files/widget.json (пишет Rust). BOOT_COMPLETED —
-             восстановление самообновления после перезагрузки. -->
+        <!-- Три виджета: «Сегодня» (2×2–4×4), «Неделя» (4×3–4×4),
+             «Когда-нибудь» (2×2–4×4). Читают files/widget.json (пишет Rust).
+             label — имя в галерее виджетов; BOOT_COMPLETED — восстановление
+             самообновления после перезагрузки. -->
         <receiver
           android:name=".DayWidgetProvider"
-          android:exported="true">
+          android:exported="true"
+          android:label="@string/widget_day_label">
           <intent-filter>
             <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
           </intent-filter>
@@ -77,7 +79,8 @@
 
         <receiver
           android:name=".WeekWidgetProvider"
-          android:exported="true">
+          android:exported="true"
+          android:label="@string/widget_week_label">
           <intent-filter>
             <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
           </intent-filter>
@@ -92,7 +95,8 @@
 
         <receiver
           android:name=".SomedayWidgetProvider"
-          android:exported="true">
+          android:exported="true"
+          android:label="@string/widget_someday_label">
           <intent-filter>
             <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
           </intent-filter>

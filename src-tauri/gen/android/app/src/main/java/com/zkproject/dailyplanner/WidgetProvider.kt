@@ -15,8 +15,12 @@ import android.widget.RemoteViews
  * write_widget_data), рендерит по теме приложения (dark из JSON, а не по
  * системной теме) и самообновляется каждые 15 минут через AlarmManager —
  * когда процесс приложения убит, виджет всё равно получает свежие данные
- * (например, после смены дня). Три виджета: «Сегодня» (4×2), «Неделя» (4×4),
- * «Когда-нибудь» (4×2) — тонкие наследники с собственным layout.
+ * (например, после смены дня). Три виджета: «Сегодня», «Неделя»,
+ * «Когда-нибудь» — тонкие наследники с собственным layout.
+ *
+ * Все виджеты АДАПТИВНЫ: содержимое подстраивается под фактический размер
+ * (onAppWidgetOptionsChanged / getAppWidgetOptions) — в маленьком виде меньше
+ * строк, в большом — больше, время — только в широких размерах.
  */
 abstract class WidgetProvider : AppWidgetProvider() {
 
@@ -26,15 +30,35 @@ abstract class WidgetProvider : AppWidgetProvider() {
   /** Уникальный action самообновления для этого типа виджета. */
   protected abstract val refreshAction: String
 
-  /** Собрать RemoteViews из данных (или состояния «нет данных»). */
-  protected abstract fun buildViews(context: Context, data: WidgetData.Payload?): RemoteViews
+  /** Собрать RemoteViews из данных (или состояния «нет данных»).
+   *  widthDp/heightDp — фактический размер виджета в dp (клетки лаунчера). */
+  protected abstract fun buildViews(
+    context: Context,
+    data: WidgetData.Payload?,
+    widthDp: Int,
+    heightDp: Int,
+  ): RemoteViews
 
   override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
     val data = WidgetData.readFile(context)
     for (id in ids) {
-      manager.updateAppWidget(id, buildViews(context, data))
+      val (w, h) = widgetSize(manager, id)
+      manager.updateAppWidget(id, buildViews(context, data, w, h))
     }
     scheduleSelfRefresh(context)
+  }
+
+  override fun onAppWidgetOptionsChanged(
+    context: Context,
+    manager: AppWidgetManager,
+    appWidgetId: Int,
+    newOptions: android.os.Bundle,
+  ) {
+    super.onAppWidgetOptionsChanged(context, manager, appWidgetId, newOptions)
+    // Пользователь растянул/сжал виджет — пересобираем под новый размер.
+    val w = newOptions.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 250)
+    val h = newOptions.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 110)
+    manager.updateAppWidget(appWidgetId, buildViews(context, WidgetData.readFile(context), w, h))
   }
 
   override fun onEnabled(context: Context) {
@@ -126,9 +150,19 @@ abstract class WidgetProvider : AppWidgetProvider() {
         if (ids.isEmpty()) continue
         val provider = cls.getDeclaredConstructor().newInstance() as WidgetProvider
         for (id in ids) {
-          manager.updateAppWidget(id, provider.buildViews(context, data))
+          val (w, h) = widgetSize(manager, id)
+          manager.updateAppWidget(id, provider.buildViews(context, data, w, h))
         }
       }
+    }
+
+    /** Фактический размер виджета в dp (мин. ширина/высота из опций
+     *  AppWidgetManager — их задаёт лаунчер при размещении/ресайзе). */
+    @JvmStatic
+    fun widgetSize(manager: AppWidgetManager, id: Int): Pair<Int, Int> {
+      val o = manager.getAppWidgetOptions(id)
+      return o.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 250) to
+        o.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 110)
     }
 
     /** Общая настройка корня: клик → приложение; фон по теме из данных. */
@@ -148,7 +182,8 @@ abstract class WidgetProvider : AppWidgetProvider() {
       v.setTextColor(R.id.widget_add, context.getColor(R.color.widget_on_accent))
     }
 
-    /** Строка задачи: время (акцент) + название; done — зачёркнуто/приглушено. */
+    /** Строка задачи: время (акцент) + название; done — зачёркнуто/приглушено.
+     *  showTime=false (маленький виджет) — время скрыто, название на всю ширину. */
     @JvmStatic
     protected fun applyTaskRow(
       v: RemoteViews,
@@ -157,19 +192,18 @@ abstract class WidgetProvider : AppWidgetProvider() {
       task: WidgetData.WTask?,
       pal: WidgetData.Palette,
       context: Context,
+      showTime: Boolean = true,
     ) {
       if (task == null) {
         v.setViewVisibility(timeId, android.view.View.GONE)
         v.setViewVisibility(titleId, android.view.View.GONE)
         return
       }
-      v.setViewVisibility(timeId, android.view.View.VISIBLE)
+      v.setViewVisibility(timeId, if (showTime && task.timeMinutes != null) android.view.View.VISIBLE else android.view.View.GONE)
       v.setViewVisibility(titleId, android.view.View.VISIBLE)
-      if (task.timeMinutes != null) {
+      if (showTime && task.timeMinutes != null) {
         v.setTextViewText(timeId, WidgetData.timeLabel(task.timeMinutes))
         v.setTextColor(timeId, pal.accent)
-      } else {
-        v.setTextViewText(timeId, "")
       }
       v.setTextViewText(titleId, task.title)
       v.setTextColor(titleId, if (task.isDone) pal.muted else pal.text)
