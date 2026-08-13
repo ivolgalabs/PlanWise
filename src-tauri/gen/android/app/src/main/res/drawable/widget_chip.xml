@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Чип выбора даты в быстром вводе (не выбран): фон bg-hover. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/widget_chip_light" />
+    <corners android:radius="8dp" />
+</shape>

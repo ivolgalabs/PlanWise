@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Фон карточки виджета (светлая тема): радиус как radius-2xl, без бордера
+     (система Android 12+ и так скругляет углы виджета). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/widget_bg_light" />
+    <corners android:radius="16dp" />
+</shape>

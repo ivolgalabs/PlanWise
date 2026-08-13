@@ -35,3 +35,6 @@ legacy/flutter-mvp/build/
 
 # Сборочный каталог виджета (swiftc-артефакты .appex)
 src-tauri/build/
+
+# Служебный каталог ZCode (планы, логи)
+.zcode/

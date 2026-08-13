@@ -5,6 +5,13 @@ mod notify;
 
 use db::Db;
 use tauri::Manager;
+#[cfg(target_os = "android")]
+use tauri_plugin_notification::NotificationExt;
+
+/// Хендл Android-плагина виджетов (Kotlin WidgetPushPlugin). После записи
+/// widget.json просим Kotlin перечитать файл и перерисовать виджеты сразу,
+/// не дожидаясь системного обновления (до 30 минут). На десктопе — None.
+pub struct WidgetPush(pub Option<tauri::plugin::PluginHandle<tauri::Wry>>);
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -13,6 +20,25 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
+        // Мини-плагин виджетов: регистрирует Kotlin-класс WidgetPushPlugin на
+        // Android, чтобы Rust-команды могли мгновенно обновлять виджеты.
+        .plugin(
+            tauri::plugin::Builder::new("widget")
+                .setup(|_app: &tauri::AppHandle, _api: tauri::plugin::PluginApi<tauri::Wry, serde_json::Value>| {
+                    #[cfg(target_os = "android")]
+                    {
+                        let app = _app;
+                        let api = _api;
+                        let handle = api.register_android_plugin(
+                            "com.zkproject.dailyplanner",
+                            "WidgetPushPlugin",
+                        )?;
+                        app.manage(WidgetPush(Some(handle)));
+                    }
+                    Ok(())
+                })
+                .build(),
+        )
         .setup(|app| {
             // Понятная ошибка вместо молчаливой паники: при сбое БД (read-only
             // каталог, коррупция) пишем причину в лог и закрываемся.
@@ -26,6 +52,19 @@ pub fn run() {
                 }
             };
             app.manage(Db(conn));
+            // Осиротевшие файлы вложений (без строки в БД) — чистим при старте,
+            // иначе копятся на диске годами.
+            commands::cleanup_orphan_attachments(app.handle(), &app.state::<Db>());
+            // Разрешение на уведомления (Android 13+). Фронтенд тоже просит,
+            // но полагаться на него нельзя (ACL/тайминги) — просим и здесь,
+            // в фоне: системный диалог покажется при первом запуске.
+            #[cfg(target_os = "android")]
+            {
+                let h = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    let _ = h.notification().request_permission();
+                });
+            }
             // Планировщик уведомлений: утренний список задач на день и
             // напоминания за N минут до задач со временем. Пересчитывает
             // расписание при старте и при изменении настроек/задач.

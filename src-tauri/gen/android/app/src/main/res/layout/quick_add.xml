@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Диалог быстрого добавления задачи: название + чипы даты + «Добавить».
+     Вызывается из виджетов кнопкой «＋» — без запуска основного интерфейса. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="20dp"
+    android:background="@drawable/quick_add_bg">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/quick_add_title"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:textColor="@color/qa_text" />
+
+    <EditText
+        android:id="@+id/qa_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:padding="12dp"
+        android:background="@drawable/qa_input_bg"
+        android:hint="@string/quick_add_hint"
+        android:textColor="@color/qa_text"
+        android:textColorHint="@color/qa_hint"
+        android:textSize="14sp"
+        android:inputType="textCapSentences"
+        android:imeOptions="actionDone"
+        android:maxLines="1" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/qa_chip_today"
+            android:layout_width="0dp"
+            android:layout_height="34dp"
+            android:layout_weight="1"
+            android:background="@drawable/widget_chip_selected"
+            android:text="@string/quick_add_today"
+            android:textSize="12sp"
+            android:textColor="@color/widget_on_accent"
+            android:gravity="center"
+            android:layout_marginEnd="6dp" />
+
+        <TextView
+            android:id="@+id/qa_chip_tomorrow"
+            android:layout_width="0dp"
+            android:layout_height="34dp"
+            android:layout_weight="1"
+            android:background="@drawable/widget_chip"
+            android:text="@string/quick_add_tomorrow"
+            android:textSize="12sp"
+            android:textColor="@color/qa_secondary"
+            android:gravity="center"
+            android:layout_marginEnd="6dp" />
+
+        <TextView
+            android:id="@+id/qa_chip_someday"
+            android:layout_width="0dp"
+            android:layout_height="34dp"
+            android:layout_weight="1"
+            android:background="@drawable/widget_chip"
+            android:text="@string/quick_add_someday"
+            android:textSize="12sp"
+            android:textColor="@color/qa_secondary"
+            android:gravity="center" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:orientation="horizontal"
+        android:gravity="end">
+
+        <TextView
+            android:id="@+id/qa_cancel"
+            android:layout_width="wrap_content"
+            android:layout_height="38dp"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:gravity="center"
+            android:text="@string/quick_add_cancel"
+            android:textSize="13sp"
+            android:textColor="@color/qa_secondary" />
+
+        <TextView
+            android:id="@+id/qa_save"
+            android:layout_width="wrap_content"
+            android:layout_height="38dp"
+            android:paddingStart="20dp"
+            android:paddingEnd="20dp"
+            android:layout_marginStart="8dp"
+            android:gravity="center"
+            android:background="@drawable/qa_save_bg"
+            android:text="@string/quick_add_save"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:textColor="@color/widget_on_accent" />
+    </LinearLayout>
+</LinearLayout>

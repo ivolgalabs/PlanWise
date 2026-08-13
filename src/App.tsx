@@ -17,6 +17,7 @@ import { WeekView } from "./views/WeekView";
 import { MonthView } from "./views/MonthView";
 import { RightPanel } from "./components/RightPanel";
 import { TaskDndContext } from "./drag";
+import { setToastListener } from "./toast";
 import "./App.css";
 
 /** Ширина правой панели (общая для «Недели» и «Дня»): resize-ручка в неделе,
@@ -49,6 +50,12 @@ function resolveActiveTheme(): string {
       ? s.preferredDarkTheme.replace(/^(dark|light)-/, "oled-")
       : s.preferredDarkTheme
     : s.preferredLightTheme;
+}
+
+/** Эффективная тема: тёмная (dark/oled) или светлая — для виджета. */
+function isDarkTheme(): boolean {
+  const t = resolveActiveTheme();
+  return t.startsWith("dark") || t.startsWith("oled");
 }
 
 function App() {
@@ -117,6 +124,20 @@ function App() {
   // Ошибка загрузки данных (сбой БД) — показывается баннером, чтобы приложение
   // не выглядело «пустым» без объяснения.
   const [loadError, setLoadError] = useState("");
+  // Тост: короткое сообщение об ошибке сохранения и т.п. Автоскрытие — 4.5 с.
+  const [toast, setToast] = useState("");
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    setToastListener((msg) => {
+      setToast(msg);
+      clearTimeout(timer);
+      timer = setTimeout(() => setToast(""), 4500);
+    });
+    return () => {
+      clearTimeout(timer);
+      setToastListener(null);
+    };
+  }, []);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchColor, setSearchColor] = useState<string | null>(null);
   const [searchPeriod, setSearchPeriod] = useState<PeriodFilter>("all");
@@ -277,7 +298,11 @@ function App() {
   // Загрузка задач. Грузим ВСЕ задачи одним запросом (широкий диапазон дат):
   // правый мини-календарь можно листать на любой месяц, поэтому ограничивать
   // выборку видимым окном нельзя — иначе на будущих неделях не будет задач.
+  // seq-счётчик защищает от гонки: быстрые изменения задач запускают несколько
+  // reload'ов, и устаревший ответ не должен перетирать свежие данные.
+  const reloadSeq = useRef(0);
   const reload = useCallback(async () => {
+    const seq = ++reloadSeq.current;
     // Обычные задачи (широкий диапазон для календаря) + «Когда-нибудь» +
     // «Архив» (отдельным пулом — в виды не попадает).
     try {
@@ -286,6 +311,7 @@ function App() {
         api.getSomedayTasks(),
         api.getArchivedTasks(),
       ]);
+      if (seq !== reloadSeq.current) return; // ответ устарел — пропускаем
       setTasks([...regular, ...someday]);
       setArchivedTasks(archived);
     } catch (e) {
@@ -295,11 +321,14 @@ function App() {
       setLoadError("Не удалось загрузить задачи. Проверьте доступ к данным приложения.");
       return;
     }
-    // Данные для Android-виджета (список задач на сегодня) — пишем при
-    // каждой перезагрузке задач, виджет читает files/widget.json.
+    // Данные для виджетов (Android + macOS) — пишем при каждой перезагрузке
+    // задач. Тему передаём явно: виджет должен выглядеть как приложение,
+    // а не по системной теме устройства.
     if (isTauri()) {
       import("@tauri-apps/api/core")
-        .then(({ invoke }) => invoke("write_widget_data"))
+        .then(({ invoke }) =>
+          invoke("write_widget_data", { dark: isDarkTheme() }),
+        )
         .catch(() => {});
     }
   }, [setTasks, setArchivedTasks]);
@@ -463,6 +492,27 @@ function App() {
           </button>
         </div>
       )}
+      {/* Тост (ошибка сохранения и т.п.) — поверх контента, автоскрытие. */}
+      {toast && (
+        <div
+          style={{
+            position: "fixed",
+            top: "calc(var(--control-h) + var(--sp-3))",
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 1000,
+            background: "color-mix(in srgb, var(--danger) 14%, var(--bg-secondary))",
+            color: COLORS.text,
+            fontSize: "var(--fs-sm)",
+            padding: "var(--sp-2) var(--sp-4)",
+            borderRadius: "var(--radius-lg)",
+            boxShadow: "var(--shadow-lg)",
+            maxWidth: "min(90vw, 420px)",
+          }}
+        >
+          {toast}
+        </div>
+      )}
       {/* Баннер архива скрывается настройками видимости. */}
       {visibility.archiveBanner && archiveCount > 0 && (
         <div
@@ -477,7 +527,8 @@ function App() {
           }}
         >
           <span>
-            Архивировано просроченных задач: {archiveCount}
+            Перенесено в архив просроченных задач: {archiveCount} — можно
+            восстановить из раздела «Архив»
           </span>
           <button
             className="icon-btn"

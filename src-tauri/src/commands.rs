@@ -12,8 +12,13 @@ fn now_ms() -> i64 {
 /// epoch-day «сегодня» по локальной дате машины (как toEpochDay на фронте:
 /// локальная дата, отсчёт от 1970-01-01). Нужен для правила «перенос задачи
 /// в прошлое = задача выполнена».
+///
+/// ВНИМАНИЕ: константа 719_163 — это num_days_from_ce(1970-01-01), а не
+/// 719_162: при неверной константе «сегодня» сдвигалось на день вперёд и
+/// автоархив молча уносил сегодняшние задачи, напоминания не планировались,
+/// а виджет «Сегодня» оставался пустым (баг жил с коммита 13a29e0).
 pub(crate) fn today_epoch_day() -> i64 {
-    chrono::Local::now().date_naive().num_days_from_ce() as i64 - 719_162
+    chrono::Local::now().date_naive().num_days_from_ce() as i64 - 719_163
 }
 
 #[tauri::command]
@@ -28,7 +33,7 @@ pub fn get_tasks(state: State<'_, Db>, start_day: i64, end_day: i64) -> Result<V
         .prepare(
             "SELECT id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes, someday, archived, travel_time, duration_minutes, difficulty, notify_minutes
              FROM tasks WHERE date BETWEEN ?1 AND ?2 AND someday = 0 AND archived = 0
-             ORDER BY sort_order ASC",
+             ORDER BY sort_order ASC, created_at ASC, id ASC",
         )
         .map_err(|e| e.to_string())?;
     let rows = stmt
@@ -414,9 +419,17 @@ pub fn delete_color_set(state: State<'_, Db>, id: String) -> Result<(), String> 
 /// сегодня). Возвращает количество заархивированных задач (для баннера в UI).
 /// Граница «сегодня» — бэкендная (today_epoch_day), а не с фронта: часы
 /// устройства и даты задач не должны расходиться с логикой переноса.
+///
+/// Грейс-период: архивируются только задачи, отстающие от локального
+/// «сегодня» минимум на двое суток (date < today - 1). Причина: «сегодня»
+/// считается по часам каждого устройства, и на устройстве с другим часовым
+/// поясом (или сбитыми часами) свежая задача «на вчера» выглядела бы
+/// просроченной и молча уезжала в архив. Двухсуточный запас делает архивацию
+/// одинаковой на всех машинах — задача исчезает из видов в один и тот же
+/// момент независимо от таймзоны.
 #[tauri::command]
 pub fn archive_overdue(state: State<'_, Db>) -> Result<i64, String> {
-    let today = today_epoch_day();
+    let today = today_epoch_day() - 1;
     let conn = state.lock();
     // Подсчёт и обновление — в одной транзакции (атомарно).
     let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
@@ -955,18 +968,75 @@ pub fn set_setting(state: State<'_, Db>, key: String, value: String) -> Result<(
     Ok(())
 }
 
-/// Записать данные для Android-виджета (задачи на сегодня) в files/widget.json.
+/// Записать данные для виджетов (Android и macOS) в widget.json.
 /// Вызывается фронтендом при перезагрузке задач И планировщиком каждый тик —
 /// виджет всегда получает свежие данные, даже если приложение не открывали.
+/// `dark` — эффективная тема приложения (светлая/тёмная), чтобы виджет
+/// выглядел так же, как интерфейс, а не по системной теме устройства.
 #[tauri::command]
-pub fn write_widget_data(app: tauri::AppHandle, state: State<'_, Db>) -> Result<(), String> {
-    refresh_widget(&app, &state)
+pub fn write_widget_data(
+    app: tauri::AppHandle,
+    state: State<'_, Db>,
+    dark: Option<bool>,
+) -> Result<(), String> {
+    refresh_widget(&app, &state, dark.unwrap_or(false))?;
+    // После записи файла сразу просим Android-виджет перечитать его —
+    // иначе он ждёт системного обновления до 30 минут.
+    push_widget_refresh(&app);
+    Ok(())
+}
+
+/// Уведомить Kotlin-виджет (WidgetPushPlugin) о новых данных. Вызывается после
+/// каждой записи widget.json, когда приложение живо. Плагин перечитывает файл
+/// и перерисовывает виджеты мгновенно; когда процесс убит — виджет
+/// обновляется сам (AlarmManager в Kotlin).
+#[cfg(target_os = "android")]
+fn push_widget_refresh(app: &tauri::AppHandle) {
+    // Async-вариант обязателен: sync-версия run_mobile_plugin блокирует
+    // вызывающий поток до ответа главного потока Android — из команды на
+    // главном потоке это дедлок.
+    if let Some(state) = app.try_state::<crate::WidgetPush>() {
+        if let Some(handle) = &state.0 {
+            let h = handle.clone();
+            tauri::async_runtime::spawn(async move {
+                let _ = h.run_mobile_plugin_async::<()>("refresh", ()).await;
+            });
+        }
+    }
+}
+
+#[cfg(not(target_os = "android"))]
+fn push_widget_refresh(_app: &tauri::AppHandle) {}
+
+/// Тема (dark), сохранённая в последнем widget.json. Планировщик перезаписывает
+/// файл при смене дня и не должен сбрасывать тему на светлую — берём её из
+/// предыдущей записи.
+pub fn read_widget_dark(app: &tauri::AppHandle) -> bool {
+    #[cfg_attr(not(target_os = "android"), allow(unused_mut))]
+    let mut dir = app
+        .path()
+        .app_data_dir()
+        .unwrap_or_else(|_| std::path::PathBuf::from("."));
+    #[cfg(target_os = "android")]
+    {
+        dir = dir.join("files");
+    }
+    let raw = std::fs::read_to_string(dir.join("widget.json")).unwrap_or_default();
+    serde_json::from_str::<serde_json::Value>(&raw)
+        .ok()
+        .and_then(|v| v.get("dark").and_then(|d| d.as_bool()))
+        .unwrap_or(false)
 }
 
 /// Общая логика записи виджет-данных (без State — для вызова из планировщика).
 /// Формат один для Android- и macOS-виджетов: сегодня (`date`/`tasks`),
-/// неделя (`week` — 7 дней с сегодня) и «Когда-нибудь» (`someday`).
-pub fn refresh_widget(app: &tauri::AppHandle, state: &State<'_, Db>) -> Result<(), String> {
+/// неделя (`week` — 7 дней с сегодня), «Когда-нибудь» (`someday`) и тема
+/// (`dark`).
+pub fn refresh_widget(
+    app: &tauri::AppHandle,
+    state: &State<'_, Db>,
+    dark: bool,
+) -> Result<(), String> {
     let conn = state.lock();
     let today = today_epoch_day();
     // Строка задачи в JSON: одинаковая для всех трёх выборок.
@@ -979,18 +1049,21 @@ pub fn refresh_widget(app: &tauri::AppHandle, state: &State<'_, Db>) -> Result<(
     };
     // Задачи по одному аргументу-дате (someday-запрос параметров не имеет —
     // для него отдельная ветка ниже).
-    let query_by_day = |conn: &rusqlite::Connection, sql: &str, day: i64| -> Vec<serde_json::Value> {
-        conn.prepare(sql)
-            .and_then(|mut stmt| {
-                stmt.query_map([day], task_row)
-                    .and_then(|it| it.collect::<Result<Vec<_>, _>>())
-            })
-            .unwrap_or_default()
-    };
-    // Сегодня — до 8 задач (Android-виджет и день на macOS).
+    let query_by_day =
+        |conn: &rusqlite::Connection, sql: &str, day: i64| -> Vec<serde_json::Value> {
+            conn.prepare(sql)
+                .and_then(|mut stmt| {
+                    stmt.query_map([day], task_row)
+                        .and_then(|it| it.collect::<Result<Vec<_>, _>>())
+                })
+                .unwrap_or_default()
+        };
+    // Сегодня — до 8 задач (Android-виджет и день на macOS). Tie-break
+    // created_at: задачи, созданные в одну миллисекунду, не перескакивают
+    // между обновлениями виджета.
     let tasks = query_by_day(
         &conn,
-        "SELECT title, time_minutes, is_done FROM tasks WHERE date = ?1 AND archived = 0 AND someday = 0 ORDER BY sort_order ASC LIMIT 8",
+        "SELECT title, time_minutes, is_done FROM tasks WHERE date = ?1 AND archived = 0 AND someday = 0 ORDER BY sort_order ASC, created_at ASC LIMIT 8",
         today,
     );
     // Неделя: 7 дней с сегодня, до 4 задач на день — для виджета «Неделя».
@@ -999,7 +1072,7 @@ pub fn refresh_widget(app: &tauri::AppHandle, state: &State<'_, Db>) -> Result<(
             let day = today + off;
             let day_tasks = query_by_day(
                 &conn,
-                "SELECT title, time_minutes, is_done FROM tasks WHERE date = ?1 AND archived = 0 AND someday = 0 ORDER BY sort_order ASC LIMIT 4",
+                "SELECT title, time_minutes, is_done FROM tasks WHERE date = ?1 AND archived = 0 AND someday = 0 ORDER BY sort_order ASC, created_at ASC LIMIT 4",
                 day,
             );
             serde_json::json!({ "date": day, "tasks": day_tasks })
@@ -1007,7 +1080,7 @@ pub fn refresh_widget(app: &tauri::AppHandle, state: &State<'_, Db>) -> Result<(
         .collect();
     // «Когда-нибудь» — задачи без даты, до 8 (без параметров).
     let someday: Vec<serde_json::Value> = conn
-        .prepare("SELECT title, time_minutes, is_done FROM tasks WHERE someday = 1 AND archived = 0 ORDER BY sort_order ASC LIMIT 8")
+        .prepare("SELECT title, time_minutes, is_done FROM tasks WHERE someday = 1 AND archived = 0 ORDER BY sort_order ASC, created_at ASC LIMIT 8")
         .and_then(|mut stmt| stmt.query_map([], task_row).and_then(|it| it.collect::<Result<Vec<_>, _>>()))
         .unwrap_or_default();
     let payload = serde_json::json!({
@@ -1015,6 +1088,7 @@ pub fn refresh_widget(app: &tauri::AppHandle, state: &State<'_, Db>) -> Result<(
         "tasks": tasks,
         "week": week,
         "someday": someday,
+        "dark": dark,
     });
     // На Android каталог data-файлов — data/files; на десктопе dir не меняется.
     #[cfg_attr(not(target_os = "android"), allow(unused_mut))]
@@ -1039,20 +1113,61 @@ pub fn refresh_widget(app: &tauri::AppHandle, state: &State<'_, Db>) -> Result<(
     std::fs::rename(&tmp, dir.join("widget.json")).map_err(|e| e.to_string())?;
     // macOS: дублируем в App Group контейнер — WidgetKit-расширение песочное
     // и читает только свой контейнер группы (group.com.zkproject.dailyplanner).
+    // Ошибки логируем, а не глотаем: молчаливый сбой здесь = вечно пустой
+    // виджет в Центре уведомлений с непонятной причиной.
     #[cfg(target_os = "macos")]
     {
         let home = std::env::var("HOME").unwrap_or_default();
         let group_dir = std::path::PathBuf::from(home)
             .join("Library/Group Containers/group.com.zkproject.dailyplanner");
         if !group_dir.as_os_str().is_empty() {
-            if let Ok(()) = std::fs::create_dir_all(&group_dir) {
+            if let Err(e) = std::fs::create_dir_all(&group_dir) {
+                eprintln!("[widget] не удалось создать App Group каталог: {e}");
+            } else {
                 let g_tmp = group_dir.join("widget.json.tmp");
-                let _ = std::fs::write(&g_tmp, &data);
-                let _ = std::fs::rename(&g_tmp, group_dir.join("widget.json"));
+                if let Err(e) = std::fs::write(&g_tmp, &data) {
+                    eprintln!("[widget] запись widget.json.tmp в App Group: {e}");
+                }
+                if let Err(e) = std::fs::rename(&g_tmp, group_dir.join("widget.json")) {
+                    eprintln!("[widget] rename widget.json в App Group: {e}");
+                }
             }
         }
     }
     Ok(())
+}
+
+/// Удалить файлы вложений, у которых нет строки в БД. Сироты появляются при
+/// сбое между записью файла и INSERT (обрыв процесса), при частичном импорте
+/// или ручном удалении записей. Вызывается при старте — иначе файлы
+/// копились бы на диске бесконечно.
+pub fn cleanup_orphan_attachments(app: &tauri::AppHandle, state: &State<'_, Db>) {
+    let dir = attachments_dir(app);
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return; // каталога ещё нет — сирот нет
+    };
+    let conn = state.lock();
+    for entry in entries.flatten() {
+        if !entry.file_type().map(|t| t.is_file()).unwrap_or(false) {
+            continue;
+        }
+        let name = entry.file_name().to_string_lossy().to_string();
+        let exists: bool = conn
+            .query_row(
+                "SELECT COUNT(*) > 0 FROM attachments WHERE stored_name = ?1",
+                [&name],
+                |r| r.get(0),
+            )
+            .unwrap_or(false);
+        if !exists {
+            if let Err(e) = std::fs::remove_file(entry.path()) {
+                eprintln!(
+                    "[attachments] не удалось удалить сироту {}: {e}",
+                    entry.path().display()
+                );
+            }
+        }
+    }
 }
 
 // ── Вложения заметок (файлы) ──────────────────────────────────────────
@@ -1249,3 +1364,4 @@ pub fn attachment_path(app: tauri::AppHandle, id: String) -> Result<String, Stri
     }
     Ok(path.to_string_lossy().into_owned())
 }
+

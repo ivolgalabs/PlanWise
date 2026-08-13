@@ -1,91 +1,189 @@
 package com.zkproject.dailyplanner
 
+import android.app.AlarmManager
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.graphics.Paint
 import android.widget.RemoteViews
-import org.json.JSONObject
 
 /**
- * Виджет «Задачи на день»: показывает список задач на сегодня из
- * files/widget.json, который пишет Rust-команда write_widget_data
- * (обновляется при каждой перезагрузке задач и по системному таймеру
- * виджета — android:updatePeriodMillis).
+ * База всех виджетов приложения: читает files/widget.json (пишет Rust-команда
+ * write_widget_data), рендерит по теме приложения (dark из JSON, а не по
+ * системной теме) и самообновляется каждые 15 минут через AlarmManager —
+ * когда процесс приложения убит, виджет всё равно получает свежие данные
+ * (например, после смены дня). Три виджета: «Сегодня» (4×2), «Неделя» (4×4),
+ * «Когда-нибудь» (4×2) — тонкие наследники с собственным layout.
  */
-class WidgetProvider : AppWidgetProvider() {
+abstract class WidgetProvider : AppWidgetProvider() {
 
-  override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
-    val data = readWidgetData(context)
-    for (id in appWidgetIds) {
-      val views = buildViews(context, data)
-      appWidgetManager.updateAppWidget(id, views)
+  /** Layout виджета (RemoteViews). */
+  protected abstract val layoutRes: Int
+
+  /** Уникальный action самообновления для этого типа виджета. */
+  protected abstract val refreshAction: String
+
+  /** Собрать RemoteViews из данных (или состояния «нет данных»). */
+  protected abstract fun buildViews(context: Context, data: WidgetData.Payload?): RemoteViews
+
+  override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
+    val data = WidgetData.readFile(context)
+    for (id in ids) {
+      manager.updateAppWidget(id, buildViews(context, data))
+    }
+    scheduleSelfRefresh(context)
+  }
+
+  override fun onEnabled(context: Context) {
+    // Виджет добавлен на экран — запускаем самообновление.
+    scheduleSelfRefresh(context)
+  }
+
+  override fun onDisabled(context: Context) {
+    // Последний виджет этого типа убран — останавливаем таймер.
+    cancelSelfRefresh(context)
+  }
+
+  override fun onReceive(context: Context, intent: Intent) {
+    when (intent.action) {
+      refreshAction -> {
+        // Таймер самообновления: перечитать widget.json и перерисоваться.
+        updateAll(context)
+      }
+      Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED -> {
+        // После перезагрузки/обновления Android сбрасывает повторяющиеся
+        // будильники — восстанавливаем самообновление и показываем данные.
+        scheduleSelfRefresh(context)
+        updateAll(context)
+      }
+      else -> super.onReceive(context, intent)
     }
   }
 
-  /** Читает files/widget.json: {"date": N, "tasks": [{title, timeMinutes, isDone}]} */
-  private fun readWidgetData(context: Context): JSONObject? {
-    return try {
-      val f = java.io.File(context.filesDir, "widget.json")
-      if (!f.exists()) null else JSONObject(f.readText())
-    } catch (e: Exception) {
-      null
-    }
+  private fun scheduleSelfRefresh(context: Context) {
+    val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+    val pi = selfRefreshPendingIntent(context)
+    // Inexact: система группирует с другими будильниками — батарея не тратится.
+    val interval = 15L * 60 * 1000
+    am.setInexactRepeating(
+      AlarmManager.RTC,
+      System.currentTimeMillis() + interval,
+      interval,
+      pi,
+    )
   }
 
-  private fun buildViews(context: Context, data: JSONObject?): RemoteViews {
-    val views = RemoteViews(context.packageName, R.layout.widget_layout)
-    // Тап по виджету — открыть приложение.
-    val open = Intent(context, MainActivity::class.java)
-    val pi = PendingIntent.getActivity(
-      context, 0, open,
-      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-    )
-    views.setOnClickPendingIntent(R.id.widget_root, pi)
+  private fun cancelSelfRefresh(context: Context) {
+    val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+    am.cancel(selfRefreshPendingIntent(context))
+  }
 
-    val tasks = data?.optJSONArray("tasks") ?: return views
-    if (tasks.length() == 0) {
-      views.setTextViewText(R.id.widget_title, "Нет задач на сегодня")
-      hideTaskRows(views)
-      return views
+  private fun selfRefreshPendingIntent(context: Context): PendingIntent =
+    PendingIntent.getBroadcast(
+      context,
+      REFRESH_REQUEST_CODE,
+      Intent(context, this.javaClass).setAction(refreshAction),
+      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+    )
+
+  companion object {
+    private const val REFRESH_REQUEST_CODE = 73001
+
+    /** Открыть приложение тапом по виджету. */
+    @JvmStatic
+    fun openAppPendingIntent(context: Context): PendingIntent =
+      PendingIntent.getActivity(
+        context, 0, Intent(context, MainActivity::class.java),
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+      )
+
+    /** Кнопка «＋»: диалог быстрого добавления с предвыбранной датой. */
+    @JvmStatic
+    fun quickAddPendingIntent(context: Context, mode: String): PendingIntent {
+      val i = Intent(context, QuickAddActivity::class.java).putExtra(QuickAddActivity.EXTRA_MODE, mode)
+      return PendingIntent.getActivity(
+        context, mode.hashCode(), i,
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+      )
     }
 
-    val pending = (0 until tasks.length()).count { !tasks.getJSONObject(it).optBoolean("isDone") }
-    views.setTextViewText(R.id.widget_title, "Задачи на сегодня ($pending)")
-    val ids = listOf(
-      R.id.widget_task1, R.id.widget_task2, R.id.widget_task3,
-      R.id.widget_task4, R.id.widget_task5, R.id.widget_task6
-    )
-    for (i in ids.indices) {
-      if (i < tasks.length()) {
-        val t = tasks.getJSONObject(i)
-        val done = t.optBoolean("isDone")
-        val time = t.optInt("timeMinutes", -1)
-        val label = if (time >= 0) {
-          val h = time / 60
-          val m = time % 60
-          "${if (h < 10) "0$h" else h}:${if (m < 10) "0$m" else m}  ${t.optString("title")}"
-        } else {
-          t.optString("title")
+    /** Перечитать widget.json и обновить ВСЕ виджеты всех трёх типов.
+     *  Вызывается из push-плагина (Rust) и после быстрого добавления. */
+    @JvmStatic
+    fun updateAll(context: Context) {
+      val manager = AppWidgetManager.getInstance(context)
+      val data = WidgetData.readFile(context)
+      val providers = listOf(
+        DayWidgetProvider::class.java,
+        WeekWidgetProvider::class.java,
+        SomedayWidgetProvider::class.java,
+      )
+      for (cls in providers) {
+        val ids = manager.getAppWidgetIds(ComponentName(context, cls))
+        if (ids.isEmpty()) continue
+        val provider = cls.getDeclaredConstructor().newInstance() as WidgetProvider
+        for (id in ids) {
+          manager.updateAppWidget(id, provider.buildViews(context, data))
         }
-        views.setTextViewText(ids[i], label)
-        // setAlpha(int) удалён в Android 15+ (остался только float-вариант) —
-        // RemoteViews искал бы отсутствующий метод и рушил inflate виджета.
-        views.setFloat(ids[i], "setAlpha", if (done) 0.4f else 1.0f)
-        views.setViewVisibility(ids[i], android.view.View.VISIBLE)
-      } else {
-        views.setViewVisibility(ids[i], android.view.View.GONE)
       }
     }
-    return views
-  }
 
-  private fun hideTaskRows(views: RemoteViews) {
-    val ids = listOf(
-      R.id.widget_task1, R.id.widget_task2, R.id.widget_task3,
-      R.id.widget_task4, R.id.widget_task5, R.id.widget_task6
-    )
-    for (id in ids) views.setViewVisibility(id, android.view.View.GONE)
+    /** Общая настройка корня: клик → приложение; фон по теме из данных. */
+    @JvmStatic
+    protected fun applyCommon(
+      v: RemoteViews,
+      context: Context,
+      data: WidgetData.Payload?,
+    ) {
+      v.setOnClickPendingIntent(R.id.widget_root, openAppPendingIntent(context))
+      val dark = data?.dark ?: false
+      val pal = WidgetData.palette(dark, context.resources)
+      v.setInt(R.id.widget_root, "setBackgroundResource", pal.bgRes)
+      v.setTextColor(R.id.widget_title, pal.text)
+      v.setTextColor(R.id.widget_subtitle, pal.muted)
+      v.setInt(R.id.widget_add, "setBackgroundResource", R.drawable.widget_add_bg)
+      v.setTextColor(R.id.widget_add, context.getColor(R.color.widget_on_accent))
+    }
+
+    /** Строка задачи: время (акцент) + название; done — зачёркнуто/приглушено. */
+    @JvmStatic
+    protected fun applyTaskRow(
+      v: RemoteViews,
+      timeId: Int,
+      titleId: Int,
+      task: WidgetData.WTask?,
+      pal: WidgetData.Palette,
+      context: Context,
+    ) {
+      if (task == null) {
+        v.setViewVisibility(timeId, android.view.View.GONE)
+        v.setViewVisibility(titleId, android.view.View.GONE)
+        return
+      }
+      v.setViewVisibility(timeId, android.view.View.VISIBLE)
+      v.setViewVisibility(titleId, android.view.View.VISIBLE)
+      if (task.timeMinutes != null) {
+        v.setTextViewText(timeId, WidgetData.timeLabel(task.timeMinutes))
+        v.setTextColor(timeId, pal.accent)
+      } else {
+        v.setTextViewText(timeId, "")
+      }
+      v.setTextViewText(titleId, task.title)
+      v.setTextColor(titleId, if (task.isDone) pal.muted else pal.text)
+      // setPaintFlags заменяет ВСЕ флаги — возвращаем антиалиасинг вместе
+      // с зачёркиванием (иначе шрифт теряет сглаживание).
+      v.setInt(
+        titleId, "setPaintFlags",
+        if (task.isDone) Paint.ANTI_ALIAS_FLAG or Paint.STRIKE_THRU_TEXT_FLAG
+        else Paint.ANTI_ALIAS_FLAG,
+      )
+      // setAlpha(int) удалён в Android 15+ (остался только float-вариант) —
+      // RemoteViews искал бы отсутствующий метод и рушил inflate виджета.
+      v.setFloat(timeId, "setAlpha", if (task.isDone) 0.5f else 1.0f)
+      v.setFloat(titleId, "setAlpha", if (task.isDone) 0.7f else 1.0f)
+    }
   }
 }

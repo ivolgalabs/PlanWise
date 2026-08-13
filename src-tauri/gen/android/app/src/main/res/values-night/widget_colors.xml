@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Тёмные значения для диалога быстрого добавления (dark-slate палитра). -->
+<resources>
+    <color name="qa_bg">#1B1C21</color>
+    <color name="qa_text">#F2F3F5</color>
+    <color name="qa_secondary">#A0A4AD</color>
+    <color name="qa_hint">#6B6F78</color>
+    <color name="qa_chip">#2A2B33</color>
+    <color name="qa_input_bg">#2A2B33</color>
+</resources>

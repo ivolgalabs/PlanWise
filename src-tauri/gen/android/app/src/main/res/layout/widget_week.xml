@@ -1,0 +1,215 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Виджет «Неделя» (4×4): заголовок с диапазоном дат + 7 строк
+     «Пн 11 · 3 задачи», сегодня — акцентом и жирным. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="14dp"
+    android:background="@drawable/widget_bg_light">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingBottom="6dp">
+
+        <TextView
+            android:id="@+id/widget_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:textColor="@color/widget_text_light"
+            android:maxLines="1"
+            android:text="Неделя" />
+
+        <TextView
+            android:id="@+id/widget_subtitle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textSize="10sp"
+            android:textColor="@color/widget_muted_light"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:layout_marginStart="8dp"
+            android:text="" />
+
+        <TextView
+            android:id="@+id/widget_add"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:background="@drawable/widget_add_bg"
+            android:text="+"
+            android:textColor="@color/widget_on_accent"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:gravity="center"
+            android:contentDescription="Добавить задачу" />
+    </LinearLayout>
+
+    <!-- 7 строк дней недели. -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingTop="4dp">
+        <TextView
+            android:id="@+id/day_label1"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textSize="12sp"
+            android:textColor="@color/widget_secondary_light"
+            android:maxLines="1"
+            android:ellipsize="end" />
+        <TextView
+            android:id="@+id/day_count1"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="12sp"
+            android:textColor="@color/widget_muted_light"
+            android:maxLines="1" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingTop="3dp">
+        <TextView
+            android:id="@+id/day_label2"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textSize="12sp"
+            android:textColor="@color/widget_secondary_light"
+            android:maxLines="1"
+            android:ellipsize="end" />
+        <TextView
+            android:id="@+id/day_count2"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="12sp"
+            android:textColor="@color/widget_muted_light"
+            android:maxLines="1" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingTop="3dp">
+        <TextView
+            android:id="@+id/day_label3"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textSize="12sp"
+            android:textColor="@color/widget_secondary_light"
+            android:maxLines="1"
+            android:ellipsize="end" />
+        <TextView
+            android:id="@+id/day_count3"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="12sp"
+            android:textColor="@color/widget_muted_light"
+            android:maxLines="1" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingTop="3dp">
+        <TextView
+            android:id="@+id/day_label4"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textSize="12sp"
+            android:textColor="@color/widget_secondary_light"
+            android:maxLines="1"
+            android:ellipsize="end" />
+        <TextView
+            android:id="@+id/day_count4"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="12sp"
+            android:textColor="@color/widget_muted_light"
+            android:maxLines="1" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingTop="3dp">
+        <TextView
+            android:id="@+id/day_label5"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textSize="12sp"
+            android:textColor="@color/widget_secondary_light"
+            android:maxLines="1"
+            android:ellipsize="end" />
+        <TextView
+            android:id="@+id/day_count5"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="12sp"
+            android:textColor="@color/widget_muted_light"
+            android:maxLines="1" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingTop="3dp">
+        <TextView
+            android:id="@+id/day_label6"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textSize="12sp"
+            android:textColor="@color/widget_secondary_light"
+            android:maxLines="1"
+            android:ellipsize="end" />
+        <TextView
+            android:id="@+id/day_count6"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="12sp"
+            android:textColor="@color/widget_muted_light"
+            android:maxLines="1" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingTop="3dp">
+        <TextView
+            android:id="@+id/day_label7"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textSize="12sp"
+            android:textColor="@color/widget_secondary_light"
+            android:maxLines="1"
+            android:ellipsize="end" />
+        <TextView
+            android:id="@+id/day_count7"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="12sp"
+            android:textColor="@color/widget_muted_light"
+            android:maxLines="1" />
+    </LinearLayout>
+</LinearLayout>

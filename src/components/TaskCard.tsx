@@ -4,6 +4,7 @@ import type { Task } from "../api";
 import { api, fromEpochDay } from "../api";
 import { COLORS, accentTint, argbToHex } from "../theme";
 import { useStore } from "../store";
+import { showToast } from "../toast";
 import { formatMinutes } from "../date";
 import { useMediaQuery } from "../useMediaQuery";
 import { SubtaskList } from "./SubtaskList";
@@ -113,16 +114,28 @@ export function TaskCard({ task, onChange, onCreateNext, showTime = true, compac
         savedRef.current = now;
         onChange();
         return updated;
-      } catch {
-        return task; // время не меняется — конфликт невозможен; тихо
+      } catch (err) {
+        // Сбой БД/диска — НЕ молчим: показываем тост и перезагружаем,
+        // чтобы строка вернулась к сохранённому в БД тексту (иначе правка
+        // «выглядит» сохранённой, но теряется).
+        console.error("Не удалось сохранить задачу:", err);
+        showToast("Не удалось сохранить задачу — проверьте данные приложения");
+        onChange();
+        return task;
       }
     }
     return task;
   };
 
   const toggleDone = async () => {
-    await api.upsertTask({ ...task, isDone: !task.isDone });
-    onChange();
+    try {
+      await api.upsertTask({ ...task, isDone: !task.isDone });
+      onChange();
+    } catch (err) {
+      console.error("Не удалось сохранить отметку задачи:", err);
+      showToast("Не удалось сохранить задачу — проверьте данные приложения");
+      onChange();
+    }
   };
 
   const setEditing = (v: boolean) => editingSetter(v);

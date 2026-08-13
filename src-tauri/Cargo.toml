@@ -43,4 +43,6 @@ tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-notification = "2"
 tauri-plugin-opener = "2"
+# Тип времени для Schedule::At уведомлений (тот же crate, что у плагина).
+time = "0.3"
 

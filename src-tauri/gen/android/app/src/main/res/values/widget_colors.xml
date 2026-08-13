@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Палитра виджетов — те же токены, что в Universal UI (themes.css):
+     light-slate и dark-slate. Акцент одинаковый в обеих темах. -->
+<resources>
+    <color name="widget_bg_light">#FFFFFF</color>
+    <color name="widget_bg_dark">#1B1C21</color>
+    <color name="widget_text_light">#1F2329</color>
+    <color name="widget_text_dark">#F2F3F5</color>
+    <color name="widget_secondary_light">#5C626A</color>
+    <color name="widget_secondary_dark">#A0A4AD</color>
+    <color name="widget_muted_light">#949BA4</color>
+    <color name="widget_muted_dark">#6B6F78</color>
+    <color name="widget_accent">#4C5699</color>
+    <color name="widget_border_light">#D1D5DB</color>
+    <color name="widget_border_dark">#2E3039</color>
+    <color name="widget_chip_light">#E2E6EB</color>
+    <color name="widget_chip_dark">#2A2B33</color>
+    <color name="widget_on_accent">#FFFFFF</color>
+
+    <!-- Диалог быстрого добавления: DayNight (значения для тёмного — values-night). -->
+    <color name="qa_bg">#FFFFFF</color>
+    <color name="qa_text">#1F2329</color>
+    <color name="qa_secondary">#5C626A</color>
+    <color name="qa_hint">#949BA4</color>
+    <color name="qa_chip">#E2E6EB</color>
+    <color name="qa_input_bg">#EEF1F4</color>
+</resources>

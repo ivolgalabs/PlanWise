@@ -1,6 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- INTERNET ОБЯЗАТЕЛЕН для любого Tauri v2 приложения на Android:
+         WebView загружает интерфейс через встроенный HTTP-сервер
+         (http://tauri.localhost) и общается с Rust-ядром через IPC
+         (http://ipc.localhost). Android блокирует ВСЕ сетевые сокеты —
+         включая localhost — без этого разрешения, поэтому без него
+         приложение не стартует (белый экран). Соединений наружу нет. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Перезагрузка Android: виджеты и уведомления восстанавливают таймеры
+         (самообновление виджета через AlarmManager; планировщик уведомлений
+         плагина). -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
     <!-- AndroidTV support -->
     <uses-feature android:name="android.software.leanback" android:required="false" />
 
@@ -33,16 +45,64 @@
             android:resource="@xml/file_paths" />
         </provider>
 
-        <!-- Виджет «Задачи на день»: читает files/widget.json (пишет Rust). -->
+        <!-- Диалог быстрого добавления задачи из виджета («＋»): лёгкая
+             Activity без WebView — работает, даже если приложение не запущено.
+             exported=false: вызывается только PendingIntent'ами из своих
+             виджетов. -->
+        <activity
+            android:name=".QuickAddActivity"
+            android:theme="@style/QuickAddTheme"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize" />
+
+        <!-- Три виджета: «Сегодня» (4×2), «Неделя» (4×4), «Когда-нибудь» (4×2).
+             Читают files/widget.json (пишет Rust). BOOT_COMPLETED —
+             восстановление самообновления после перезагрузки. -->
         <receiver
-          android:name=".WidgetProvider"
+          android:name=".DayWidgetProvider"
           android:exported="true">
           <intent-filter>
             <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
           </intent-filter>
+          <intent-filter>
+            <action android:name="android.intent.action.BOOT_COMPLETED" />
+            <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+          </intent-filter>
           <meta-data
             android:name="android.appwidget.provider"
-            android:resource="@xml/widget_info" />
+            android:resource="@xml/widget_day_info" />
+        </receiver>
+
+        <receiver
+          android:name=".WeekWidgetProvider"
+          android:exported="true">
+          <intent-filter>
+            <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+          </intent-filter>
+          <intent-filter>
+            <action android:name="android.intent.action.BOOT_COMPLETED" />
+            <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+          </intent-filter>
+          <meta-data
+            android:name="android.appwidget.provider"
+            android:resource="@xml/widget_week_info" />
+        </receiver>
+
+        <receiver
+          android:name=".SomedayWidgetProvider"
+          android:exported="true">
+          <intent-filter>
+            <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+          </intent-filter>
+          <intent-filter>
+            <action android:name="android.intent.action.BOOT_COMPLETED" />
+            <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+          </intent-filter>
+          <meta-data
+            android:name="android.appwidget.provider"
+            android:resource="@xml/widget_someday_info" />
         </receiver>
     </application>
 </manifest>

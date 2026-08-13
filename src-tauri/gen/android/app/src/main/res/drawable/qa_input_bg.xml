@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Поле ввода быстрого добавления: фон bg-tertiary, скругление radius-lg. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/qa_input_bg" />
+    <corners android:radius="8dp" />
+</shape>

@@ -1,4 +1,17 @@
 <resources>
     <string name="app_name">"Ежедневник"</string>
     <string name="main_activity_title">"Ежедневник"</string>
+    <string name="widget_day_description">"Задачи на сегодня"</string>
+    <string name="widget_week_description">"Неделя — задачи по дням"</string>
+    <string name="widget_someday_description">"Задачи «Когда-нибудь»"</string>
+    <string name="quick_add_title">"Быстрая задача"</string>
+    <string name="quick_add_hint">"Что нужно сделать?"</string>
+    <string name="quick_add_today">"Сегодня"</string>
+    <string name="quick_add_tomorrow">"Завтра"</string>
+    <string name="quick_add_someday">"Когда-нибудь"</string>
+    <string name="quick_add_cancel">"Отмена"</string>
+    <string name="quick_add_save">"Добавить"</string>
+    <string name="quick_add_empty">"Введите название задачи"</string>
+    <string name="quick_add_ok">"Задача добавлена"</string>
+    <string name="quick_add_db_missing">"Сначала откройте приложение"</string>
 </resources>
