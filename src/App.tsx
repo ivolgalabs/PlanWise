@@ -58,6 +58,31 @@ function isDarkTheme(): boolean {
   return t.startsWith("dark") || t.startsWith("oled");
 }
 
+// Дебаунс записи данных виджетов. Каждое изменение задачи вызывает reload(),
+// а refresh_widget на бэке делает ~24 запроса к SQLite + 2 записи файла
+// (widget.json + копия в App Group на macOS). На серии быстрых правок
+// (несколько чекбоксов подряд, ввод текста, перенос drag'ом) это лишняя
+// нагрузка на CPU/диск и батарею. Коаллесим всплеск в один вызов через 600 мс —
+// виджет всё равно обновляется незаметно для пользователя, а фоновый тик
+// планировщика (60 с) и перезапись при смене дня остаются страховкой на случай
+// пропущенного вызова (например, закрыли приложение в окне дебаунса — тогда
+// виджет обновится при следующем старте, когда reload() пишет данные).
+let widgetWriteTimer: ReturnType<typeof setTimeout> | undefined;
+let pendingWidgetDark = false;
+const scheduleWidgetWrite = (dark: boolean) => {
+  pendingWidgetDark = dark;
+  clearTimeout(widgetWriteTimer);
+  widgetWriteTimer = setTimeout(() => {
+    widgetWriteTimer = undefined;
+    if (!isTauri()) return;
+    import("@tauri-apps/api/core")
+      .then(({ invoke }) =>
+        invoke("write_widget_data", { dark: pendingWidgetDark }),
+      )
+      .catch(() => {});
+  }, 600);
+};
+
 function App() {
   const {
     selectedDate,
@@ -208,11 +233,7 @@ function App() {
     const apply = () => {
       applyTheme(resolveActiveTheme());
       if (isTauri()) {
-        import("@tauri-apps/api/core")
-          .then(({ invoke }) =>
-            invoke("write_widget_data", { dark: isDarkTheme() }),
-          )
-          .catch(() => {});
+        scheduleWidgetWrite(isDarkTheme());
       }
     };
     apply();
@@ -332,15 +353,12 @@ function App() {
       setLoadError("Не удалось загрузить задачи. Проверьте доступ к данным приложения.");
       return;
     }
-    // Данные для виджетов (Android + macOS) — пишем при каждой перезагрузке
-    // задач. Тему передаём явно: виджет должен выглядеть как приложение,
-    // а не по системной теме устройства.
+    // Данные для виджетов (Android + macOS) — пишем при перезагрузке задач
+    // через дебаунс: всплеск правок коаллесится в один вызов (см.
+    // scheduleWidgetWrite), экономя CPU/диск/батарею. Тему передаём явно:
+    // виджет должен выглядеть как приложение, а не по системной теме устройства.
     if (isTauri()) {
-      import("@tauri-apps/api/core")
-        .then(({ invoke }) =>
-          invoke("write_widget_data", { dark: isDarkTheme() }),
-        )
-        .catch(() => {});
+      scheduleWidgetWrite(isDarkTheme());
     }
   }, [setTasks, setArchivedTasks]);
 

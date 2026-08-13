@@ -396,7 +396,10 @@ fn due_unix_minute(due: NaiveDateTime) -> i64 {
 fn today_titles(app: &tauri::AppHandle) -> Vec<String> {
     let today_epoch = crate::commands::today_epoch_day();
     let db = app.state::<Db>();
-    let conn = db.0.lock().unwrap();
+    // db.lock() — poison-safe (возвращает данные даже при отравленном мьютексе,
+    // см. Db::lock); db.0.lock().unwrap() падал бы на каждом тике после паники
+    // в другом потоке, хоть tick() и ловит её через catch_unwind.
+    let conn = db.lock();
     conn.prepare(
       "SELECT title FROM tasks WHERE date = ?1 AND is_done = 0 AND archived = 0 AND someday = 0 ORDER BY sort_order ASC, created_at ASC",
     )
