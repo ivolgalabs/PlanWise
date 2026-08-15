@@ -56,11 +56,6 @@ export function SubtaskList({ taskId }: Props) {
     load();
   };
 
-  const del = async (id: string) => {
-    await api.deleteSubtask(id);
-    load();
-  };
-
   const done = items.filter((s) => s.isDone).length;
 
   // Всегда показываем блок подзадач: заголовок (если есть подзадачи) + список
@@ -85,7 +80,6 @@ export function SubtaskList({ taskId }: Props) {
           key={s.id}
           subtask={s}
           onToggle={() => toggle(s)}
-          onDelete={() => del(s.id)}
           onRename={async (sub, title) => {
             await api.upsertSubtask({ ...sub, title });
             load();
@@ -147,12 +141,10 @@ export function SubtaskList({ taskId }: Props) {
 function SubtaskRow({
   subtask,
   onToggle,
-  onDelete,
   onRename,
 }: {
   subtask: Subtask;
   onToggle: () => void;
-  onDelete: () => void;
   /** Переименовать подзадачу (Enter/blur в режиме редактирования). */
   onRename?: (s: Subtask, title: string) => void;
 }) {
@@ -193,6 +185,7 @@ function SubtaskRow({
   return (
     <div
       ref={setNodeRef}
+      className="subtask-row"
       style={{
         display: "flex",
         // flex-start: текст подзадачи переносится на несколько строк —
@@ -290,14 +283,6 @@ function SubtaskRow({
           {subtask.title}
         </span>
       )}
-      <button
-        onClick={onDelete}
-        className="chip-btn"
-        title="Удалить"
-        style={{ flexShrink: 0, marginTop: -5 }}
-      >
-        <Icon name="close" size={12} />
-      </button>
     </div>
   );
 }

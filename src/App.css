@@ -373,6 +373,17 @@ input[type="checkbox"] {
   border-top: 1px solid color-mix(in srgb, var(--text-primary) 38%, transparent);
 }
 
+/* Разделители между подзадачами: строки плотные, без границ не понять,
+   где кончается одна подзадача и начинается другая. Тоньше разделителя
+   задач (подзадачи — вложенный список). Светлые 40%, тёмные/OLED 35%. */
+.subtask-row + .subtask-row {
+  border-top: 1px solid color-mix(in srgb, var(--text-primary) 40%, transparent);
+}
+[data-theme^="dark-"] .subtask-row + .subtask-row,
+[data-theme^="oled-"] .subtask-row + .subtask-row {
+  border-top: 1px solid color-mix(in srgb, var(--text-primary) 35%, transparent);
+}
+
 /* Время в строке задачи — статичный бейдж (ТОЛЬКО отображение; изменение —
    в карточке задачи). Единый стиль для дня, недели и сетки; конфликт по
    времени — красный, чтобы наложение было заметно. */
