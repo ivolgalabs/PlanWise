@@ -187,20 +187,7 @@ pub fn start_scheduler(app: tauri::AppHandle) {
         // Паника в одном тике (например, сбой БД) не должна убивать
         // планировщик навсегда — ловим и продолжаем следующий цикл.
         let fell = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| tick(&app))).is_err();
-        // Android: фиксированный 60-с цикл — sync-модель (sync_scheduled)
-        // рассчитана на частую сверку с OS-планировщиком. Десктоп: спим до
-        // ближайшего события с потолком MAX_SLEEP (см. next_wake_in).
-        let sleep = if cfg!(target_os = "android") {
-            Duration::from_secs(60)
-        } else if fell {
-            // Тик упал — next_wake_in может падать по той же причине
-            // (например, БД недоступна): не крутим panic-loop на максимумах.
-            Duration::from_secs(60)
-        } else {
-            // Сам расчёт тоже под catch_unwind: паника здесь убила бы поток.
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| next_wake_in(&app)))
-                .unwrap_or(Duration::from_secs(60))
-        };
+        let sleep = next_sleep(&app, fell);
         let (lock, cvar) = wake_pair();
         let mut woken = lock.lock().unwrap();
         while !*woken {
@@ -212,6 +199,27 @@ pub fn start_scheduler(app: tauri::AppHandle) {
         }
         *woken = false;
     });
+}
+
+/// До какого момента спать. Android: фиксированный 60-с цикл — sync-модель
+/// (sync_scheduled) рассчитана на частую сверку с OS-планировщиком; wake из
+/// write_widget_data уже даёт мгновенный sync после правок задач. Десктоп:
+/// спим до ближайшего события с потолком MAX_SLEEP (см. next_wake_in).
+#[cfg(target_os = "android")]
+fn next_sleep(_app: &tauri::AppHandle, _fell: bool) -> Duration {
+    Duration::from_secs(60)
+}
+
+#[cfg(not(target_os = "android"))]
+fn next_sleep(app: &tauri::AppHandle, fell: bool) -> Duration {
+    if fell {
+        // Тик упал — next_wake_in может падать по той же причине
+        // (например, БД недоступна): не крутим panic-loop на максимумах.
+        return Duration::from_secs(60);
+    }
+    // Сам расчёт тоже под catch_unwind: паника здесь убила бы поток.
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| next_wake_in(app)))
+        .unwrap_or(Duration::from_secs(60))
 }
 
 /// До какого момента спать (десктоп): ближайшее интересное событие —
