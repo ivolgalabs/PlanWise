@@ -114,7 +114,10 @@ body {
 .subtasks-area {
   margin: 0.25em var(--sp-2) var(--sp-2) calc(var(--sp-4) + 14px);
   padding: var(--sp-2) var(--sp-3);
-  background: var(--bg-tertiary);
+  /* Фон светлее родного bg-tertiary (на OLED он сливается с фоном) +
+     рамка: блок подзадач виден как вложенная область, а не пятно. */
+  background: color-mix(in srgb, var(--text-primary) 8%, var(--bg-primary));
+  border: 1px solid var(--border-color);
   border-left: 2px solid var(--accent);
   border-radius: var(--radius-md);
 }
@@ -123,7 +126,8 @@ body {
 .notes-panel {
   margin: 0 var(--sp-2) var(--sp-2) calc(var(--sp-4) + 14px);
   padding: var(--sp-2) var(--sp-3);
-  background: var(--bg-tertiary);
+  background: color-mix(in srgb, var(--text-primary) 8%, var(--bg-primary));
+  border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
 }
 .notes-panel textarea {
@@ -263,7 +267,9 @@ input[type="checkbox"] {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: none;
+  /* Без opacity-приглушения (0.5 делал кнопки почти невидимыми на тёмных
+     темах): видимость дают фон + рамка, интерактивность — цвет иконки. */
+  border: 1px solid var(--border-color);
   background: var(--bg-tertiary);
   border-radius: var(--radius-md);
   /* WCAG target-size ≥ 24px (по тачу на мобильном). fs-md = 0.95rem ≈ 15px
@@ -271,15 +277,15 @@ input[type="checkbox"] {
   width: 24px;
   height: 24px;
   font-size: var(--fs-2xs);
-  color: var(--text-primary);
+  color: var(--text-secondary);
   cursor: pointer;
   line-height: 1;
   padding: 0;
-  opacity: 0.5;
-  transition: opacity var(--duration-fast);
+  transition: background var(--duration-fast);
 }
 .chip-btn:hover {
-  opacity: 1;
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 
 /* Чип с текстом: категории, период, статус, сортировка (поиск). */
@@ -357,10 +363,14 @@ input[type="checkbox"] {
 }
 
 /* Разделители задач: тонкая линия между соседними блоками, чтобы было
-   понятно, где начинается и заканчивается каждая задача. Линия категории
-   (border-left у .task-block) при этом сохраняется. */
+   понятно, где начинается и заканчивается каждая задача. 50% на светлых
+   темах, на тёмных/OLED светлее нельзя — там переопределение ниже (35%). */
 .task-block + .task-block {
-  border-top: 1px solid color-mix(in srgb, var(--text-primary) 9%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--text-primary) 50%, transparent);
+}
+[data-theme^="dark-"] .task-block + .task-block,
+[data-theme^="oled-"] .task-block + .task-block {
+  border-top: 1px solid color-mix(in srgb, var(--text-primary) 38%, transparent);
 }
 
 /* Время в строке задачи — статичный бейдж (ТОЛЬКО отображение; изменение —
@@ -616,11 +626,13 @@ input[type="checkbox"] {
 /* Видимость интерактивных элементов на тёмных темах. Родные --border-color
    из themes.css Universal UI на тёмном фоне почти невидимы (OLED — 1.2:1):
    рамки полей, кнопок-чипов и разделители сливаются, непонятно «куда
-   нажимать». Поднимаем до ~3:1 миксом с --text-primary (тёмная гамма
-   сохраняется). Светлые темы не трогаем — там родные границы читаются. */
+   нажимать». Поднимаем до ~4:1 непрозрачным миксом с --text-primary (тёмная
+   гамма сохраняется). НЕПРОЗРАЧНЫЙ результат: color-mix с transparent между
+   движками раскрывается по-разному (Chromium выдаёт непрозрачный яркий цвет).
+   Светлые темы не трогаем — там родные границы читаются. */
 [data-theme^="dark-"],
 [data-theme^="oled-"] {
-  --border-color: color-mix(in srgb, var(--text-primary) 40%, transparent);
+  --border-color: color-mix(in srgb, var(--text-primary) 45%, var(--bg-primary));
 }
 
 /* Нативные чекбоксы: accent-color делает их видимыми и в акцентном цвете
