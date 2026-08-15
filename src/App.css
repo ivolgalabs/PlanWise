@@ -288,6 +288,29 @@ input[type="checkbox"] {
   color: var(--text-primary);
 }
 
+/* Компактная иконка-кнопка для плотных списков (меню дня в месяце): обычный
+   chip-btn (24px) рядом с мелким текстом подзадач (fs-2xs) выглядел крупно. */
+.chip-btn-sm {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  width: 20px;
+  height: 20px;
+  font-size: var(--fs-2xs);
+  color: var(--text-secondary);
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+  transition: background var(--duration-fast);
+}
+.chip-btn-sm:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
 /* Чип с текстом: категории, период, статус, сортировка (поиск). */
 .text-chip {
   display: inline-flex;

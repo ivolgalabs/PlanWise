@@ -5,6 +5,7 @@ import { api, fromEpochDay } from "../api";
 import { startOfWeek, firstOfMonth, isSameDay, isToday, isPast, formatMinutes, sortTasksByMode } from "../date";
 import { COLORS, accentTint, setHex } from "../theme";
 import { useStore } from "../store";
+import { useMediaQuery } from "../useMediaQuery";
 import { dayId } from "../drag";
 import { TaskFormFields } from "../components/AddTaskModal";
 import { ConfirmDialog } from "../components/ConfirmDialog";
@@ -56,6 +57,9 @@ export function MonthView({ tasks, onSelectDay, onSelectWeek, onChange }: Props)
   const [menuDay, setMenuDay] = useState<Date | null>(null);
   // Задача на подтверждение удаления (модалка «Удалить задачу?»).
   const [confirmDel, setConfirmDel] = useState<Task | null>(null);
+  // Широкий экран: меню дня разбивается на две колонки — список задач слева
+  // (свой скролл), форма добавления справа (всегда на виду).
+  const wide = useMediaQuery("(min-width: 760px)");
 
   // Escape закрывает модалку добавления.
   useEffect(() => {
@@ -101,9 +105,39 @@ export function MonthView({ tasks, onSelectDay, onSelectWeek, onChange }: Props)
     onSelectDay(d);
   };
 
+  // Список задач дня — общий для широкой и узкой раскладок панели.
+  const taskList = menuDay ? (
+    <>
+      {tasksForDay(menuDay).length === 0 && (
+        <p style={{ margin: 0, padding: "var(--sp-1) 0", fontSize: "var(--fs-sm)", color: COLORS.muted }}>
+          Нет задач на этот день
+        </p>
+      )}
+      {tasksForDay(menuDay).map((t) => (
+        <div key={t.id} className="month-task-block" style={{ borderRadius: "var(--radius-sm)", minWidth: 0 }}>
+          {/* Строка задачи: клик по свободному месту — к дню, по тексту —
+              инлайн-переименование, ✕ — удаление с подтверждением. */}
+          <MonthTaskRow
+            task={t}
+            colorSets={colorSets}
+            onOpenDay={() => openDay(menuDay)}
+            onRename={async (title) => {
+              await api.upsertTask({ ...t, title });
+              onChange();
+            }}
+            onDelete={() => setConfirmDel(t)}
+          />
+          {/* Подзадачи задачи — компактным списком под строкой
+              (в месяце их раньше не было вовсе). */}
+          <DayTaskSubs taskId={t.id} done={t.isDone} />
+        </div>
+      ))}
+    </>
+  ) : null;
+
   return (
     <>
-      <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, padding: "var(--sp-4)" }}>
+    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, padding: "var(--sp-4)" }}>
       <div style={{ display: "flex" }}>
         {weekdays.map((w) => (
           <div
@@ -176,79 +210,103 @@ export function MonthView({ tasks, onSelectDay, onSelectWeek, onChange }: Props)
               background: COLORS.card,
               border: `1px solid var(--border-color)`,
               borderRadius: "var(--radius-md)",
-              // Просторная панель: крупный заголовок, поля как в поиске.
+              // Панель во всю высоту экрана: список задач скроллится внутри,
+              // форма добавления и переходы всегда на виду (раньше при длинном
+              // списке до них нужно было прокручивать всю панель).
               padding: "var(--sp-8)",
-              width: 460,
+              width: wide ? 720 : 460,
               maxWidth: "92vw",
-              maxHeight: "85vh",
-              overflowX: "hidden",
-              overflowY: "auto",
+              height: "min(85vh, 720px)",
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
               boxShadow: "var(--shadow-xl)",
             }}
           >
-            <div style={{ fontSize: "var(--fs-lg)", fontWeight: 700, color: COLORS.text, marginBottom: "var(--sp-5)", textTransform: "capitalize" }}>
+            <div style={{ fontSize: "var(--fs-lg)", fontWeight: 700, color: COLORS.text, marginBottom: "var(--sp-5)", textTransform: "capitalize", flexShrink: 0 }}>
               {menuDay.toLocaleDateString("ru", { day: "numeric", month: "long", weekday: "long" })}
             </div>
 
-            {/* Список задач дня: клик — перейти к дню */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-1)", marginBottom: "var(--sp-5)" }}>
-              {tasksForDay(menuDay).length === 0 && (
-                <p style={{ margin: 0, padding: "var(--sp-1) 0", fontSize: "var(--fs-sm)", color: COLORS.muted }}>
-                  Нет задач на этот день
-                </p>
-              )}
-              {tasksForDay(menuDay).map((t) => (
-                <div key={t.id} className="month-task-block" style={{ borderRadius: "var(--radius-sm)", minWidth: 0 }}>
-                  {/* Строка задачи: клик по свободному месту — к дню, по тексту —
-                      инлайн-переименование, ✕ — удаление с подтверждением. */}
-                  <MonthTaskRow
-                    task={t}
-                    colorSets={colorSets}
-                    onOpenDay={() => openDay(menuDay)}
-                    onRename={async (title) => {
-                      await api.upsertTask({ ...t, title });
+            {wide ? (
+              /* Широкий экран: список задач слева (свой скролл), форма и
+                 переходы справа — видны одновременно. */
+              <div style={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: "minmax(0, 1.2fr) minmax(0, 1fr)", gap: "var(--sp-6)", overflow: "hidden" }}>
+                <div style={{ minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: "var(--sp-1)", paddingRight: "var(--sp-2)" }}>
+                  {taskList}
+                </div>
+                <div style={{ minHeight: 0, overflowY: "auto" }}>
+                  {/* Форма добавления: название, время (системные часы +
+                      пресеты), приоритет, длительность, категория — общий
+                      компонент, как в дне/неделе (окно «Новая задача»). */}
+                  <TaskFormFields
+                    day={menuDay}
+                    onAdded={() => {
+                      setMenuDay(null);
                       onChange();
                     }}
-                    onDelete={() => setConfirmDel(t)}
+                    onCancel={() => setMenuDay(null)}
                   />
-                  {/* Подзадачи задачи — компактным списком под строкой
-                      (в месяце их раньше не было вовсе). */}
-                  <DayTaskSubs taskId={t.id} done={t.isDone} />
+                  {/* Переход из месяца: в день или в неделю (с этим днём). */}
+                  <div style={{ display: "flex", gap: "var(--sp-2)", marginTop: "var(--sp-3)" }}>
+                    <button
+                      className="modal-action-btn primary"
+                      onClick={() => openDay(menuDay)}
+                      style={{ flex: 1 }}
+                    >
+                      К дню
+                    </button>
+                    <button
+                      className="modal-action-btn"
+                      onClick={() => {
+                        setMenuDay(null);
+                        onSelectWeek(menuDay);
+                      }}
+                      style={{ flex: 1 }}
+                    >
+                      К неделе
+                    </button>
+                  </div>
                 </div>
-              ))}
-            </div>
-
-            {/* Форма добавления: название, время (системные часы + пресеты),
-                приоритет, длительность, категория — общий компонент,
-                как в дне/неделе (окно «Новая задача»). */}
-            <TaskFormFields
-              day={menuDay}
-              onAdded={() => {
-                setMenuDay(null);
-                onChange();
-              }}
-              onCancel={() => setMenuDay(null)}
-            />
-            {/* Переход из месяца: в день или в неделю (с этим днём). */}
-            <div style={{ display: "flex", gap: "var(--sp-2)", marginTop: "var(--sp-3)" }}>
-              <button
-                className="modal-action-btn primary"
-                onClick={() => openDay(menuDay)}
-                style={{ flex: 1 }}
-              >
-                К дню
-              </button>
-              <button
-                className="modal-action-btn"
-                onClick={() => {
-                  setMenuDay(null);
-                  onSelectWeek(menuDay);
-                }}
-                style={{ flex: 1 }}
-              >
-                К неделе
-              </button>
-            </div>
+              </div>
+            ) : (
+              /* Узкий экран: список со своим скроллом над формой — форма
+                 доступна без прокрутки всего списка. */
+              <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+                <div style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: "var(--sp-1)" }}>
+                  {taskList}
+                </div>
+                <div style={{ flexShrink: 0, maxHeight: "45%", overflowY: "auto" }}>
+                  <TaskFormFields
+                    day={menuDay}
+                    onAdded={() => {
+                      setMenuDay(null);
+                      onChange();
+                    }}
+                    onCancel={() => setMenuDay(null)}
+                  />
+                  {/* Переход из месяца: в день или в неделю (с этим днём). */}
+                  <div style={{ display: "flex", gap: "var(--sp-2)", marginTop: "var(--sp-3)" }}>
+                    <button
+                      className="modal-action-btn primary"
+                      onClick={() => openDay(menuDay)}
+                      style={{ flex: 1 }}
+                    >
+                      К дню
+                    </button>
+                    <button
+                      className="modal-action-btn"
+                      onClick={() => {
+                        setMenuDay(null);
+                        onSelectWeek(menuDay);
+                      }}
+                      style={{ flex: 1 }}
+                    >
+                      К неделе
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -267,7 +325,7 @@ export function MonthView({ tasks, onSelectDay, onSelectWeek, onChange }: Props)
           onCancel={() => setConfirmDel(null)}
         />
       )}
-      </div>
+    </div>
     </>
   );
 }
@@ -542,7 +600,7 @@ function MonthTaskRow({
       )}
       <button
         type="button"
-        className="chip-btn"
+        className="chip-btn-sm"
         onClick={(e) => {
           e.stopPropagation();
           onDelete();
@@ -550,7 +608,7 @@ function MonthTaskRow({
         title="Удалить задачу"
         style={{ flexShrink: 0 }}
       >
-        <Icon name="close" size={12} />
+        <Icon name="close" size={11} />
       </button>
     </div>
   );
@@ -699,7 +757,7 @@ function MonthSubRow({
       )}
       <button
         type="button"
-        className="chip-btn"
+        className="chip-btn-sm"
         onClick={async () => {
           await api.deleteSubtask(sub.id);
           onChanged();
@@ -707,7 +765,7 @@ function MonthSubRow({
         title="Удалить подзадачу"
         style={{ flexShrink: 0 }}
       >
-        <Icon name="close" size={12} />
+        <Icon name="close" size={10} />
       </button>
     </div>
   );
