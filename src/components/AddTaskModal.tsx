@@ -739,7 +739,9 @@ export function TaskFormFields({
                   key={s.id}
                   style={{
                     display: "flex",
-                    alignItems: "center",
+                    // flex-start: длинный текст подзадачи переносится —
+                    // чекбокс и поле остаются наверху, а не по центру.
+                    alignItems: "flex-start",
                     gap: "var(--sp-2)",
                     fontSize: "var(--fs-sm)",
                     color: COLORS.text,
@@ -752,7 +754,7 @@ export function TaskFormFields({
                       await api.upsertSubtask({ ...s, isDone: !s.isDone });
                       setSubItems(await api.getSubtasks(s.taskId));
                     }}
-                    style={{ margin: 0 }}
+                    style={{ margin: 0, flexShrink: 0 }}
                   />
                   {editSubId === s.id ? (
                     <input
@@ -787,9 +789,11 @@ export function TaskFormFields({
                       title={s.title || undefined}
                       style={{
                         flex: 1,
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
+                        minWidth: 0,
+                        // Многострочный перенос: на тач-устройствах тултипа
+                        // нет — однострочный ellipsis прятал длинный текст.
+                        whiteSpace: "pre-wrap",
+                        overflowWrap: "anywhere",
                         textDecoration: s.isDone ? "line-through" : "none",
                         color: s.isDone ? COLORS.muted : COLORS.text,
                         cursor: "text",
@@ -816,14 +820,14 @@ export function TaskFormFields({
                   key={i}
                   style={{
                     display: "flex",
-                    alignItems: "center",
+                    alignItems: "flex-start",
                     gap: "var(--sp-2)",
                     fontSize: "var(--fs-sm)",
                     color: COLORS.text,
                   }}
                 >
-                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: COLORS.muted, flexShrink: 0 }} />
-                  <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: COLORS.muted, flexShrink: 0, marginTop: 7 }} />
+                  <span style={{ flex: 1, minWidth: 0, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
                     {s}
                   </span>
                   <button

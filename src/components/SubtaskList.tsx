@@ -195,7 +195,9 @@ function SubtaskRow({
       ref={setNodeRef}
       style={{
         display: "flex",
-        alignItems: "center",
+        // flex-start: текст подзадачи переносится на несколько строк —
+        // чекбокс/ручка/кнопка остаются наверху строки, а не по центру.
+        alignItems: "flex-start",
         gap: "var(--sp-2)",
         padding: "1px 0",
         opacity: isDragging ? 0.4 : undefined,
@@ -225,7 +227,7 @@ function SubtaskRow({
       >
         <Icon name="dots" size={14} />
       </span>
-      <label className="checkbox-hit">
+      <label className="checkbox-hit" style={{ margin: 0, flexShrink: 0 }}>
         <input
           type="checkbox"
           checked={subtask.isDone}
@@ -261,19 +263,23 @@ function SubtaskRow({
           title={subtask.title || undefined}
           style={{
             flex: 1,
+            minWidth: 0,
             fontSize: "var(--fs-2xs)",
             color: subtask.isDone ? COLORS.muted : COLORS.text,
             textDecoration: subtask.isDone ? "line-through" : "none",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
+            // Многострочный перенос: на тач-устройствах тултипа нет, и
+            // однострочный ellipsis делал длинный текст нечитаемым вовсе.
+            // pre-wrap сохраняет явные переводы строк, anywhere рвёт и
+            // длинные слова/ссылки.
+            whiteSpace: "pre-wrap",
+            overflowWrap: "anywhere",
             cursor: "text",
           }}
         >
           {subtask.title}
         </span>
       )}
-      <button onClick={onDelete} className="chip-btn" title="Удалить">
+      <button onClick={onDelete} className="chip-btn" title="Удалить" style={{ flexShrink: 0 }}>
         <Icon name="close" size={12} />
       </button>
     </div>
