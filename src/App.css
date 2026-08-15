@@ -384,6 +384,22 @@ input[type="checkbox"] {
   border-top: 1px solid color-mix(in srgb, var(--text-primary) 35%, transparent);
 }
 
+/* Меню дня в месяце: строки задач и подзадачи разграничиваются теми же
+   разделителями, что в дне/неделе (задачи) и под списком подзадач. */
+.month-task-block + .month-task-block {
+  border-top: 1px solid color-mix(in srgb, var(--text-primary) 40%, transparent);
+}
+[data-theme^="dark-"] .month-task-block + .month-task-block,
+[data-theme^="oled-"] .month-task-block + .month-task-block {
+  border-top: 1px solid color-mix(in srgb, var(--text-primary) 35%, transparent);
+}
+.month-task-btn {
+  transition: background var(--duration-fast) var(--ease-standard);
+}
+.month-task-btn:hover {
+  background: var(--bg-hover);
+}
+
 /* Время в строке задачи — статичный бейдж (ТОЛЬКО отображение; изменение —
    в карточке задачи). Единый стиль для дня, недели и сетки; конфликт по
    времени — красный, чтобы наложение было заметно. */

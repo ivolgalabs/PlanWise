@@ -192,9 +192,10 @@ export function MonthView({ tasks, onSelectDay, onSelectWeek, onChange }: Props)
                 </p>
               )}
               {tasksForDay(menuDay).map((t) => (
-                <div key={t.id} style={{ borderRadius: "var(--radius-sm)" }}>
+                <div key={t.id} className="month-task-block" style={{ borderRadius: "var(--radius-sm)" }}>
                   <button
                     onClick={() => openDay(menuDay)}
+                    className="month-task-btn"
                     style={{
                       display: "flex",
                       alignItems: "center",
@@ -445,6 +446,8 @@ function DayTaskSubs({ taskId, done }: { taskId: string; done: boolean }) {
       {subs.map((s) => (
         <span
           key={s.id}
+          className="subtask-row"
+          title={s.title || undefined}
           style={{
             display: "flex",
             alignItems: "center",
