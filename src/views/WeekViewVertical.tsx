@@ -256,8 +256,9 @@ function DayRow({
       <div
         style={{
           paddingLeft: "var(--sp-6)",
-          // Иерархия: прошедшие дни — мельче шрифт задач, остальные — обычный.
-          fontSize: weight === "past" ? "var(--fs-2xs)" : "var(--fs-sm)",
+          // Иерархия: прошедшие дни — мельче шрифт задач (fs-sm), остальные —
+          // обычный (fs-md). Мелкие задачи (fs-2xs) нечитаемы при окне 1100px.
+          fontSize: weight === "past" ? "var(--fs-sm)" : "var(--fs-md)",
         }}
       >
         {dayTasks.map((t) => (

@@ -129,7 +129,7 @@ body {
   gap: var(--sp-2);
   margin: 1px var(--sp-2) var(--sp-2) 43px;
   color: var(--text-muted);
-  font-size: var(--fs-2xs);
+  font-size: var(--fs-sm);
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;

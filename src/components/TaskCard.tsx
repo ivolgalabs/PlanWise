@@ -683,7 +683,7 @@ export const TaskCard = memo(function TaskCard({
         {visibility.notes && task.notes && compact && (
           <div
             style={{
-              fontSize: "var(--fs-2xs)",
+              fontSize: "var(--fs-sm)",
               color: COLORS.muted,
               whiteSpace: "pre-wrap",
               wordBreak: "break-word",

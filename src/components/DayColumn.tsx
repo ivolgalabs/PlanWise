@@ -130,8 +130,9 @@ export function DayColumn({
           overflowY: "auto",
           minHeight: 0,
           cursor: "text",
-          // Иерархия: прошедшие дни — мельче шрифт задач, будущие — обычный.
-          fontSize: weight === "past" ? "var(--fs-2xs)" : "var(--fs-sm)",
+          // Иерархия: прошедшие дни — мельче шрифт задач (fs-sm), остальные —
+          // обычный (fs-md). Мелкие задачи (fs-2xs) нечитаемы при окне 1100px.
+          fontSize: weight === "past" ? "var(--fs-sm)" : "var(--fs-md)",
         }}
       >
         {tasks.map((t) => (

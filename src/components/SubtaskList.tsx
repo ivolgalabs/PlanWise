@@ -65,7 +65,7 @@ export function SubtaskList({ taskId }: Props) {
       {items.length > 0 && (
         <div
           style={{
-            fontSize: "var(--fs-2xs)",
+            fontSize: "var(--fs-sm)",
             color: COLORS.muted,
             marginBottom: 2,
             fontWeight: 600,
@@ -94,12 +94,12 @@ export function SubtaskList({ taskId }: Props) {
             display: "flex",
             alignItems: "center",
             gap: "var(--sp-2)",
-            fontSize: "var(--fs-2xs)",
+            fontSize: "var(--fs-sm)",
             color: "var(--danger)",
           }}
         >
           <span>Не удалось загрузить подзадачи</span>
-          <button className="text-chip" onClick={load} style={{ fontSize: "var(--fs-2xs)" }}>
+          <button className="text-chip" onClick={load} style={{ fontSize: "var(--fs-sm)" }}>
             Повторить
           </button>
         </div>
@@ -122,7 +122,7 @@ export function SubtaskList({ taskId }: Props) {
             width: "100%",
             border: "none",
             padding: "1px 0",
-            fontSize: "var(--fs-2xs)",
+            fontSize: "var(--fs-sm)",
             background: "transparent",
             outline: "none",
             color: COLORS.text,
@@ -196,7 +196,7 @@ function SubtaskRow({
         opacity: isDragging ? 0.4 : undefined,
         // Шрифт строки = шрифт текста подзадачи: чекбокс (1em) не должен
         // вырастать больше текста (подзадача «больше самой задачи»).
-        fontSize: "var(--fs-2xs)",
+        fontSize: "var(--fs-sm)",
       }}
       {...attributes}
     >
@@ -253,7 +253,7 @@ function SubtaskRow({
           style={{
             flex: 1,
             minWidth: 0,
-            fontSize: "var(--fs-2xs)",
+            fontSize: "var(--fs-sm)",
             background: "transparent",
             border: "none",
             outline: "none",
@@ -268,7 +268,7 @@ function SubtaskRow({
           style={{
             flex: 1,
             minWidth: 0,
-            fontSize: "var(--fs-2xs)",
+            fontSize: "var(--fs-sm)",
             color: subtask.isDone ? COLORS.muted : COLORS.text,
             textDecoration: subtask.isDone ? "line-through" : "none",
             // Многострочный перенос: на тач-устройствах тултипа нет, и
