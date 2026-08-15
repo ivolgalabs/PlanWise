@@ -1,12 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
-import type { Task, Subtask } from "../api";
+import type { Task, Subtask, ColorSet } from "../api";
 import { api, fromEpochDay } from "../api";
 import { startOfWeek, firstOfMonth, isSameDay, isToday, isPast, formatMinutes, sortTasksByMode } from "../date";
 import { COLORS, accentTint, setHex } from "../theme";
 import { useStore } from "../store";
 import { dayId } from "../drag";
 import { TaskFormFields } from "../components/AddTaskModal";
+import { ConfirmDialog } from "../components/ConfirmDialog";
+import { Icon } from "../components/Icon";
 
 interface Props {
   tasks: Task[];
@@ -15,6 +17,23 @@ interface Props {
   onSelectWeek: (d: Date) => void;
   onChange: () => void;
 }
+
+/** Доп. время задачи: «09:00–10:30» (длительность) и «выезд в 08:15» —
+ *  мелкими подписями справа от названия (в списке задач дня). */
+const fmt = (m: number) =>
+  `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+const timeMetaOf = (t: Task): string[] => {
+  const meta: string[] = [];
+  if (t.timeMinutes != null && t.durationMinutes) {
+    const end = (t.timeMinutes + t.durationMinutes) % (24 * 60);
+    meta.push(`${fmt(t.timeMinutes)}–${fmt(end)}`);
+  }
+  if (t.timeMinutes != null && t.travelTime) {
+    const dep = (t.timeMinutes - t.travelTime + 24 * 60) % (24 * 60);
+    meta.push(`выезд в ${fmt(dep)}`);
+  }
+  return meta;
+};
 
 /**
  * Вид «Месяц»: сетка строк-недель с разной высотой. Строка с сегодняшним днём
@@ -35,6 +54,8 @@ export function MonthView({ tasks, onSelectDay, onSelectWeek, onChange }: Props)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const [menuDay, setMenuDay] = useState<Date | null>(null);
+  // Задача на подтверждение удаления (модалка «Удалить задачу?»).
+  const [confirmDel, setConfirmDel] = useState<Task | null>(null);
 
   // Escape закрывает модалку добавления.
   useEffect(() => {
@@ -80,25 +101,9 @@ export function MonthView({ tasks, onSelectDay, onSelectWeek, onChange }: Props)
     onSelectDay(d);
   };
 
-  // Доп. время задачи: «09:00–10:30» (длительность) и «выезд в 08:15» —
-  // мелкими подписями справа от названия (в списке задач дня).
-  const fmt = (m: number) =>
-    `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
-  const timeMetaOf = (t: Task): string[] => {
-    const meta: string[] = [];
-    if (t.timeMinutes != null && t.durationMinutes) {
-      const end = (t.timeMinutes + t.durationMinutes) % (24 * 60);
-      meta.push(`${fmt(t.timeMinutes)}–${fmt(end)}`);
-    }
-    if (t.timeMinutes != null && t.travelTime) {
-      const dep = (t.timeMinutes - t.travelTime + 24 * 60) % (24 * 60);
-      meta.push(`выезд в ${fmt(dep)}`);
-    }
-    return meta;
-  };
-
   return (
-    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, padding: "var(--sp-4)" }}>
+    <>
+      <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, padding: "var(--sp-4)" }}>
       <div style={{ display: "flex" }}>
         {weekdays.map((w) => (
           <div
@@ -176,6 +181,7 @@ export function MonthView({ tasks, onSelectDay, onSelectWeek, onChange }: Props)
               width: 460,
               maxWidth: "92vw",
               maxHeight: "85vh",
+              overflowX: "hidden",
               overflowY: "auto",
               boxShadow: "var(--shadow-xl)",
             }}
@@ -192,63 +198,19 @@ export function MonthView({ tasks, onSelectDay, onSelectWeek, onChange }: Props)
                 </p>
               )}
               {tasksForDay(menuDay).map((t) => (
-                <div key={t.id} className="month-task-block" style={{ borderRadius: "var(--radius-sm)" }}>
-                  <button
-                    onClick={() => openDay(menuDay)}
-                    className="month-task-btn"
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "var(--sp-2)",
-                      textAlign: "left",
-                      padding: "var(--sp-2) var(--sp-3)",
-                      borderRadius: "var(--radius-sm)",
-                      border: "none",
-                      background: "transparent",
-                      cursor: "pointer",
-                      fontSize: "var(--fs-sm)",
-                      color: t.isDone ? COLORS.muted : COLORS.text,
-                      textDecoration: t.isDone ? "line-through" : "none",
-                      width: "100%",
-                      minWidth: 0,
+                <div key={t.id} className="month-task-block" style={{ borderRadius: "var(--radius-sm)", minWidth: 0 }}>
+                  {/* Строка задачи: клик по свободному месту — к дню, по тексту —
+                      инлайн-переименование, ✕ — удаление с подтверждением. */}
+                  <MonthTaskRow
+                    task={t}
+                    colorSets={colorSets}
+                    onOpenDay={() => openDay(menuDay)}
+                    onRename={async (title) => {
+                      await api.upsertTask({ ...t, title });
+                      onChange();
                     }}
-                  >
-                    <span
-                      style={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: "50%",
-                        flexShrink: 0,
-                        background:
-                          t.isDone || !t.colorSetId
-                            ? COLORS.muted
-                            : setHex(colorSets, t.colorSetId) ?? COLORS.muted,
-                      }}
-                    />
-                    {t.timeMinutes != null && (
-                      <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted, flexShrink: 0 }}>
-                        {formatMinutes(t.timeMinutes)}
-                      </span>
-                    )}
-                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
-                      {t.title}
-                    </span>
-                    {/* Справа от задачи — время выполнения и выезд (если заданы):
-                        карточка широкая, место для всей информации есть. */}
-                    {timeMetaOf(t).length > 0 && (
-                      <span
-                        style={{
-                          marginLeft: "auto",
-                          flexShrink: 0,
-                          fontSize: "var(--fs-2xs)",
-                          color: COLORS.muted,
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {timeMetaOf(t).join(" · ")}
-                      </span>
-                    )}
-                  </button>
+                    onDelete={() => setConfirmDel(t)}
+                  />
                   {/* Подзадачи задачи — компактным списком под строкой
                       (в месяце их раньше не было вовсе). */}
                   <DayTaskSubs taskId={t.id} done={t.isDone} />
@@ -290,7 +252,23 @@ export function MonthView({ tasks, onSelectDay, onSelectWeek, onChange }: Props)
           </div>
         </div>
       )}
-    </div>
+
+      {/* Подтверждение удаления задачи (как в карточке задачи). */}
+      {confirmDel && (
+        <ConfirmDialog
+          title={`Удалить задачу «${confirmDel.title.trim() || "без названия"}»?`}
+          confirmLabel="Удалить"
+          onConfirm={async () => {
+            const t = confirmDel;
+            setConfirmDel(null);
+            await api.deleteTask(t.id);
+            onChange();
+          }}
+          onCancel={() => setConfirmDel(null)}
+        />
+      )}
+      </div>
+    </>
   );
 }
 
@@ -413,11 +391,178 @@ function CategoryBadges({ tasks }: { tasks: Task[] }) {
   );
 }
 
+/** Строка задачи в модалке дня (месяц). Клик по свободному месту — переход
+ *  к дню; клик по тексту — инлайн-переименование (как в дне/неделе);
+ *  ✕ справа — удаление задачи (подтверждается отдельным диалогом).
+ *  Вся цепочка вложенности с minWidth: 0/overflow: hidden — длинные названия
+ *  и подписи времени не должны выталкивать строку за края карточки. */
+function MonthTaskRow({
+  task,
+  colorSets,
+  onOpenDay,
+  onRename,
+  onDelete,
+}: {
+  task: Task;
+  colorSets: ColorSet[];
+  onOpenDay: () => void;
+  onRename: (title: string) => Promise<void>;
+  onDelete: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(task.title);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing) {
+      requestAnimationFrame(() => inputRef.current?.focus());
+    }
+  }, [editing]);
+
+  const commit = async () => {
+    const t = value.trim();
+    setEditing(false);
+    if (t && t !== task.title) await onRename(t);
+  };
+
+  const meta = timeMetaOf(task);
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onOpenDay}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpenDay();
+        }
+      }}
+      className="month-task-btn"
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "var(--sp-2)",
+        textAlign: "left",
+        padding: "var(--sp-2) var(--sp-3)",
+        borderRadius: "var(--radius-sm)",
+        cursor: "pointer",
+        fontSize: "var(--fs-sm)",
+        width: "100%",
+        minWidth: 0,
+        overflow: "hidden",
+        color: task.isDone ? COLORS.muted : COLORS.text,
+      }}
+    >
+      <span
+        style={{
+          width: 8,
+          height: 8,
+          borderRadius: "50%",
+          flexShrink: 0,
+          background:
+            task.isDone || !task.colorSetId
+              ? COLORS.muted
+              : setHex(colorSets, task.colorSetId) ?? COLORS.muted,
+        }}
+      />
+      {task.timeMinutes != null && (
+        <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted, flexShrink: 0 }}>
+          {formatMinutes(task.timeMinutes)}
+        </span>
+      )}
+      {editing ? (
+        <input
+          ref={inputRef}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          // Enter/Escape/Space не должны уходить на строку (открытие дня)
+          // и на окно (закрытие модалки) — останавливаем всплытие.
+          onKeyDown={(e) => {
+            e.stopPropagation();
+            if (e.key === "Enter") {
+              e.preventDefault();
+              commit();
+            } else if (e.key === "Escape") {
+              setEditing(false);
+            }
+          }}
+          onBlur={commit}
+          onClick={(e) => e.stopPropagation()}
+          data-month-task-edit-id={task.id}
+          style={{
+            flex: 1,
+            minWidth: 0,
+            fontSize: "var(--fs-sm)",
+            background: "transparent",
+            border: "none",
+            borderBottom: "1px solid var(--accent)",
+            outline: "none",
+            color: task.isDone ? COLORS.muted : COLORS.text,
+          }}
+        />
+      ) : (
+        <span
+          onClick={(e) => {
+            e.stopPropagation();
+            setValue(task.title);
+            setEditing(true);
+          }}
+          title={task.title || undefined}
+          style={{
+            flex: 1,
+            minWidth: 0,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            cursor: "text",
+            textDecoration: task.isDone ? "line-through" : "none",
+          }}
+        >
+          {task.title}
+        </span>
+      )}
+      {/* Справа от задачи — время выполнения и выезд (если заданы). maxWidth
+          + ellipsis: длинная подпись не выталкивает название задачи. */}
+      {meta.length > 0 && (
+        <span
+          style={{
+            marginLeft: "auto",
+            flexShrink: 0,
+            maxWidth: "45%",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            fontSize: "var(--fs-2xs)",
+            color: COLORS.muted,
+          }}
+        >
+          {meta.join(" · ")}
+        </span>
+      )}
+      <button
+        type="button"
+        className="chip-btn"
+        onClick={(e) => {
+          e.stopPropagation();
+          onDelete();
+        }}
+        title="Удалить задачу"
+        style={{ flexShrink: 0 }}
+      >
+        <Icon name="close" size={12} />
+      </button>
+    </div>
+  );
+}
+
 /** Подзадачи одной задачи в модалке дня (месяц). Раньше в месяце их не было
- *  вовсе — теперь компактный список под строкой задачи. Клик по подзадаче
- *  не нужен (переход к дню открывает карточку), поэтому без чекбоксов и drag. */
+ *  вовсе — теперь компактный список под строкой задачи. Без чекбоксов и drag:
+ *  клик по тексту — инлайн-переименование, ✕ — удаление. */
 function DayTaskSubs({ taskId, done }: { taskId: string; done: boolean }) {
   const [subs, setSubs] = useState<Subtask[] | null>(null);
+  // Версия списка: после переименования/удаления перечитываем подзадачи.
+  const [rev, setRev] = useState(0);
   useEffect(() => {
     let alive = true;
     setSubs(null);
@@ -432,7 +577,7 @@ function DayTaskSubs({ taskId, done }: { taskId: string; done: boolean }) {
     return () => {
       alive = false;
     };
-  }, [taskId]);
+  }, [taskId, rev]);
   if (!subs || subs.length === 0) return null;
   return (
     <div
@@ -441,29 +586,129 @@ function DayTaskSubs({ taskId, done }: { taskId: string; done: boolean }) {
         display: "flex",
         flexDirection: "column",
         gap: 2,
+        minWidth: 0,
       }}
     >
       {subs.map((s) => (
-        <span
-          key={s.id}
-          className="subtask-row"
-          title={s.title || undefined}
+        <MonthSubRow key={s.id} sub={s} done={done} onChanged={() => setRev((v) => v + 1)} />
+      ))}
+    </div>
+  );
+}
+
+/** Строка подзадачи в модалке дня (месяц): точка + текст (клик — инлайн-
+ *  переименование) + ✕ (удаление). minWidth: 0/overflow: hidden — длинный
+ *  текст подзадачи обрезается многоточием, а не выходит за края карточки. */
+function MonthSubRow({
+  sub,
+  done,
+  onChanged,
+}: {
+  sub: Subtask;
+  done: boolean;
+  /** Перечитать список подзадач после переименования/удаления. */
+  onChanged: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(sub.title);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing) {
+      requestAnimationFrame(() => inputRef.current?.focus());
+    }
+  }, [editing]);
+
+  const commit = () => {
+    const t = value.trim();
+    setEditing(false);
+    if (t && t !== sub.title) {
+      api.upsertSubtask({ ...sub, title: t }).then(onChanged);
+    }
+  };
+
+  const done2 = sub.isDone || done;
+  return (
+    <div
+      className="subtask-row"
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "var(--sp-2)",
+        fontSize: "var(--fs-2xs)",
+        minWidth: 0,
+      }}
+    >
+      <span
+        style={{
+          width: 6,
+          height: 6,
+          borderRadius: "50%",
+          background: COLORS.muted,
+          flexShrink: 0,
+        }}
+      />
+      {editing ? (
+        <input
+          ref={inputRef}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => {
+            e.stopPropagation();
+            if (e.key === "Enter") {
+              e.preventDefault();
+              commit();
+            } else if (e.key === "Escape") {
+              setEditing(false);
+            }
+          }}
+          onBlur={commit}
+          data-subtask-edit-id={sub.id}
           style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "var(--sp-2)",
+            flex: 1,
+            minWidth: 0,
             fontSize: "var(--fs-2xs)",
-            color: s.isDone || done ? COLORS.muted : COLORS.text,
-            textDecoration: s.isDone || done ? "line-through" : "none",
+            background: "transparent",
+            border: "none",
+            borderBottom: "1px solid var(--accent)",
+            outline: "none",
+            color: done2 ? COLORS.muted : COLORS.text,
+            textDecoration: done2 ? "line-through" : "none",
+          }}
+        />
+      ) : (
+        <span
+          onClick={() => {
+            setValue(sub.title);
+            setEditing(true);
+          }}
+          title={sub.title || undefined}
+          style={{
+            flex: 1,
+            minWidth: 0,
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
+            color: done2 ? COLORS.muted : COLORS.text,
+            textDecoration: done2 ? "line-through" : "none",
+            cursor: "text",
           }}
         >
-          <span style={{ width: 6, height: 6, borderRadius: "50%", background: COLORS.muted, flexShrink: 0 }} />
-          {s.title}
+          {sub.title}
         </span>
-      ))}
+      )}
+      <button
+        type="button"
+        className="chip-btn"
+        onClick={async () => {
+          await api.deleteSubtask(sub.id);
+          onChanged();
+        }}
+        title="Удалить подзадачу"
+        style={{ flexShrink: 0 }}
+      >
+        <Icon name="close" size={12} />
+      </button>
     </div>
   );
 }
