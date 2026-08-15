@@ -65,7 +65,7 @@ function FilterSelect<T extends string>({ label, value, options, open, onToggle,
             left: 0,
             marginTop: 4,
             background: COLORS.card,
-            border: `1px solid ${COLORS.cardBorder}`,
+            border: `1px solid var(--border-color)`,
             borderRadius: "var(--radius-md)",
             boxShadow: "var(--shadow-lg)",
             zIndex: 300,
@@ -126,10 +126,10 @@ export function SearchBar({ query, onQuery, color, onColor, period, status, sort
   const toggle = (k: FilterKey) => setOpenKey((cur) => (cur === k ? null : k));
 
   return (
-    <div ref={barRef} style={{ padding: "var(--sp-1) var(--sp-4)", borderBottom: `1px solid ${COLORS.cardBorder}`, display: "flex", flexDirection: "column", gap: "var(--sp-1)" }}>
+    <div ref={barRef} style={{ padding: "var(--sp-1) var(--sp-4)", borderBottom: `1px solid var(--border-color)`, display: "flex", flexDirection: "column", gap: "var(--sp-1)" }}>
       {/* Ряд 1: инпут (заметно выше — текст не липнет к краям) + закрыть */}
       <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)" }}>
-        <input autoFocus value={query} onChange={(e) => onQuery(e.target.value)} placeholder="Поиск задач…" className="inline-input" style={{ flex: 1, minWidth: 0, border: `1px solid ${COLORS.cardBorder}`, borderRadius: "var(--radius-md)", padding: "8px 12px", fontSize: "var(--fs-md)", background: "transparent", color: COLORS.text, outline: "none" }} />
+        <input autoFocus value={query} onChange={(e) => onQuery(e.target.value)} placeholder="Поиск задач…" className="inline-input" style={{ flex: 1, minWidth: 0, border: `1px solid var(--border-color)`, borderRadius: "var(--radius-md)", padding: "8px 12px", fontSize: "var(--fs-md)", background: "transparent", color: COLORS.text, outline: "none" }} />
         <button className="icon-btn" onClick={onClose} title="Закрыть поиск"><Icon name="close" size={14} /></button>
       </div>
       {/* Ряд 2: категории + период/статус/сортировка — один компактный ряд
@@ -158,14 +158,14 @@ export function SearchBar({ query, onQuery, color, onColor, period, status, sort
             type="date"
             value={from ? toISODate(from) : ""}
             onChange={(e) => onFrom(e.target.value ? fromISODate(e.target.value) : null)}
-            style={{ border: `1px solid ${COLORS.cardBorder}`, borderRadius: "var(--radius-sm)", padding: "2px 6px", background: "transparent", color: COLORS.text, outline: "none" }}
+            style={{ border: `1px solid var(--border-color)`, borderRadius: "var(--radius-sm)", padding: "2px 6px", background: "transparent", color: COLORS.text, outline: "none" }}
           />
           <span>по</span>
           <input
             type="date"
             value={to ? toISODate(to) : ""}
             onChange={(e) => onTo(e.target.value ? fromISODate(e.target.value) : null)}
-            style={{ border: `1px solid ${COLORS.cardBorder}`, borderRadius: "var(--radius-sm)", padding: "2px 6px", background: "transparent", color: COLORS.text, outline: "none" }}
+            style={{ border: `1px solid var(--border-color)`, borderRadius: "var(--radius-sm)", padding: "2px 6px", background: "transparent", color: COLORS.text, outline: "none" }}
           />
         </div>
       )}

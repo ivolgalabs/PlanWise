@@ -227,7 +227,18 @@ function SubtaskRow({
       >
         <Icon name="dots" size={14} />
       </span>
-      <label className="checkbox-hit" style={{ margin: 0, flexShrink: 0 }}>
+      <label
+        className="checkbox-hit"
+        style={{
+          margin: 0,
+          flexShrink: 0,
+          // Метка — touch-таргет 28px с визуальным чекбоксом по центру;
+          // при flex-start она бы опускала квадрат на ~6px ниже первой
+          // строки текста. Поднимаем, чтобы чекбокс стоял на первой строке
+          // (однострочной и многострочной) ровно.
+          marginTop: -6,
+        }}
+      >
         <input
           type="checkbox"
           checked={subtask.isDone}
@@ -279,7 +290,12 @@ function SubtaskRow({
           {subtask.title}
         </span>
       )}
-      <button onClick={onDelete} className="chip-btn" title="Удалить" style={{ flexShrink: 0 }}>
+      <button
+        onClick={onDelete}
+        className="chip-btn"
+        title="Удалить"
+        style={{ flexShrink: 0, marginTop: -5 }}
+      >
         <Icon name="close" size={12} />
       </button>
     </div>

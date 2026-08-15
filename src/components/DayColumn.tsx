@@ -99,7 +99,7 @@ export function DayColumn({
           style={{
             fontWeight: headWeight,
             fontSize: headFs,
-            color: today ? COLORS.accent : past ? COLORS.muted : COLORS.secondary,
+            color: today ? "var(--accent-text)" : past ? COLORS.muted : COLORS.secondary,
             textTransform: "capitalize",
             whiteSpace: "nowrap",
             overflow: "hidden",
@@ -113,11 +113,23 @@ export function DayColumn({
       </div>
       <div
         className="day-tasks"
+        onClick={(e) => {
+          // Клик по ПУСТОЙ части ячейки дня (мимо задач) — то же, что клик
+          // по «+ добавить»: фокус в поле ввода внизу колонки. Печатаешь и
+          // Enter — задача попадает в этот день.
+          if (e.target !== e.currentTarget) return;
+          const inp = newInputRef.current;
+          if (inp) {
+            inp.focus();
+            inp.scrollIntoView({ block: "nearest" });
+          }
+        }}
         style={{
           padding: 4,
           flex: 1,
           overflowY: "auto",
           minHeight: 0,
+          cursor: "text",
           // Иерархия: прошедшие дни — мельче шрифт задач, будущие — обычный.
           fontSize: weight === "past" ? "var(--fs-2xs)" : "var(--fs-sm)",
         }}
@@ -152,7 +164,7 @@ export function DayColumn({
           style={{
             width: "100%",
             border: "none",
-            borderTop: `1px solid ${COLORS.cardBorder}`,
+            borderTop: `1px solid var(--border-color)`,
             padding: "4px 8px",
             fontSize: 12,
             background: "transparent",

@@ -46,7 +46,8 @@ export function WeekViewVertical({ tasks, archivedTasks, mobileSections, anchor,
 
   const tasksForDay = (d: Date) =>
     sortTasksByMode(
-      tasks.filter((t) => isSameDay(fromEpochDay(t.date), d)),
+      // !someday: «Когда-нибудь» не дублируется в днях недели (см. WeekView).
+      tasks.filter((t) => !t.someday && isSameDay(fromEpochDay(t.date), d)),
       sortMode,
     );
 
@@ -214,7 +215,7 @@ function DayRow({
     weight === "past" ? 400 : weight === "today" || weight === "tomorrow" ? 700 : 600;
   const headColor =
     weight === "today"
-      ? COLORS.accent
+      ? "var(--accent-text)"
       : weight === "tomorrow"
         ? COLORS.text
         : past
@@ -287,7 +288,7 @@ function DayRow({
               style={{
                 width: "100%",
                 border: "none",
-                borderTop: `1px solid ${COLORS.cardBorder}`,
+                borderTop: `1px solid var(--border-color)`,
                 padding: "var(--sp-2) var(--sp-1)",
                 fontSize: "var(--fs-sm)",
                 background: "transparent",

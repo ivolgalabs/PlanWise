@@ -123,13 +123,13 @@ export function SearchResults({ tasks, query, color, period, status, sort, from,
         {filtered.length === 0 ? (
           <>
             Ничего не найдено.{" "}
-            <button className="text-chip" onClick={onResetFilters} style={{ border: `1px solid ${COLORS.cardBorder}` }}>Сбросить фильтры</button>
+            <button className="text-chip" onClick={onResetFilters} style={{ border: `1px solid var(--border-color)` }}>Сбросить фильтры</button>
           </>
         ) : (
           <>
             Найдено задач: {filtered.length}
             {anyFilter && (
-              <button className="text-chip" onClick={onResetFilters} style={{ border: `1px solid ${COLORS.cardBorder}` }}>Сбросить фильтры</button>
+              <button className="text-chip" onClick={onResetFilters} style={{ border: `1px solid var(--border-color)` }}>Сбросить фильтры</button>
             )}
           </>
         )}
@@ -144,7 +144,7 @@ export function SearchResults({ tasks, query, color, period, status, sort, from,
               display: "flex",
               flexDirection: "column",
               padding: "var(--sp-1) 0",
-              borderBottom: `1px solid ${COLORS.cardBorder}`,
+              borderBottom: `1px solid var(--border-color)`,
             }}
           >
             <div

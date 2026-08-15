@@ -282,7 +282,7 @@ export function TaskDndContext({ children, onChange }: TaskDndContextProps) {
             onClick={(e) => e.stopPropagation()}
             style={{
               background: COLORS.card,
-              border: `1px solid ${COLORS.cardBorder}`,
+              border: `1px solid var(--border-color)`,
               borderRadius: "var(--radius-md)",
               padding: "var(--sp-6)",
               width: 320,
@@ -337,7 +337,7 @@ function DragGhost({ task }: { task: Task }) {
         padding: "6px 10px",
         maxWidth: 280,
         background: COLORS.card,
-        border: `1px solid ${COLORS.cardBorder}`,
+        border: `1px solid var(--border-color)`,
         borderRadius: "var(--radius-md)",
         boxShadow: "0 4px 14px rgba(0,0,0,.18)",
         opacity: 0.92,

@@ -43,7 +43,7 @@ export function ConfirmDialog({ title, confirmLabel = "Удалить", danger =
         aria-modal="true"
         style={{
           background: COLORS.card,
-          border: `1px solid ${COLORS.cardBorder}`,
+          border: `1px solid var(--border-color)`,
           borderRadius: "var(--radius-md)",
           padding: "var(--sp-6)",
           width: 340,

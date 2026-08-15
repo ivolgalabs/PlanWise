@@ -41,6 +41,8 @@ export function DayView({ day, tasks, archivedTasks, onChange }: Props) {
   const sortMode = useStore((s) => s.sortMode);
   const dayTasks = sortTasksByMode(
     tasks.filter((t) => {
+      // «Когда-нибудь» не показывается в дне (своя колонка).
+      if (t.someday) return false;
       const d = fromEpochDay(t.date);
       return (
         d.getFullYear() === day.getFullYear() &&
@@ -131,7 +133,7 @@ function SideDayZone({ day, label }: { day: Date; label: string }) {
         fontWeight: 600,
         color: isOver ? COLORS.accent : COLORS.muted,
         background: isOver ? accentTint(0.12) : "transparent",
-        border: `1px dashed ${isOver ? COLORS.accent : COLORS.cardBorder}`,
+        border: `1px dashed ${isOver ? COLORS.accent : "var(--border-color)"}`,
         borderRadius: "var(--radius-md)",
         margin: "var(--sp-2)",
         userSelect: "none",
@@ -223,7 +225,7 @@ function DayTasksArea({
           style={{
             fontSize: "var(--fs-xl)",
             fontWeight: 700,
-            color: today ? COLORS.accent : COLORS.text,
+            color: today ? "var(--accent-text)" : COLORS.text,
             margin: 0,
             textTransform: "capitalize",
           }}
@@ -274,7 +276,7 @@ function DayTasksArea({
             style={{
               width: "100%",
               border: "none",
-              borderTop: `1px solid ${COLORS.cardBorder}`,
+              borderTop: `1px solid var(--border-color)`,
               padding: "var(--sp-4) var(--sp-2)",
               marginTop: "var(--sp-2)",
               fontSize: "var(--fs-md)",

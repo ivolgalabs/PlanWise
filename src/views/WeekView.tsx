@@ -45,8 +45,10 @@ export function WeekView({ tasks, archivedTasks, onChange }: Props) {
   // Вертикаль, если выбрано настройкой ИЛИ окно узкое.
   const effectiveVertical = weekVertical || narrow;
 
+  // !someday: задачи «Когда-нибудь» живут только в своей колонке — иначе
+  // дублируются в ячейках дня (у них проставлена дата создания).
   const tasksForDay = (d: Date) =>
-    sortTasksByMode(tasks.filter((t) => isSameDay(fromEpochDay(t.date), d)), sortMode);
+    sortTasksByMode(tasks.filter((t) => !t.someday && isSameDay(fromEpochDay(t.date), d)), sortMode);
 
   return (
     // flex:1 вместо height:100% — см. DayView (zoom-совместимость).

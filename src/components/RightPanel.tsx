@@ -48,7 +48,7 @@ export function RightPanel({ tasks, width, onSelect, onChange, fill = false }: P
         display: "flex",
         flexDirection: "column",
         minHeight: 0,
-        borderLeft: `1px solid ${COLORS.cardBorder}`,
+        borderLeft: `1px solid var(--border-color)`,
       }}
     >
       {archiveOpen ? (
@@ -90,7 +90,7 @@ export function RightPanel({ tasks, width, onSelect, onChange, fill = false }: P
               padding: "var(--sp-2) var(--sp-3)",
               fontSize: "var(--fs-sm)",
               fontWeight: 700,
-              color: COLORS.accent,
+              color: "var(--accent-text)",
               cursor: "pointer",
               marginTop: "auto",
             }}

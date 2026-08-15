@@ -1556,7 +1556,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
             onClick={(e) => e.stopPropagation()}
             style={{
               background: COLORS.card,
-              border: `1px solid ${COLORS.cardBorder}`,
+              border: `1px solid var(--border-color)`,
               borderRadius: "var(--radius-md)",
               padding: "var(--sp-8)",
               width: 460,

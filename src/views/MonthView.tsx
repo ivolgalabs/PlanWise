@@ -68,7 +68,8 @@ export function MonthView({ tasks, onSelectDay, onSelectWeek, onChange }: Props)
   );
 
   const tasksForDay = (d: Date) =>
-    sortTasksByMode(tasks.filter((t) => isSameDay(fromEpochDay(t.date), d)), sortMode);
+    // !someday: «Когда-нибудь» не дублируется в днях месяца (см. WeekView).
+    sortTasksByMode(tasks.filter((t) => !t.someday && isSameDay(fromEpochDay(t.date), d)), sortMode);
 
   const weekdays = mondayFirst
     ? ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
@@ -168,7 +169,7 @@ export function MonthView({ tasks, onSelectDay, onSelectWeek, onChange }: Props)
             aria-modal="true"
             style={{
               background: COLORS.card,
-              border: `1px solid ${COLORS.cardBorder}`,
+              border: `1px solid var(--border-color)`,
               borderRadius: "var(--radius-md)",
               // Просторная панель: крупный заголовок, поля как в поиске.
               padding: "var(--sp-8)",

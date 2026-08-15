@@ -108,9 +108,11 @@ body {
   gap: var(--sp-1);
   flex-shrink: 0;
 }
-/* Блок подзадач — визуально обособлен от основной строки */
+/* Блок подзадач — визуально обособлен от основной строки.
+   Верхний отступ в em: растёт вместе со шрифтом (шрифт крупнее при широком
+   окне/масштабе), иначе текст задачи визуально «прилипал» к подзадачам. */
 .subtasks-area {
-  margin: 0 var(--sp-2) var(--sp-2) calc(var(--sp-4) + 14px);
+  margin: 0.25em var(--sp-2) var(--sp-2) calc(var(--sp-4) + 14px);
   padding: var(--sp-2) var(--sp-3);
   background: var(--bg-tertiary);
   border-left: 2px solid var(--accent);
@@ -264,8 +266,10 @@ input[type="checkbox"] {
   border: none;
   background: var(--bg-tertiary);
   border-radius: var(--radius-md);
-  width: calc(var(--fs-md) + 4px);
-  height: calc(var(--fs-md) + 4px);
+  /* WCAG target-size ≥ 24px (по тачу на мобильном). fs-md = 0.95rem ≈ 15px
+     давал ~19px — меньше минимума. */
+  width: 24px;
+  height: 24px;
   font-size: var(--fs-2xs);
   color: var(--text-primary);
   cursor: pointer;
@@ -369,6 +373,11 @@ input[type="checkbox"] {
   padding: 1px 6px;
   border-radius: var(--radius-md);
   white-space: nowrap;
+  /* Бейдж не вылезает за пределы узкой колонки сетки недели (обрезается
+     с многоточием вместо наслоения на соседние объекты). */
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--text-muted);
   background: transparent;
 }
@@ -517,7 +526,12 @@ input[type="checkbox"] {
     align-items: stretch !important;
   }
   .task-text-wrap textarea {
-    flex: 1 1 100%;
+    /* БЫЛО flex: 1 1 100% — в WebKit (WKWebView, т.е. в самом приложении)
+       процентный flex-basis в КОЛОНКЕ растягивает textarea на всю высоту
+       обёртки и выталкивает бейдж времени/заметку за нижнюю границу строки
+       (время наслаивается на «+ подзадача»). Ширину textarea растягивает
+       align-items: stretch обёртки выше — вертикальный flex не нужен. */
+    flex: 0 1 auto;
     /* Инлайн width:100% создаёт цикл (ширина textarea зависит от ширины
        обёртки, та — от textarea) — обёртка не могла ужаться меньше ~20
        символов, и правый ряд (время/цвет/удалить) уезжал на вторую строку.
@@ -557,3 +571,61 @@ input[type="checkbox"] {
     margin-right: 2px;
   }
 }
+
+/* Доступность (WCAG AA >= 4.5:1). Токены --text-muted и --accent-text из
+   themes.css Universal UI низкоконтрастные почти во всех темах (muted 1.6-4.2:1,
+   accent-текст 2.5-4.1:1) — вторичный текст и «сегодня» плохо читаются. Не
+   правим universal-ui: переопределяем обе переменные конкретными значениями
+   (смесь с --text-primary, подобрана один раз расчётом; светлые затемняем,
+   тёмные/OLED осветляем). --accent не трогаем — он остаётся фоном кнопок
+   с белым текстом (--text-on-accent). Значения сгенерированы скриптом. */
+[data-theme="light-slate"] { --text-muted: #5e646b; --accent-text: #333a5b; }
+[data-theme="dark-slate"] { --text-muted: #a0a4a9; --accent-text: #888fba; }
+[data-theme="oled-slate"] { --text-muted: #a0a4a9; --accent-text: #888fba; }
+[data-theme="light-nord"] { --text-muted: #616977; --accent-text: #445771; }
+[data-theme="dark-nord"] { --text-muted: #a8b1c2; --accent-text: #91a9c6; }
+[data-theme="oled-nord"] { --text-muted: #a8b1c2; --accent-text: #91a9c6; }
+[data-theme="light-midnight"] { --text-muted: #676c85; --accent-text: #243a7d; }
+[data-theme="dark-midnight"] { --text-muted: #808ab4; --accent-text: #6486ed; }
+[data-theme="oled-midnight"] { --text-muted: #808ab4; --accent-text: #6486ed; }
+[data-theme="light-dracula"] { --text-muted: #666875; --accent-text: #59367e; }
+[data-theme="dark-dracula"] { --text-muted: #9ea8c3; --accent-text: #b885e0; }
+[data-theme="oled-dracula"] { --text-muted: #9ea8c3; --accent-text: #b885e0; }
+[data-theme="light-sepia"] { --text-muted: #7b6854; --accent-text: #6d4227; }
+[data-theme="dark-sepia"] { --text-muted: #aaa49c; --accent-text: #bc896f; }
+[data-theme="oled-sepia"] { --text-muted: #aaa49c; --accent-text: #bc896f; }
+[data-theme="light-evergreen"] { --text-muted: #4f665b; --accent-text: #244937; }
+[data-theme="dark-evergreen"] { --text-muted: #93a39f; --accent-text: #6e9785; }
+[data-theme="oled-evergreen"] { --text-muted: #93a39f; --accent-text: #6e9785; }
+[data-theme="light-amber"] { --text-muted: #766547; --accent-text: #814110; }
+[data-theme="dark-amber"] { --text-muted: #b1a59d; --accent-text: #e28e56; }
+[data-theme="oled-amber"] { --text-muted: #b1a59d; --accent-text: #e28e56; }
+[data-theme="light-sakura"] { --text-muted: #8c5968; --accent-text: #944b62; }
+[data-theme="dark-sakura"] { --text-muted: #b18994; --accent-text: #e693ad; }
+[data-theme="oled-sakura"] { --text-muted: #b18994; --accent-text: #e693ad; }
+[data-theme="light-terra"] { --text-muted: #6f6a60; --accent-text: #88492e; }
+[data-theme="dark-terra"] { --text-muted: #a5a29b; --accent-text: #e99271; }
+[data-theme="oled-terra"] { --text-muted: #a5a29b; --accent-text: #e99271; }
+[data-theme="light-indigo"] { --text-muted: #6f6a60; --accent-text: #474458; }
+[data-theme="dark-indigo"] { --text-muted: #a5a29b; --accent-text: #8c8bac; }
+[data-theme="oled-indigo"] { --text-muted: #a5a29b; --accent-text: #8c8bac; }
+[data-theme="light-sage"] { --text-muted: #6f6a60; --accent-text: #555b3c; }
+[data-theme="dark-sage"] { --text-muted: #a5a29b; --accent-text: #afbb8f; }
+[data-theme="oled-sage"] { --text-muted: #a5a29b; --accent-text: #afbb8f; }
+
+/* Видимость интерактивных элементов на тёмных темах. Родные --border-color
+   из themes.css Universal UI на тёмном фоне почти невидимы (OLED — 1.2:1):
+   рамки полей, кнопок-чипов и разделители сливаются, непонятно «куда
+   нажимать». Поднимаем до ~3:1 миксом с --text-primary (тёмная гамма
+   сохраняется). Светлые темы не трогаем — там родные границы читаются. */
+[data-theme^="dark-"],
+[data-theme^="oled-"] {
+  --border-color: color-mix(in srgb, var(--text-primary) 40%, transparent);
+}
+
+/* Нативные чекбоксы: accent-color делает их видимыми и в акцентном цвете
+   темы (незакрашенный квадрат на тёмном фоне иначе еле заметен). */
+input[type="checkbox"] {
+  accent-color: var(--accent);
+}
+

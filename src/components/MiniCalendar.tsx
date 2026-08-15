@@ -100,7 +100,7 @@ export function MiniCalendar({ tasks, large, onSelect, droppable = true, fill = 
     <div
       style={{
         background: COLORS.card,
-        border: `1px solid ${COLORS.cardBorder}`,
+        border: `1px solid var(--border-color)`,
         borderRadius: "var(--radius-md)",
         padding: large ? "var(--sp-6)" : "var(--sp-4)",
         // fill: растягиваем карточку на всю высоту flex-родителя (панель),
@@ -310,10 +310,10 @@ function CalendarDayCell({
           fontWeight: selected || today ? 700 : 400,
           color: inMonth
             ? selected || today
-              ? COLORS.accent
+              ? "var(--accent-text)"
               : COLORS.text
             : today
-              ? COLORS.accent
+              ? "var(--accent-text)"
               : varTint("--text-muted", 0.4),
         }}
       >

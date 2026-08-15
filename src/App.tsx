@@ -463,6 +463,8 @@ function App() {
   };
 
   return (
+    // <main>-landmark для скринридеров и навигации (Lighthouse a11y).
+    <main style={{ height: "100%" }}>
     <div
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
@@ -692,6 +694,7 @@ function App() {
         />
       )}
     </div>
+    </main>
   );
 }
 

@@ -31,13 +31,13 @@ export function ArchivePanel({ tasks, onClose, onChange }: Props) {
           alignItems: "center",
           gap: "var(--sp-2)",
           padding: "var(--sp-2) var(--sp-3)",
-          borderBottom: `1px solid ${COLORS.cardBorder}`,
+          borderBottom: `1px solid var(--border-color)`,
         }}
       >
         <button className="icon-btn" onClick={onClose} title="Свернуть архив">
           <Icon name="chevronL" size={14} />
         </button>
-        <span style={{ fontSize: "var(--fs-sm)", fontWeight: 700, color: COLORS.accent }}>
+        <span style={{ fontSize: "var(--fs-sm)", fontWeight: 700, color: "var(--accent-text)" }}>
           Архив
         </span>
         <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted }}>
@@ -58,7 +58,7 @@ export function ArchivePanel({ tasks, onClose, onChange }: Props) {
               alignItems: "center",
               gap: "var(--sp-2)",
               padding: "var(--sp-1) 0",
-              borderBottom: `1px solid ${COLORS.cardBorder}`,
+              borderBottom: `1px solid var(--border-color)`,
             }}
           >
             <label className="checkbox-hit">
@@ -96,7 +96,7 @@ export function ArchivePanel({ tasks, onClose, onChange }: Props) {
               style={{
                 fontSize: "var(--fs-2xs)",
                 flexShrink: 0,
-                border: `1px solid ${COLORS.cardBorder}`,
+                border: `1px solid var(--border-color)`,
                 background: "transparent",
                 borderRadius: "var(--radius-md)",
                 padding: "4px 10px",

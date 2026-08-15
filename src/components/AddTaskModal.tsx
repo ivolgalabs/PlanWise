@@ -346,7 +346,7 @@ export function TaskFormFields({
         style={{
           width: "100%",
           fontSize: "var(--fs-md)",
-          border: `1px solid ${COLORS.cardBorder}`,
+          border: `1px solid var(--border-color)`,
           borderRadius: "var(--radius-md)",
           padding: "10px 12px",
           marginBottom: "var(--sp-4)",
@@ -389,7 +389,7 @@ export function TaskFormFields({
                 padding: "4px 8px",
                 cursor: "pointer",
                 borderRadius: "var(--radius-md)",
-                border: `1px solid ${priority === p.v ? COLORS.accent : COLORS.cardBorder}`,
+                border: `1px solid ${priority === p.v ? COLORS.accent : "var(--border-color)"}`,
                 background: priority === p.v ? "color-mix(in srgb, var(--text-primary) 6%, transparent)" : "transparent",
                 color: COLORS.text,
               }}
@@ -428,7 +428,7 @@ export function TaskFormFields({
           style={{
             fontSize: "var(--fs-sm)",
             padding: "6px 8px",
-            border: `1px solid ${COLORS.cardBorder}`,
+            border: `1px solid var(--border-color)`,
             borderRadius: "var(--radius-md)",
             background: "transparent",
             color: COLORS.text,
@@ -459,7 +459,7 @@ export function TaskFormFields({
           className="chip-btn"
           style={{
             background: "transparent",
-            border: `1px solid ${color === null ? COLORS.accent : COLORS.cardBorder}`,
+            border: `1px solid ${color === null ? COLORS.accent : "var(--border-color)"}`,
             opacity: color === null ? 1 : 0.5,
             display: "inline-flex",
             alignItems: "center",
@@ -525,7 +525,7 @@ export function TaskFormFields({
             flex: 1,
             minWidth: 180,
             fontSize: "var(--fs-sm)",
-            border: `1px solid ${COLORS.cardBorder}`,
+            border: `1px solid var(--border-color)`,
             borderRadius: "var(--radius-md)",
             padding: "6px 10px",
             background: "transparent",
@@ -563,7 +563,7 @@ export function TaskFormFields({
                     display: "flex",
                     alignItems: "center",
                     gap: "var(--sp-2)",
-                    border: `1px solid ${COLORS.cardBorder}`,
+                    border: `1px solid var(--border-color)`,
                     borderRadius: "var(--radius-md)",
                     padding: "4px 8px",
                   }}
@@ -622,7 +622,7 @@ export function TaskFormFields({
                     display: "flex",
                     alignItems: "center",
                     gap: "var(--sp-2)",
-                    border: `1px solid ${COLORS.cardBorder}`,
+                    border: `1px solid var(--border-color)`,
                     borderRadius: "var(--radius-md)",
                     padding: "4px 8px",
                   }}
@@ -878,7 +878,7 @@ export function TaskFormFields({
                 flex: 1,
                 minWidth: 0,
                 fontSize: "var(--fs-sm)",
-                border: `1px dashed ${COLORS.cardBorder}`,
+                border: `1px dashed var(--border-color)`,
                 borderRadius: "var(--radius-md)",
                 padding: "6px 10px",
                 background: "transparent",
@@ -1025,7 +1025,7 @@ export function AddTaskModal({
         aria-modal="true"
         style={{
           background: COLORS.card,
-          border: `1px solid ${COLORS.cardBorder}`,
+          border: `1px solid var(--border-color)`,
           borderRadius: "var(--radius-md)",
           padding: "var(--sp-8)",
           width: 460,

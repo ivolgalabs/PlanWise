@@ -177,7 +177,6 @@ export function TimePicker({
         style={{
           ...badgeStyle(value !== null, large, compact, conflict),
           cursor: "pointer",
-          border: "none",
           display: "inline-flex",
           alignItems: "center",
           gap: "var(--sp-3)",
@@ -307,12 +306,16 @@ function badgeStyle(hasTime: boolean, large = false, compact = false, conflict =
   return {
     fontSize: large ? "var(--fs-sm)" : "var(--fs-2xs)",
     // Наложение по времени — красное время, чтобы конфликт был заметен.
-    color: conflict ? "var(--danger)" : hasTime ? COLORS.accent : COLORS.muted,
+    color: conflict ? "var(--danger)" : hasTime ? "var(--accent-text)" : COLORS.muted,
     background: conflict
       ? "color-mix(in srgb, var(--danger) 14%, transparent)"
       : hasTime
         ? accentTint(0.1)
         : "transparent",
+    // Время не задано — пунктирная рамка показывает, что бейдж кликабелен
+    // (сплошная выглядела бы как выбранное). В компактной сетке не добавляем —
+    // там рамки у каждой строки шумели бы.
+    border: !compact && !hasTime ? "1px dashed var(--border-color)" : undefined,
     padding: large ? "4px 10px" : "1px 6px",
     borderRadius: "var(--radius-md)",
     minHeight: compact ? 26 : undefined,
@@ -338,20 +341,20 @@ const modalStyle: React.CSSProperties = {
 function presetBtn(active: boolean): React.CSSProperties {
   return {
     fontSize: "var(--fs-2xs)", padding: "3px 6px", cursor: "pointer",
-    border: `1px solid ${active ? COLORS.accent : COLORS.cardBorder}`,
+    border: `1px solid ${active ? COLORS.accent : "var(--border-color)"}`,
     background: active ? accentTint(0.1) : "transparent",
     color: active ? COLORS.accent : COLORS.text, borderRadius: "var(--radius-sm)",
   };
 }
 const timeInputStyle: React.CSSProperties = {
   width: "100%", fontSize: "var(--fs-md)", padding: "6px 8px",
-  border: `1px solid ${COLORS.cardBorder}`, borderRadius: "var(--radius-sm)",
+  border: `1px solid var(--border-color)`, borderRadius: "var(--radius-sm)",
   background: "transparent", color: COLORS.text, outline: "none",
 };
 // Числовые поля «ч»/«мин» в DurationSelect: компактные, по центру цифры.
 const numStyle: React.CSSProperties = {
   width: 54, fontSize: "var(--fs-sm)", padding: "4px 2px",
-  border: `1px solid ${COLORS.cardBorder}`, borderRadius: "var(--radius-sm)",
+  border: `1px solid var(--border-color)`, borderRadius: "var(--radius-sm)",
   background: "transparent", color: COLORS.text, outline: "none",
   textAlign: "center",
 };
@@ -365,7 +368,7 @@ const okBtnStyle: React.CSSProperties = {
   cursor: "pointer",
   border: `1px solid ${COLORS.accent}`,
   background: accentTint(0.1),
-  color: COLORS.accent,
+  color: "var(--accent-text)",
   borderRadius: "var(--radius-sm)",
   fontWeight: 600,
 };

@@ -47,7 +47,7 @@ export function SomedayColumn({ tasks, onChange, stretch = false }: Props) {
         flex: "1 1 auto",
         maxHeight: stretch ? "none" : "45%",
         minHeight: 0,
-        borderTop: `1px solid ${COLORS.cardBorder}`,
+        borderTop: `1px solid var(--border-color)`,
         background: isOver ? accentTint(0.08) : undefined,
       }}
     >
@@ -57,7 +57,7 @@ export function SomedayColumn({ tasks, onChange, stretch = false }: Props) {
           padding: "var(--sp-1) var(--sp-3)",
           fontSize: "var(--fs-sm)",
           fontWeight: 700,
-          color: COLORS.accent,
+          color: "var(--accent-text)",
           display: "flex",
           alignItems: "center",
           gap: "var(--sp-2)",
