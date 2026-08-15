@@ -257,8 +257,19 @@ function DayTasksArea({
 
       {/* Inline-поле ввода — крупное. Форма: кнопка «Далее/Готово» мобильной
           клавиатуры (enterKeyHint) добавляет задачу, как Enter на десктопе.
-          Рядом — «Настроить»: расширенное окно (время, приоритет, категория). */}
-      <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)" }}>
+          Рядом — «Настроить»: расширенное окно (время, приоритет, категория).
+          Ряд отделён от задач полной линией сверху (на ряду, а не на input —
+          чтобы линия шла и под шестерёнкой, и кнопка не наезжала на задачи). */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "var(--sp-2)",
+          borderTop: "1px solid var(--border-color)",
+          marginTop: "var(--sp-3)",
+          paddingTop: "var(--sp-3)",
+        }}
+      >
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -276,9 +287,7 @@ function DayTasksArea({
             style={{
               width: "100%",
               border: "none",
-              borderTop: `1px solid var(--border-color)`,
-              padding: "var(--sp-4) var(--sp-2)",
-              marginTop: "var(--sp-2)",
+              padding: "var(--sp-2) var(--sp-1)",
               fontSize: "var(--fs-md)",
               background: "transparent",
               outline: "none",
@@ -287,12 +296,12 @@ function DayTasksArea({
           />
         </form>
         <button
-          className="chip-btn"
+          className="chip-btn-sm"
           onClick={() => setAddOpen(true)}
           title="Настроить задачу: время, приоритет, длительность, категория"
-          style={{ flexShrink: 0, marginTop: "var(--sp-2)" }}
+          style={{ flexShrink: 0 }}
         >
-          <Icon name="gear" size={14} />
+          <Icon name="gear" size={12} />
         </button>
       </div>
       {addOpen && (
