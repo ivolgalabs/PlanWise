@@ -14,7 +14,7 @@
  *  - subtask → день (та же): подтверждение перед promote
  */
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -72,6 +72,18 @@ export const parseTaskZone = (id: string | number | undefined | null): string | 
 
 /** id draggable-подзадачи. */
 export const subtaskDragId = (subtaskId: string): string => `s:${subtaskId}`;
+
+// Опции сенсоров — модульные константы: useSensor мемоизирует результат по
+// [Sensor, options], и литерал прямо в рендере ломал мемоизацию → sensors
+// пересоздавались при каждом рендере провайдера → activators → dnd-контекст
+// → ре-рендер ВСЕХ useDraggable/useDroppable (всех строк задач) на любое
+// изменение стора, минуя memo карточек. Константа держит ссылку стабильной.
+const MOUSE_SENSOR_OPTIONS = {
+  activationConstraint: { distance: 5 },
+};
+const TOUCH_SENSOR_OPTIONS = {
+  activationConstraint: { delay: 120, tolerance: 12 },
+};
 
 interface TaskDndContextProps {
   children: ReactNode;
@@ -146,20 +158,23 @@ export function TaskDndContext({ children, onChange }: TaskDndContextProps) {
   // Touch: задержка 120мс + допуск 12px — палец успевает слегка поехать при
   // «взятии» строки, и drag не отменяется (150/8 отменял почти каждый захват).
   const sensors = useSensors(
-    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(TouchSensor, {
-      activationConstraint: { delay: 120, tolerance: 12 },
-    }),
+    useSensor(MouseSensor, MOUSE_SENSOR_OPTIONS),
+    useSensor(TouchSensor, TOUCH_SENSOR_OPTIONS),
   );
 
-  const onDragStart = (e: DragStartEvent) => {
+  // Колбэки DndContext — СТРОГО useCallback: dnd-kit кладёт их в deps цепочки
+  // активаторов сенсоров, и новый референс при каждом рендере этого провайдера
+  // пересоздавал internalContext → ре-рендер ВСЕХ useDraggable/useDroppable
+  // (все строки задач) на любое изменение стора, минуя memo карточек.
+  const onDragStart = useCallback((e: DragStartEvent) => {
     const task = e.active.data.current?.task as Task | undefined;
     const subtask = e.active.data.current?.subtask as Subtask | undefined;
     if (task) setActiveTask(task);
     else if (subtask) setActiveSubtask(subtask);
-  };
+  }, []);
 
-  const onDragEnd = async (e: DragEndEvent) => {
+  // useCallback: см. комментарий у onDragStart.
+  const onDragEnd = useCallback(async (e: DragEndEvent) => {
     setActiveTask(null);
     setActiveSubtask(null);
     const over = e.over?.id;
@@ -206,7 +221,7 @@ export function TaskDndContext({ children, onChange }: TaskDndContextProps) {
       setPending({ kind: "promote", subtask, date: targetDay });
       return;
     }
-  };
+  }, [onChange]);
 
   // Выполнить promote после подтверждения пользователя.
   const confirmPromote = async () => {
@@ -233,10 +248,11 @@ export function TaskDndContext({ children, onChange }: TaskDndContextProps) {
       collisionDetection={customCollision}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
-      onDragCancel={() => {
+      // useCallback: см. комментарий у onDragStart.
+      onDragCancel={useCallback(() => {
         setActiveTask(null);
         setActiveSubtask(null);
-      }}
+      }, [])}
     >
       {children}
       <DragOverlay dropAnimation={null}>

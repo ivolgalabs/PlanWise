@@ -152,6 +152,33 @@ fn mark_fired(key: String) {
     map.insert(key, now);
 }
 
+/// Потолок сна между тиками (десктоп). Точный интервал считает
+/// next_event_from (спим до самого ближайшего события), но не дольше
+/// MAX_SLEEP — страховка от перевода системных часов, DST и «молчаливых»
+/// изменений задач мимо команд (импорт). 30 минут вместо жёстких 60 секунд
+/// сокращает фоновые пробуждения примерно в 30 раз.
+#[cfg(not(target_os = "android"))]
+const MAX_SLEEP_SECS: i64 = 30 * 60;
+
+/// Пробуждение планировщика: настройки или задачи изменились — пересчитать
+/// расписание немедленно, не дожидаясь планового пробуждения.
+static WAKE: std::sync::OnceLock<(std::sync::Mutex<bool>, std::sync::Condvar)> =
+    std::sync::OnceLock::new();
+
+fn wake_pair() -> &'static (std::sync::Mutex<bool>, std::sync::Condvar) {
+    WAKE.get_or_init(|| (std::sync::Mutex::new(false), std::sync::Condvar::new()))
+}
+
+/// Разбудить планировщик (вызывается командами после изменения настроек и —
+/// на десктопе — задач). На Android вызовы из правок задач НЕ дёргаются:
+/// там серия чекбоксов означала бы лишний JNI-тик pending() на каждую.
+pub fn wake_scheduler() {
+    let (lock, cvar) = wake_pair();
+    let mut woken = lock.lock().unwrap();
+    *woken = true;
+    cvar.notify_all();
+}
+
 /// Запустить планировщик: запрос разрешения + фоновый поток-тик.
 pub fn start_scheduler(app: tauri::AppHandle) {
     // Разрешение на уведомления (Android 13+) запрашивает фронтенд через
@@ -159,11 +186,105 @@ pub fn start_scheduler(app: tauri::AppHandle) {
     std::thread::spawn(move || loop {
         // Паника в одном тике (например, сбой БД) не должна убивать
         // планировщик навсегда — ловим и продолжаем следующий цикл.
-        if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| tick(&app))).is_err() {
-            eprintln!("[notify] тик планировщика упал, продолжаю через 60 с");
+        let fell = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| tick(&app))).is_err();
+        // Android: фиксированный 60-с цикл — sync-модель (sync_scheduled)
+        // рассчитана на частую сверку с OS-планировщиком. Десктоп: спим до
+        // ближайшего события с потолком MAX_SLEEP (см. next_wake_in).
+        let sleep = if cfg!(target_os = "android") {
+            Duration::from_secs(60)
+        } else if fell {
+            // Тик упал — next_wake_in может падать по той же причине
+            // (например, БД недоступна): не крутим panic-loop на максимумах.
+            Duration::from_secs(60)
+        } else {
+            // Сам расчёт тоже под catch_unwind: паника здесь убила бы поток.
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| next_wake_in(&app)))
+                .unwrap_or(Duration::from_secs(60))
+        };
+        let (lock, cvar) = wake_pair();
+        let mut woken = lock.lock().unwrap();
+        while !*woken {
+            let (guard, timeout) = cvar.wait_timeout(woken, sleep).unwrap();
+            woken = guard;
+            if timeout.timed_out() {
+                break; // плановое пробуждение
+            }
         }
-        std::thread::sleep(Duration::from_secs(60));
+        *woken = false;
     });
+}
+
+/// До какого момента спать (десктоп): ближайшее интересное событие —
+/// due напоминания, час дайджеста или смена дня для виджета.
+#[cfg(not(target_os = "android"))]
+fn next_wake_in(app: &tauri::AppHandle) -> Duration {
+    let prefs = load_prefs(app);
+    let now = Local::now().naive_local();
+    let tasks = if prefs.reminders {
+        load_timed_tasks(app)
+    } else {
+        Vec::new()
+    };
+    let target = next_event_from(&prefs, &tasks, now);
+    let secs = (target - now).num_seconds().clamp(1, MAX_SLEEP_SECS);
+    Duration::from_secs(secs as u64)
+}
+
+/// Чистый расчёт ближайшего события (без AppHandle — для юнит-тестов).
+/// Смена дня обязательна всегда: планировщик обновляет виджет после полуночи.
+#[cfg(not(target_os = "android"))]
+fn next_event_from(
+    prefs: &NotifyPrefs,
+    tasks: &[ReminderRow],
+    now: NaiveDateTime,
+) -> NaiveDateTime {
+    let mut best: Option<NaiveDateTime> = None;
+    let mut consider = |d: Option<NaiveDateTime>| {
+        if let Some(d) = d {
+            if d > now && best.is_none_or(|b| d < b) {
+                best = Some(d);
+            }
+        }
+    };
+    // Смена дня (+5 с запаса на полуночную границу) — обновление виджета.
+    consider(
+        now.date()
+            .checked_add_days(chrono::Days::new(1))
+            .and_then(|d| d.and_hms_opt(0, 0, 5)),
+    );
+    // Утренний дайджест сегодня (если час не прошёл) или завтра.
+    if prefs.day_summary {
+        let h = prefs.day_summary_hour.clamp(0, 23) as u32;
+        let today = now.date().and_hms_opt(h, 0, 0);
+        consider(if today.is_some_and(|d| d > now) {
+            today
+        } else {
+            now.date()
+                .checked_add_days(chrono::Days::new(1))
+                .and_then(|d| d.and_hms_opt(h, 0, 0))
+        });
+    }
+    // Напоминания: ближайший due по тем же правилам, что и отправка
+    // (интервалы глобальные/свои + «пора выезжать»).
+    if prefs.reminders {
+        for (_, _, minutes, date_epoch, travel_time, notify_minutes) in tasks.iter() {
+            if *notify_minutes == Some(0) {
+                continue;
+            }
+            let Some(start) = task_start(*minutes, *date_epoch) else {
+                continue;
+            };
+            for rm in task_intervals(*notify_minutes, prefs) {
+                consider(Some(due_at(start, rm)));
+            }
+            if let Some(tt) = travel_time {
+                if *tt > 0 {
+                    consider(Some(due_at(start, *tt)));
+                }
+            }
+        }
+    }
+    best.unwrap_or_else(|| now + chrono::Duration::seconds(MAX_SLEEP_SECS))
 }
 
 /// День, для которого виджет уже записан (i64::MIN = ещё не писался).
@@ -327,10 +448,7 @@ fn sync_scheduled(app: &tauri::AppHandle, prefs: &NotifyPrefs) {
             let Some(start) = task_start(minutes, date_epoch) else {
                 continue;
             };
-            let intervals: Vec<i64> = match notify_minutes {
-                Some(n) if n > 0 => vec![n],
-                _ => prefs.remind_minutes.clone(),
-            };
+            let intervals: Vec<i64> = task_intervals(notify_minutes, prefs);
             for rm in intervals {
                 let due = due_at(start, rm);
                 // Горизонт: строго в будущем и в пределах выборки (+7 дней) —
@@ -486,6 +604,15 @@ fn load_timed_tasks(app: &tauri::AppHandle) -> Vec<ReminderRow> {
     .unwrap_or_default()
 }
 
+/// Интервалы напоминаний задачи: своё notify_minutes (N>0) перекрывает
+/// глобальные настройки; 0 отфильтровывается вызывающим (задачу не уведомлять).
+fn task_intervals(notify_minutes: Option<i64>, prefs: &NotifyPrefs) -> Vec<i64> {
+    match notify_minutes {
+        Some(n) if n > 0 => vec![n],
+        _ => prefs.remind_minutes.clone(),
+    }
+}
+
 /// Начало задачи (локальная дата + время) — Option при некорректных данных.
 fn task_start(minutes: i64, date_epoch: i64) -> Option<NaiveDateTime> {
     let h = (minutes / 60) as u32;
@@ -544,10 +671,7 @@ fn check_reminders(app: &tauri::AppHandle, prefs: &NotifyPrefs, now: NaiveDateTi
 
         // Своё время уведомления задачи (одно значение) вместо глобальных
         // интервалов, если задано.
-        let intervals: Vec<i64> = match notify_minutes {
-            Some(n) if n > 0 => vec![n],
-            _ => prefs.remind_minutes.clone(),
-        };
+        let intervals: Vec<i64> = task_intervals(notify_minutes, prefs);
 
         // 1. Выбранные интервалы напоминаний — каждому своё уведомление.
         for rm in intervals {
@@ -600,4 +724,111 @@ fn check_reminders(app: &tauri::AppHandle, prefs: &NotifyPrefs, now: NaiveDateTi
 fn epoch_to_date(days: i64) -> Option<NaiveDate> {
     let epoch = NaiveDate::from_ymd_opt(1970, 1, 1)?;
     epoch.checked_add_days(chrono::Days::new(days.max(0) as u64))
+}
+
+#[cfg(all(test, not(target_os = "android")))]
+mod tests {
+    use super::*;
+
+    fn prefs(day_summary: bool, reminders: bool, remind: Vec<i64>) -> NotifyPrefs {
+        NotifyPrefs {
+            day_summary,
+            day_summary_hour: 8,
+            reminders,
+            remind_minutes: remind,
+        }
+    }
+
+    /// Задача 2026-08-16 10:00 (id, title, time_minutes, date_epoch, travel, notify).
+    fn task(minutes: i64, date_epoch: i64, notify: Option<i64>) -> ReminderRow {
+        (
+            "t1".into(),
+            "Задача".into(),
+            minutes,
+            date_epoch,
+            None,
+            notify,
+        )
+    }
+
+    fn date_of(d: NaiveDate) -> i64 {
+        (d - NaiveDate::from_ymd_opt(1970, 1, 1).unwrap()).num_days()
+    }
+
+    /// Уведомления выключены → ближайшее событие — полночь (смена дня виджета).
+    #[test]
+    fn next_event_all_off_is_midnight() {
+        let now = NaiveDate::from_ymd_opt(2026, 8, 15)
+            .unwrap()
+            .and_hms_opt(12, 0, 0)
+            .unwrap();
+        let ev = next_event_from(&prefs(false, false, vec![60]), &[], now);
+        assert_eq!(
+            ev,
+            NaiveDate::from_ymd_opt(2026, 8, 16)
+                .unwrap()
+                .and_hms_opt(0, 0, 5)
+                .unwrap()
+        );
+    }
+
+    /// Дайджест ещё не прошёл сегодня → спим до него, а не до полуночи.
+    #[test]
+    fn next_event_digest_today_wins_over_midnight() {
+        let now = NaiveDate::from_ymd_opt(2026, 8, 15)
+            .unwrap()
+            .and_hms_opt(6, 30, 0)
+            .unwrap();
+        let ev = next_event_from(&prefs(true, false, vec![]), &[], now);
+        assert_eq!(ev, now.date().and_hms_opt(8, 0, 0).unwrap());
+    }
+
+    /// Дайджест сегодня прошёл → сначала полуночь (виджет), а тик после
+    /// полуночи уже выберет завтрашний дайджест.
+    #[test]
+    fn next_event_after_digest_is_midnight_then_digest() {
+        let day = NaiveDate::from_ymd_opt(2026, 8, 15).unwrap();
+        let now = day.and_hms_opt(9, 0, 0).unwrap();
+        // В 9:00 ближайшее событие — смена дня (полночь + 5 с).
+        let ev = next_event_from(&prefs(true, false, vec![]), &[], now);
+        assert_eq!(
+            ev,
+            NaiveDate::from_ymd_opt(2026, 8, 16)
+                .unwrap()
+                .and_hms_opt(0, 0, 5)
+                .unwrap()
+        );
+        // После полуночного тика ближайшее — утренний дайджест в 8:00.
+        let after_midnight = NaiveDate::from_ymd_opt(2026, 8, 16)
+            .unwrap()
+            .and_hms_opt(0, 0, 6)
+            .unwrap();
+        let ev2 = next_event_from(&prefs(true, false, vec![]), &[], after_midnight);
+        assert_eq!(ev2, after_midnight.date().and_hms_opt(8, 0, 0).unwrap());
+    }
+
+    /// Задача через час с напоминанием за 60 мин → due уже почти сейчас:
+    /// берём min(due, полуночь) = due. Прошедшие due игнорируются.
+    #[test]
+    fn next_event_nearest_reminder() {
+        let day = NaiveDate::from_ymd_opt(2026, 8, 15).unwrap();
+        let now = day.and_hms_opt(9, 30, 0).unwrap();
+        // Задача сегодня 11:00, напоминание за 60 мин → due 10:00.
+        // И задача сегодня 8:00 (прошла) — её due не должен победить.
+        let tasks = vec![
+            task(11 * 60, date_of(day), None),
+            task(8 * 60, date_of(day), None),
+        ];
+        let ev = next_event_from(&prefs(true, true, vec![60]), &tasks, now);
+        assert_eq!(ev, day.and_hms_opt(10, 0, 0).unwrap());
+    }
+
+    /// Своё notify_minutes перекрывает глобальные интервалы.
+    #[test]
+    fn task_intervals_own_override() {
+        let p = prefs(true, true, vec![15, 60]);
+        assert_eq!(task_intervals(Some(1440), &p), vec![1440]);
+        assert_eq!(task_intervals(None, &p), vec![15, 60]);
+        assert_eq!(task_intervals(Some(0), &p), vec![15, 60]); // 0 фильтруется вызывающим
+    }
 }
