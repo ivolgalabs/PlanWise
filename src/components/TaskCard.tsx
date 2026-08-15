@@ -678,8 +678,9 @@ export const TaskCard = memo(function TaskCard({
             )}
           </div>
         )}
-        {/* Заметка — всегда под текстом, пока не скрыта настройкой. */}
-        {visibility.notes && task.notes && (
+        {/* Компактная сетка недели: заметка остаётся под текстом (в колонке
+            она не сжимается). Вне сетки — отдельный блок с иконкой ниже. */}
+        {visibility.notes && task.notes && compact && (
           <div
             style={{
               fontSize: "var(--fs-2xs)",
@@ -718,6 +719,15 @@ export const TaskCard = memo(function TaskCard({
         <Icon name="edit" size={compact ? 12 : 14} />
       </button>
     </div>
+    {/* Заметка — под строкой, отдельным блоком с иконкой: в ряду с текстом
+        (flex-row) она сжималась к правому краю и терялась, теперь видно, что
+        это заметка. compact (сетка недели) — остаётся под текстом (выше). */}
+    {visibility.notes && task.notes && !compact && (
+      <div className="task-note" title="Заметка">
+        <Icon name="note" size={13} />
+        <span>{task.notes}</span>
+      </div>
+    )}
     {/* Подзадачи под строкой (линия категории покрывает весь блок).
         Текст подзадачи редактируется прямо в строке; карточка родительской
         задачи открывается кнопкой «✎» выше. */}
