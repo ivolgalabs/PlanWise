@@ -737,6 +737,7 @@ export function TaskFormFields({
             ? subItems.map((s) => (
                 <div
                   key={s.id}
+                  className="subtask-row"
                   style={{
                     display: "flex",
                     // flex-start: длинный текст подзадачи переносится —
@@ -822,6 +823,7 @@ export function TaskFormFields({
             : subs.map((s, i) => (
                 <div
                   key={i}
+                  className="subtask-row"
                   style={{
                     display: "flex",
                     alignItems: "flex-start",
