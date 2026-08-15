@@ -19,21 +19,25 @@ interface Props {
   onChange: () => void;
 }
 
-/** Доп. время задачи: «09:00–10:30» (длительность) и «выезд в 08:15» —
- *  мелкими подписями справа от названия (в списке задач дня). */
+/** Время задачи: «09:00–10:30» (диапазон при длительности) и «выезд в 08:15».
+ *  Диапазон показывается бейджем как единственное время задачи — стартовое
+ *  время в нём уже есть, отдельно не дублируется. */
 const fmt = (m: number) =>
   `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
-const timeMetaOf = (t: Task): string[] => {
-  const meta: string[] = [];
-  if (t.timeMinutes != null && t.durationMinutes) {
-    const end = (t.timeMinutes + t.durationMinutes) % (24 * 60);
-    meta.push(`${fmt(t.timeMinutes)}–${fmt(end)}`);
-  }
-  if (t.timeMinutes != null && t.travelTime) {
-    const dep = (t.timeMinutes - t.travelTime + 24 * 60) % (24 * 60);
-    meta.push(`выезд в ${fmt(dep)}`);
-  }
-  return meta;
+
+/** Пересекается ли время задачи с другой задачей того же дня (как в TaskCard):
+ *  интервал [start, start+duration), без длительности — одна минута. */
+const hasTimeConflict = (t: Task, dayTasks: Task[]): boolean => {
+  if (t.timeMinutes == null || t.isDone) return false;
+  const d1 = t.durationMinutes ?? 0;
+  return dayTasks.some(
+    (o) =>
+      o.id !== t.id &&
+      !o.isDone &&
+      o.timeMinutes != null &&
+      t.timeMinutes! < o.timeMinutes + Math.max(o.durationMinutes ?? 0, 1) &&
+      o.timeMinutes < t.timeMinutes! + Math.max(d1, 1),
+  );
 };
 
 /**
@@ -106,20 +110,22 @@ export function MonthView({ tasks, onSelectDay, onSelectWeek, onChange }: Props)
   };
 
   // Список задач дня — общий для широкой и узкой раскладок панели.
+  const dayList = menuDay ? tasksForDay(menuDay) : [];
   const taskList = menuDay ? (
     <>
-      {tasksForDay(menuDay).length === 0 && (
+      {dayList.length === 0 && (
         <p style={{ margin: 0, padding: "var(--sp-1) 0", fontSize: "var(--fs-sm)", color: COLORS.muted }}>
           Нет задач на этот день
         </p>
       )}
-      {tasksForDay(menuDay).map((t) => (
+      {dayList.map((t) => (
         <div key={t.id} className="month-task-block" style={{ borderRadius: "var(--radius-sm)", minWidth: 0 }}>
           {/* Строка задачи: клик по свободному месту — к дню, по тексту —
               инлайн-переименование, ✕ — удаление с подтверждением. */}
           <MonthTaskRow
             task={t}
             colorSets={colorSets}
+            conflict={hasTimeConflict(t, dayList)}
             onOpenDay={() => openDay(menuDay)}
             onRename={async (title) => {
               await api.upsertTask({ ...t, title });
@@ -231,7 +237,7 @@ export function MonthView({ tasks, onSelectDay, onSelectWeek, onChange }: Props)
               /* Широкий экран: список задач слева (свой скролл), форма и
                  переходы справа — видны одновременно. */
               <div style={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: "minmax(0, 1.2fr) minmax(0, 1fr)", gap: "var(--sp-6)", overflow: "hidden" }}>
-                <div style={{ minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: "var(--sp-1)", paddingRight: "var(--sp-2)" }}>
+                <div style={{ minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: "var(--sp-2)", paddingRight: "var(--sp-2)" }}>
                   {taskList}
                 </div>
                 <div style={{ minHeight: 0, overflowY: "auto" }}>
@@ -272,7 +278,7 @@ export function MonthView({ tasks, onSelectDay, onSelectWeek, onChange }: Props)
               /* Узкий экран: список со своим скроллом над формой — форма
                  доступна без прокрутки всего списка. */
               <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-                <div style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: "var(--sp-1)" }}>
+                <div style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: "var(--sp-2)" }}>
                   {taskList}
                 </div>
                 <div style={{ flexShrink: 0, maxHeight: "45%", overflowY: "auto" }}>
@@ -457,12 +463,15 @@ function CategoryBadges({ tasks }: { tasks: Task[] }) {
 function MonthTaskRow({
   task,
   colorSets,
+  conflict,
   onOpenDay,
   onRename,
   onDelete,
 }: {
   task: Task;
   colorSets: ColorSet[];
+  /** Время пересекается с другой задачей этого дня (красный бейдж). */
+  conflict: boolean;
   onOpenDay: () => void;
   onRename: (title: string) => Promise<void>;
   onDelete: () => void;
@@ -483,7 +492,31 @@ function MonthTaskRow({
     if (t && t !== task.title) await onRename(t);
   };
 
-  const meta = timeMetaOf(task);
+  // Время: при длительности показываем ТОЛЬКО диапазон «09:00–10:30» (бейдж),
+  // стартовое время не дублируем — оно уже есть в диапазоне. Без длительности —
+  // просто «09:00». Конфликт — красный бейдж, как время в дне/неделе.
+  const hasTime = task.timeMinutes != null;
+  const hasRange = hasTime && !!task.durationMinutes;
+  const timeText = hasTime
+    ? hasRange
+      ? (() => {
+          const total = task.timeMinutes! + task.durationMinutes!;
+          const days = Math.floor(total / (24 * 60));
+          return `${fmt(task.timeMinutes!)}–${fmt(total % (24 * 60))}${days > 0 ? ` (+${days} дн.)` : ""}`;
+        })()
+      : formatMinutes(task.timeMinutes!)
+    : null;
+  const travel = hasTime && task.travelTime
+    ? `выезд в ${fmt((task.timeMinutes! - task.travelTime + 24 * 60) % (24 * 60))}`
+    : null;
+  const timeBadge = hasTime ? (
+    <span
+      className={`task-time has${conflict ? " conflict" : ""}`}
+      title={conflict ? "Время пересекается с другой задачей" : undefined}
+    >
+      {timeText}
+    </span>
+  ) : null;
 
   return (
     <div
@@ -502,7 +535,9 @@ function MonthTaskRow({
         alignItems: "center",
         gap: "var(--sp-2)",
         textAlign: "left",
-        padding: "var(--sp-2) var(--sp-3)",
+        // Вертикальный отступ больше прежнего: строки не слипаются, кнопки
+        // удаления не наслаиваются друг на друга.
+        padding: "var(--sp-3) var(--sp-3)",
         borderRadius: "var(--radius-sm)",
         cursor: "pointer",
         fontSize: "var(--fs-sm)",
@@ -524,11 +559,9 @@ function MonthTaskRow({
               : setHex(colorSets, task.colorSetId) ?? COLORS.muted,
         }}
       />
-      {task.timeMinutes != null && (
-        <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted, flexShrink: 0 }}>
-          {formatMinutes(task.timeMinutes)}
-        </span>
-      )}
+      {/* Бейдж стартового времени — только без диапазона: при длительности
+          время уже показано диапазоном справа, дублировать не нужно. */}
+      {hasTime && !hasRange && timeBadge}
       {editing ? (
         <input
           ref={inputRef}
@@ -570,9 +603,11 @@ function MonthTaskRow({
           style={{
             flex: 1,
             minWidth: 0,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
+            // Длинное название ПЕРЕНОСИТСЯ на новые строки, а не режется
+            // многоточием: раньше хвост задачи был не виден. Список дня
+            // скроллится, поэтому высота строки не ограничена.
+            whiteSpace: "normal",
+            wordBreak: "break-word",
             cursor: "text",
             textDecoration: task.isDone ? "line-through" : "none",
           }}
@@ -580,24 +615,30 @@ function MonthTaskRow({
           {task.title}
         </span>
       )}
-      {/* Справа от задачи — время выполнения и выезд (если заданы). maxWidth
-          + ellipsis: длинная подпись не выталкивает название задачи. */}
-      {meta.length > 0 && (
+      {/* Справа: диапазон времени (бейдж, красный при конфликте) и выезд.
+          flexWrap: блок переносится, а не наезжает на кнопку удаления. */}
+      {(hasRange && timeBadge) || travel ? (
         <span
           style={{
             marginLeft: "auto",
-            flexShrink: 0,
-            maxWidth: "45%",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-            fontSize: "var(--fs-2xs)",
-            color: COLORS.muted,
+            flexShrink: 1,
+            minWidth: 0,
+            maxWidth: "60%",
+            display: "inline-flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            justifyContent: "flex-end",
+            gap: "var(--sp-2)",
           }}
         >
-          {meta.join(" · ")}
+          {hasRange && timeBadge}
+          {travel && (
+            <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted, whiteSpace: "nowrap" }}>
+              {travel}
+            </span>
+          )}
         </span>
-      )}
+      ) : null}
       <button
         type="button"
         className="chip-btn-sm"
@@ -640,10 +681,10 @@ function DayTaskSubs({ taskId, done }: { taskId: string; done: boolean }) {
   return (
     <div
       style={{
-        margin: "0 var(--sp-3) var(--sp-1) calc(var(--sp-4) + 14px)",
+        margin: "0 var(--sp-3) var(--sp-2) calc(var(--sp-4) + 14px)",
         display: "flex",
         flexDirection: "column",
-        gap: 2,
+        gap: 3,
         minWidth: 0,
       }}
     >
@@ -695,6 +736,8 @@ function MonthSubRow({
         gap: "var(--sp-2)",
         fontSize: "var(--fs-2xs)",
         minWidth: 0,
+        // Немного вертикального воздуха — строки подзадач не слипаются.
+        padding: "var(--sp-1) 0",
       }}
     >
       <span
@@ -744,9 +787,9 @@ function MonthSubRow({
           style={{
             flex: 1,
             minWidth: 0,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
+            // Длинный текст подзадачи переносится, а не обрезается.
+            whiteSpace: "normal",
+            wordBreak: "break-word",
             color: done2 ? COLORS.muted : COLORS.text,
             textDecoration: done2 ? "line-through" : "none",
             cursor: "text",

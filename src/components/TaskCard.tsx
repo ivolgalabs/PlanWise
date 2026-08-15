@@ -386,19 +386,25 @@ export const TaskCard = memo(function TaskCard({
   const [cardOpen, setCardOpen] = useState(false);
 
   // Время в строке — ТОЛЬКО отображение (изменение — в карточке задачи).
-  // Формат: «09:00» + мета «09:00–10:30 · выезд в 08:15 (+1 дн.)».
+  // Бейдж: при длительности — диапазон «09:00–10:30» (стартовое время в нём
+  // уже есть, отдельно не дублируется), без неё — «09:00». Мета: выезд.
   const fmt = (m: number) =>
     `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
   const timeMeta: string[] = [];
-  if (task.timeMinutes != null && task.durationMinutes) {
-    const total = task.timeMinutes + task.durationMinutes;
-    const days = Math.floor(total / (24 * 60));
-    timeMeta.push(`${fmt(task.timeMinutes)}–${fmt(total % (24 * 60))}${days > 0 ? ` (+${days} дн.)` : ""}`);
-  }
   if (task.timeMinutes != null && task.travelTime) {
     const dep = (task.timeMinutes - task.travelTime + 24 * 60) % (24 * 60);
     timeMeta.push(`выезд в ${fmt(dep)}`);
   }
+  const timeText =
+    task.timeMinutes != null
+      ? task.durationMinutes
+        ? (() => {
+            const total = task.timeMinutes! + task.durationMinutes!;
+            const days = Math.floor(total / (24 * 60));
+            return `${fmt(task.timeMinutes!)}–${fmt(total % (24 * 60))}${days > 0 ? ` (+${days} дн.)` : ""}`;
+          })()
+        : formatMinutes(task.timeMinutes)
+      : null;
   // Статичный «бейдж» времени: выглядит как раньше, но это не кнопка —
   // клик открывает карточку, где время настраивается.
   const timeBadge = (
@@ -406,11 +412,7 @@ export const TaskCard = memo(function TaskCard({
       className={`task-time${task.timeMinutes != null ? " has" : ""}${timeConflict ? " conflict" : ""}`}
       title={timeConflict ? "Время пересекается с другой задачей" : task.timeMinutes != null ? "Нажмите, чтобы настроить время" : "Без привязки ко времени"}
     >
-      {task.timeMinutes != null
-        ? formatMinutes(task.timeMinutes)
-        : compact
-          ? "в теч. дня"
-          : "в течение дня"}
+      {timeText ?? (compact ? "в теч. дня" : "в течение дня")}
     </span>
   );
 
