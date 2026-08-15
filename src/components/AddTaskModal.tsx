@@ -743,6 +743,10 @@ export function TaskFormFields({
                     // чекбокс и поле остаются наверху, а не по центру.
                     alignItems: "flex-start",
                     gap: "var(--sp-2)",
+                    // Вертикальный отступ: строки плотные (без него кнопки
+                    // удаления 24px стоят вплотную друг к другу — выглядит
+                    // как наслоение).
+                    padding: "3px 0",
                     fontSize: "var(--fs-sm)",
                     color: COLORS.text,
                   }}
@@ -822,6 +826,7 @@ export function TaskFormFields({
                     display: "flex",
                     alignItems: "flex-start",
                     gap: "var(--sp-2)",
+                    padding: "3px 0",
                     fontSize: "var(--fs-sm)",
                     color: COLORS.text,
                   }}
