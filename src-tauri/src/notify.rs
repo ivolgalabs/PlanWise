@@ -490,20 +490,22 @@ fn schedule_at(app: &tauri::AppHandle, id: i32, title: &str, body: &str, due: Na
         .show();
 }
 
-/// Дайджест «Список дел на день»: InboxStyle-уведомление — каждая задача
-/// строкой («09:00  Задача»), в развёрнутом виде — весь список, а не
-/// обрезанные 4 строки, как в плоском body.
+/// Дайджест «План на день»: InboxStyle-уведомление — каждая задача строкой.
+/// Задачи с временем — «09:00  Название» (сортировка по времени), без времени —
+/// пунктиром «• Название» в конце (сначала по расписанию, потом «в течение дня»).
+/// В развёрнутом виде — весь список, в сводке — сколько задач со временем.
 #[cfg(target_os = "android")]
 fn schedule_digest(app: &tauri::AppHandle, ts: NaiveDateTime, rows: &[(String, Option<i64>)]) {
     let Ok(at) = time::OffsetDateTime::from_unix_timestamp(to_local(&ts).timestamp()) else {
         return;
     };
     let n = rows.len();
+    let timed = rows.iter().filter(|(_, t)| t.is_some()).count();
     let mut b = app
         .notification()
         .builder()
         .id(DIGEST_NOTIFICATION_ID)
-        .title(format!("Задачи на сегодня ({n})"))
+        .title(format!("План на сегодня: {n} задач"))
         .channel_id(TASKS_CHANNEL_ID)
         .schedule(Schedule::At {
             date: at,
@@ -513,11 +515,17 @@ fn schedule_digest(app: &tauri::AppHandle, ts: NaiveDateTime, rows: &[(String, O
     for (title, time) in rows {
         let line = match time {
             Some(m) => format!("{:02}:{:02}  {}", m / 60, m % 60, title),
-            None => title.clone(),
+            None => format!("• {title}"),
         };
         b = b.inbox_line(line);
     }
-    b = b.summary(if n == 1 { "1 задача".to_string() } else { format!("{n} задач") });
+    b = b.summary(if timed == 0 {
+        "в течение дня".to_string()
+    } else if timed == 1 {
+        "1 задача со временем".to_string()
+    } else {
+        format!("{timed} задач со временем")
+    });
     let _ = b.show();
 }
 
