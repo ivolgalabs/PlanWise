@@ -52,13 +52,8 @@ export const firstOfMonth = (d: Date): Date =>
   new Date(d.getFullYear(), d.getMonth(), 1);
 
 /** День в прошлом (строго раньше сегодня). */
-export const isPast = (d: Date): boolean => {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const day = new Date(d);
-  day.setHours(0, 0, 0, 0);
-  return day.getTime() < today.getTime();
-};
+export const isPast = (d: Date): boolean =>
+  atMidnight(d).getTime() < atMidnight(new Date()).getTime();
 
 /**
  * Визуальный «вес» дня для иерархии отображения:
@@ -71,11 +66,9 @@ export const isPast = (d: Date): boolean => {
 export type DayWeight = "today" | "tomorrow" | "near" | "future" | "past";
 
 export const dayWeight = (d: Date): DayWeight => {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const day = new Date(d);
-  day.setHours(0, 0, 0, 0);
-  const diffDays = Math.round((day.getTime() - today.getTime()) / 86_400_000);
+  const diffDays = Math.round(
+    (atMidnight(d).getTime() - atMidnight(new Date()).getTime()) / 86_400_000,
+  );
   if (diffDays === 0) return "today";
   if (diffDays === 1) return "tomorrow";
   if (diffDays < 0) return "past";
@@ -126,4 +119,79 @@ export const sortTasksByMode = <T extends { timeMinutes?: number | null; difficu
     const ka = key(a), kb = key(b);
     return ka - kb || a.sortOrder - b.sortOrder;
   });
+};
+
+/** Задачи конкретного дня: «Когда-нибудь» не дублируется в днях, сортировка —
+ *  по выбранному режиму. Единая точка для всех видов (день/неделя/месяц). */
+export const tasksForDay = <
+  T extends {
+    someday: boolean;
+    date: number;
+    sortOrder: number;
+    timeMinutes?: number | null;
+    difficulty?: number;
+  },
+>(
+  tasks: T[],
+  d: Date,
+  mode: "time" | "manual" | "priority",
+): T[] =>
+  sortTasksByMode(
+    tasks.filter((t) => !t.someday && isSameDay(fromEpochDay(t.date), d)),
+    mode,
+  );
+
+/** Пересечение двух временных интервалов [start, start+duration); без
+ *  длительности занимает одну минуту (две задачи «в одно время» конфликтуют,
+ *  «встык» — нет). */
+export const intervalsOverlap = (m1: number, d1: number, m2: number, d2: number): boolean =>
+  m1 < m2 + Math.max(d2, 1) && m2 < m1 + Math.max(d1, 1);
+
+/** Есть ли у задачи пересечение по времени с другой задачей (для списков дня). */
+export const hasTimeConflict = (
+  t: {
+    id: string;
+    timeMinutes?: number | null;
+    durationMinutes?: number | null;
+    isDone?: boolean;
+  },
+  others: Array<{
+    id: string;
+    timeMinutes?: number | null;
+    durationMinutes?: number | null;
+    isDone?: boolean;
+  }>,
+): boolean => {
+  if (t.timeMinutes == null || t.isDone) return false;
+  const d1 = t.durationMinutes ?? 0;
+  return others.some(
+    (o) =>
+      o.id !== t.id &&
+      !o.isDone &&
+      o.timeMinutes != null &&
+      intervalsOverlap(t.timeMinutes!, d1, o.timeMinutes, o.durationMinutes ?? 0),
+  );
+};
+
+/** Время задачи для бейджа: «09:00» или «09:00–10:30» (+N дн. при переходе
+ *  через полночь); null — время не задано. */
+export const taskTimeRange = (t: {
+  timeMinutes?: number | null;
+  durationMinutes?: number | null;
+}): string | null => {
+  if (t.timeMinutes == null) return null;
+  if (!t.durationMinutes) return formatMinutes(t.timeMinutes);
+  const total = t.timeMinutes + t.durationMinutes;
+  const days = Math.floor(total / (24 * 60));
+  return `${formatMinutes(t.timeMinutes)}–${formatMinutes(total % (24 * 60))}${days > 0 ? ` (+${days} дн.)` : ""}`;
+};
+
+/** «выезд в HH:MM» — за travelTime до начала задачи; null если не задано. */
+export const travelTimeText = (t: {
+  timeMinutes?: number | null;
+  travelTime?: number | null;
+}): string | null => {
+  if (t.timeMinutes == null || !t.travelTime) return null;
+  const dep = (t.timeMinutes - t.travelTime + 24 * 60) % (24 * 60);
+  return `выезд в ${formatMinutes(dep)}`;
 };

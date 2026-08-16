@@ -5,7 +5,7 @@ import { api } from "../api";
 import { COLORS, accentTint, argbToHex } from "../theme";
 import { useStore } from "../store";
 import { showToast } from "../toast";
-import { formatMinutes, fromEpochDay } from "../date";
+import { fromEpochDay, intervalsOverlap, taskTimeRange, travelTimeText } from "../date";
 import { useMediaQuery } from "../useMediaQuery";
 import { SubtaskList } from "./SubtaskList";
 import { AddTaskModal } from "./AddTaskModal";
@@ -139,8 +139,6 @@ export const TaskCard = memo(function TaskCard({
   // ── Пересечения по времени ────────────────────────────────────────
   // Задача «занимает» интервал [start, start+duration); без длительности —
   // одну минуту (мгновение). Одинаковое время двух задач = наложение.
-  const intervalsOverlap = (m1: number, d1: number, m2: number, d2: number) =>
-    m1 < m2 + Math.max(d2, 1) && m2 < m1 + Math.max(d1, 1);
   // Селектор возвращает ПРИМИТИВ (id конфликтующей задачи или null):
   // подписка перерисовывает карточку только когда сам факт конфликта
   // изменился. Подписка на весь массив s.tasks (как было) рендерила ВСЕ
@@ -389,20 +387,9 @@ export const TaskCard = memo(function TaskCard({
   // Бейдж: при длительности — диапазон «09:00–10:30» (стартовое время в нём
   // уже есть, отдельно не дублируется), без неё — «09:00». Мета: выезд.
   const timeMeta: string[] = [];
-  if (task.timeMinutes != null && task.travelTime) {
-    const dep = (task.timeMinutes - task.travelTime + 24 * 60) % (24 * 60);
-    timeMeta.push(`выезд в ${formatMinutes(dep)}`);
-  }
-  const timeText =
-    task.timeMinutes != null
-      ? task.durationMinutes
-        ? (() => {
-            const total = task.timeMinutes! + task.durationMinutes!;
-            const days = Math.floor(total / (24 * 60));
-            return `${formatMinutes(task.timeMinutes!)}–${formatMinutes(total % (24 * 60))}${days > 0 ? ` (+${days} дн.)` : ""}`;
-          })()
-        : formatMinutes(task.timeMinutes)
-      : null;
+  const travel = travelTimeText(task);
+  if (travel) timeMeta.push(travel);
+  const timeText = taskTimeRange(task);
   // Статичный «бейдж» времени: выглядит как раньше, но это не кнопка —
   // клик открывает карточку, где время настраивается.
   const timeBadge = (

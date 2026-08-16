@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import type { Task, Subtask, ColorSet } from "../api";
 import { api } from "../api";
-import { startOfWeek, firstOfMonth, isSameDay, isSameMonth, isToday, isPast, formatMinutes, sortTasksByMode, fromEpochDay, toEpochDay } from "../date";
+import { startOfWeek, firstOfMonth, isSameMonth, isToday, isPast, toEpochDay, tasksForDay, hasTimeConflict, taskTimeRange, travelTimeText } from "../date";
 import { COLORS, accentTint, setHex } from "../theme";
 import { useStore } from "../store";
 import { useMediaQuery } from "../useMediaQuery";
@@ -22,21 +22,6 @@ interface Props {
 /** Время задачи: «09:00–10:30» (диапазон при длительности) и «выезд в 08:15».
  *  Диапазон показывается бейджем как единственное время задачи — стартовое
  *  время в нём уже есть, отдельно не дублируется. */
-
-/** Пересекается ли время задачи с другой задачей того же дня (как в TaskCard):
- *  интервал [start, start+duration), без длительности — одна минута. */
-const hasTimeConflict = (t: Task, dayTasks: Task[]): boolean => {
-  if (t.timeMinutes == null || t.isDone) return false;
-  const d1 = t.durationMinutes ?? 0;
-  return dayTasks.some(
-    (o) =>
-      o.id !== t.id &&
-      !o.isDone &&
-      o.timeMinutes != null &&
-      t.timeMinutes! < o.timeMinutes + Math.max(o.durationMinutes ?? 0, 1) &&
-      o.timeMinutes < t.timeMinutes! + Math.max(d1, 1),
-  );
-};
 
 /**
  * Вид «Месяц»: сетка строк-недель с разной высотой. Строка с сегодняшним днём
@@ -94,10 +79,6 @@ export function MonthView({ tasks, onSelectDay, onSelectWeek, onChange }: Props)
     wk.some((d) => isToday(d)),
   );
 
-  const tasksForDay = (d: Date) =>
-    // !someday: «Когда-нибудь» не дублируется в днях месяца (см. WeekView).
-    sortTasksByMode(tasks.filter((t) => !t.someday && isSameDay(fromEpochDay(t.date), d)), sortMode);
-
   const weekdays = mondayFirst
     ? ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
     : ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
@@ -108,7 +89,7 @@ export function MonthView({ tasks, onSelectDay, onSelectWeek, onChange }: Props)
   };
 
   // Список задач дня — общий для широкой и узкой раскладок панели.
-  const dayList = menuDay ? tasksForDay(menuDay) : [];
+  const dayList = menuDay ? tasksForDay(tasks, menuDay, sortMode) : [];
   const taskList = menuDay ? (
     <>
       {dayList.length === 0 && (
@@ -185,7 +166,7 @@ export function MonthView({ tasks, onSelectDay, onSelectWeek, onChange }: Props)
                     // monthDate), а не выбранной даты — иначе при рассинхроне
                     // якорей весь месяц выглядел бы «чужим».
                     inMonth={isSameMonth(day, monthDate ?? selectedDate)}
-                    dayTasks={tasksForDay(day)}
+                    dayTasks={tasksForDay(tasks, day, sortMode)}
                     onClickDay={() => setMenuDay(day)}
                   />
                 );
@@ -489,18 +470,8 @@ function MonthTaskRow({
   // просто «09:00». Конфликт — красный бейдж, как время в дне/неделе.
   const hasTime = task.timeMinutes != null;
   const hasRange = hasTime && !!task.durationMinutes;
-  const timeText = hasTime
-    ? hasRange
-      ? (() => {
-          const total = task.timeMinutes! + task.durationMinutes!;
-          const days = Math.floor(total / (24 * 60));
-          return `${formatMinutes(task.timeMinutes!)}–${formatMinutes(total % (24 * 60))}${days > 0 ? ` (+${days} дн.)` : ""}`;
-        })()
-      : formatMinutes(task.timeMinutes!)
-    : null;
-  const travel = hasTime && task.travelTime
-    ? `выезд в ${formatMinutes((task.timeMinutes! - task.travelTime + 24 * 60) % (24 * 60))}`
-    : null;
+  const timeText = taskTimeRange(task);
+  const travel = travelTimeText(task);
   const timeBadge = hasTime ? (
     <span
       className={`task-time has${conflict ? " conflict" : ""}`}

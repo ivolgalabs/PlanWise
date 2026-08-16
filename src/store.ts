@@ -144,6 +144,24 @@ interface PlannerState {
   setAutoDonePastTime: (v: boolean) => void;
 }
 
+/** Разрешить активный id темы по mode и предпочтениям (производное состояния).
+ *  Единая точка для App (применение темы, виджет) и настроек (свотч). */
+export const resolveActiveTheme = (s: PlannerState): string => {
+  if (s.themeMode === "light") return s.preferredLightTheme;
+  if (s.themeMode === "dark") {
+    return s.useOledForDarkMode
+      ? s.preferredDarkTheme.replace(/^(dark|light)-/, "oled-")
+      : s.preferredDarkTheme;
+  }
+  // system
+  const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  return isDark
+    ? s.useOledForDarkMode
+      ? s.preferredDarkTheme.replace(/^(dark|light)-/, "oled-")
+      : s.preferredDarkTheme
+    : s.preferredLightTheme;
+};
+
 export const useStore = create<PlannerState>()(
   // persist: сохраняем настройки UI между запусками. tasks и selectedDate
   // не персистим — задачи грузятся из SQLite, дата всегда стартует с сегодня.

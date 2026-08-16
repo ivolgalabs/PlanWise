@@ -4,7 +4,7 @@ import { open, save } from "@tauri-apps/plugin-dialog";
 // Файловый ввод-вывод: на Android системные диалоги возвращают content://,
 // который std::fs не читает — плагин fs умеет работать с такими URI.
 import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
-import { useStore } from "../store";
+import { useStore, resolveActiveTheme } from "../store";
 import {
   COLORS, THEME_FAMILIES, argbToHex, hexToArgb,
   ACCENTS, LIGHT_SHADES, DARK_SHADES, hslToHex, hexToHue, autoSlotFor,
@@ -399,19 +399,8 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
     window.matchMedia("(prefers-color-scheme: dark)").matches;
   const curDark =
     themeMode === "dark" || (themeMode === "system" && systemIsDark);
-  // Разрешённая тема сейчас (дубль логики resolveActiveTheme из App).
-  const resolvedTheme =
-    themeMode === "light"
-      ? preferredLightTheme
-      : themeMode === "dark"
-        ? useOledForDarkMode
-          ? preferredDarkTheme.replace(/^(dark|light)-/, "oled-")
-          : preferredDarkTheme
-        : systemIsDark
-          ? useOledForDarkMode
-            ? preferredDarkTheme.replace(/^(dark|light)-/, "oled-")
-            : preferredDarkTheme
-          : preferredLightTheme;
+  // Разрешённая тема сейчас (общий resolveActiveTheme из store).
+  const resolvedTheme = resolveActiveTheme(useStore.getState());
   // Активный свотч: тема применена сейчас (без OLED-замены показываем базу).
   const activeBase = resolvedTheme.replace(/^oled-/, "dark-");
 

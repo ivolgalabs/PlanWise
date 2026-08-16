@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { toEpochDay } from "./date";
 import { browserApi } from "./api-browser-fallback";
+import type { TaskPattern } from "./store";
 
 export interface Task {
   id: string;
@@ -137,4 +138,28 @@ export const api = {
   /** Абсолютный путь файла вложения — для открытия системным приложением. */
   attachmentPath: (id: string) =>
     isTauri() ? invoke<string>("attachment_path", { id }) : Promise.reject(new Error("Доступно в приложении")),
+};
+
+/** Создать задачу из шаблона на дату: задача получает ВСЕ параметры шаблона
+ *  (время, сложность, длительность, уведомление, выезд, категорию, заметку)
+ *  и подзадачи. Общее для «Дня» и «Недели» (кнопки «+ Шаблон»). */
+export const createTaskFromPattern = async (
+  p: TaskPattern,
+  date: number,
+): Promise<void> => {
+  const created = await api.upsertTask({
+    title: p.title,
+    date,
+    timeMinutes: p.timeMinutes,
+    difficulty: p.difficulty,
+    durationMinutes: p.durationMinutes,
+    notifyMinutes: p.notifyMinutes ?? null,
+    travelTime: p.travelTime ?? null,
+    colorSetId: p.colorSetId ?? null,
+    notes: p.notes ?? "",
+  });
+  for (const s of p.subtasks ?? []) {
+    const st = s.trim();
+    if (st) await api.upsertSubtask({ taskId: created.id, title: st });
+  }
 };

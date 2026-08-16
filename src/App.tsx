@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api, isTauri } from "./api";
 import type { Task } from "./api";
 import { useStore } from "./store";
+import { resolveActiveTheme } from "./store";
 import type { ViewKind } from "./store";
 import { COLORS, applyTheme, watchSystemTheme, accentTint, applyCustomSlot } from "./theme";
 import { useMediaQuery } from "./useMediaQuery";
@@ -34,27 +35,9 @@ function loadCalWidth(): number {
   return CAL_DEFAULT;
 }
 
-/** Разрешить id темы по mode + предпочтениям. */
-function resolveActiveTheme(): string {
-  const s = useStore.getState();
-  if (s.themeMode === "light") return s.preferredLightTheme;
-  if (s.themeMode === "dark") {
-    return s.useOledForDarkMode
-      ? s.preferredDarkTheme.replace(/^(dark|light)-/, "oled-")
-      : s.preferredDarkTheme;
-  }
-  // system
-  const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-  return isDark
-    ? s.useOledForDarkMode
-      ? s.preferredDarkTheme.replace(/^(dark|light)-/, "oled-")
-      : s.preferredDarkTheme
-    : s.preferredLightTheme;
-}
-
 /** Эффективная тема: тёмная (dark/oled) или светлая — для виджета. */
 function isDarkTheme(): boolean {
-  const t = resolveActiveTheme();
+  const t = resolveActiveTheme(useStore.getState());
   return t.startsWith("dark") || t.startsWith("oled");
 }
 
@@ -231,7 +214,7 @@ function App() {
   // в старой теме до следующего изменения задач.
   useEffect(() => {
     const apply = () => {
-      applyTheme(resolveActiveTheme());
+      applyTheme(resolveActiveTheme(useStore.getState()));
       if (isTauri()) {
         scheduleWidgetWrite(isDarkTheme());
       }

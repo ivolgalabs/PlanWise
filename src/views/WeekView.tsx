@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 import type { Task } from "../api";
-import { fromEpochDay } from "../date";
-import { weekDays, isSameDay, sortTasksByMode } from "../date";
+import { weekDays, tasksForDay } from "../date";
 import { DayColumn } from "../components/DayColumn";
 import { WeekShiftZone } from "../components/WeekShiftZone";
 import { WeekViewVertical } from "./WeekViewVertical";
@@ -45,11 +44,6 @@ export function WeekView({ tasks, archivedTasks, onChange }: Props) {
   // Вертикаль, если выбрано настройкой ИЛИ окно узкое.
   const effectiveVertical = weekVertical || narrow;
 
-  // !someday: задачи «Когда-нибудь» живут только в своей колонке — иначе
-  // дублируются в ячейках дня (у них проставлена дата создания).
-  const tasksForDay = (d: Date) =>
-    sortTasksByMode(tasks.filter((t) => !t.someday && isSameDay(fromEpochDay(t.date), d)), sortMode);
-
   return (
     // flex:1 вместо height:100% — см. DayView (zoom-совместимость).
     <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
@@ -79,7 +73,7 @@ export function WeekView({ tasks, archivedTasks, onChange }: Props) {
                   <div key={ri} style={{ display: "flex", gap: 4, flex: 1, minHeight: 0 }}>
                     {row.map((d) => (
                       <div key={d.toISOString()} style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", minHeight: 0 }}>
-                        <DayColumn day={d} tasks={tasksForDay(d)} onChange={onChange} />
+                        <DayColumn day={d} tasks={tasksForDay(tasks, d, sortMode)} onChange={onChange} />
                       </div>
                     ))}
                   </div>

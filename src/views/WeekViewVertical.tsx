@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import type { Task } from "../api";
 import { api } from "../api";
-import { weekDays, isSameDay, isToday, isPast, dayWeight, sortTasksByMode, formatMinutes, fromEpochDay, toEpochDay } from "../date";
+import { weekDays, isToday, isPast, dayWeight, formatMinutes, toEpochDay, tasksForDay } from "../date";
 import { TaskCard } from "../components/TaskCard";
 import { WeekShiftZone } from "../components/WeekShiftZone";
 import { SomedayColumn } from "../components/SomedayColumn";
@@ -11,6 +11,7 @@ import { AddTaskModal } from "../components/AddTaskModal";
 import { Icon } from "../components/Icon";
 import { COLORS, accentTint } from "../theme";
 import { useStore, type TaskPattern } from "../store";
+import { createTaskFromPattern } from "../api";
 import { dayId } from "../drag";
 
 interface Props {
@@ -44,13 +45,6 @@ export function WeekViewVertical({ tasks, archivedTasks, mobileSections, anchor,
   // Раскрытие архива — по кнопке (как в «Дне»), чтобы не раздувать список.
   const [archiveOpen, setArchiveOpen] = useState(false);
 
-  const tasksForDay = (d: Date) =>
-    sortTasksByMode(
-      // !someday: «Когда-нибудь» не дублируется в днях недели (см. WeekView).
-      tasks.filter((t) => !t.someday && isSameDay(fromEpochDay(t.date), d)),
-      sortMode,
-    );
-
   const dayKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 
   const addTask = async (d: Date) => {
@@ -62,7 +56,7 @@ export function WeekViewVertical({ tasks, archivedTasks, mobileSections, anchor,
   };
 
   const createNext = async (afterId: string, day: Date) => {
-    const dayTasks = tasksForDay(day);
+    const dayTasks = tasksForDay(tasks, day, sortMode);
     const after = dayTasks.find((t) => t.id === afterId);
     const sort = after ? after.sortOrder + 1 : Date.now();
     await api.upsertTask({ title: "", date: toEpochDay(day), sortOrder: sort });
@@ -97,7 +91,7 @@ export function WeekViewVertical({ tasks, archivedTasks, mobileSections, anchor,
             key={d.toISOString()}
             day={d}
             dayKey={dayKey(d)}
-            dayTasks={tasksForDay(d)}
+            dayTasks={tasksForDay(tasks, d, sortMode)}
             onChange={onChange}
             createNext={createNext}
             title={titlesByDay[dayKey(d)] ?? ""}
@@ -176,23 +170,7 @@ function DayRow({
 
   // Шаблон задач: кнопка создаёт задачу на этот день с параметрами шаблона.
   const addPattern = async (p: TaskPattern) => {
-    // Задача из шаблона получает ВСЕ его параметры, включая категорию,
-    // заметку и подзадачи (как в карточке).
-    const created = await api.upsertTask({
-      title: p.title,
-      date: ed,
-      timeMinutes: p.timeMinutes,
-      difficulty: p.difficulty,
-      durationMinutes: p.durationMinutes,
-      notifyMinutes: p.notifyMinutes ?? null,
-      travelTime: p.travelTime ?? null,
-      colorSetId: p.colorSetId ?? null,
-      notes: p.notes ?? "",
-    });
-    for (const s of p.subtasks ?? []) {
-      const st = s.trim();
-      if (st) await api.upsertSubtask({ taskId: created.id, title: st });
-    }
+    await createTaskFromPattern(p, ed);
     onChange();
   };
 

@@ -9,9 +9,10 @@ import { AddTaskModal } from "../components/AddTaskModal";
 import { Icon } from "../components/Icon";
 import { COLORS, accentTint } from "../theme";
 import { dayId } from "../drag";
-import { isToday, sortTasksByMode, formatMinutes, isSameDay, fromEpochDay, toEpochDay } from "../date";
+import { isToday, formatMinutes, toEpochDay, tasksForDay } from "../date";
 import { useMediaQuery } from "../useMediaQuery";
 import { useStore, type TaskPattern } from "../store";
+import { createTaskFromPattern } from "../api";
 
 interface Props {
   day: Date;
@@ -39,14 +40,7 @@ export function DayView({ day, tasks, archivedTasks, onChange }: Props) {
   const panelNarrow = useMediaQuery("(max-width: 700px)");
 
   const sortMode = useStore((s) => s.sortMode);
-  const dayTasks = sortTasksByMode(
-    tasks.filter((t) => {
-      // «Когда-нибудь» не показывается в дне (своя колонка).
-      if (t.someday) return false;
-      return isSameDay(fromEpochDay(t.date), day);
-    }),
-    sortMode,
-  );
+  const dayTasks = tasksForDay(tasks, day, sortMode);
 
   const epochDay = toEpochDay(day);
   const dayKey = `${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`;
@@ -176,24 +170,7 @@ function DayTasksArea({
   const [addOpen, setAddOpen] = useState(false);
   // Шаблон задач: кнопка создаёт задачу на этот день с параметрами шаблона.
   const addPattern = async (p: TaskPattern) => {
-    const ed = toEpochDay(day);
-    // Задача из шаблона получает ВСЕ его параметры, включая категорию,
-    // заметку и подзадачи (как в карточке).
-    const created = await api.upsertTask({
-      title: p.title,
-      date: ed,
-      timeMinutes: p.timeMinutes,
-      difficulty: p.difficulty,
-      durationMinutes: p.durationMinutes,
-      notifyMinutes: p.notifyMinutes ?? null,
-      travelTime: p.travelTime ?? null,
-      colorSetId: p.colorSetId ?? null,
-      notes: p.notes ?? "",
-    });
-    for (const s of p.subtasks ?? []) {
-      const st = s.trim();
-      if (st) await api.upsertSubtask({ taskId: created.id, title: st });
-    }
+    await createTaskFromPattern(p, toEpochDay(day));
     onChange();
   };
   return (
