@@ -44,7 +44,7 @@ interface FieldsProps {
   /** День, на который добавляется задача (для создания) или день задачи. */
   day: Date;
   /** Вызывается после успешного сохранения (родитель решает — закрыть). */
-  onAdded: () => void;
+  onAdded?: () => void;
   onCancel: () => void;
   /** Автофокус на поле названия (в модалке дня удобно, в месяце — нет). */
   autoFocus?: boolean;
@@ -290,7 +290,7 @@ export function TaskFormFields({
           }
         }
       }
-      onAdded();
+      onAdded?.();
     } catch (err) {
       // Rust не дал сохранить (время занято другой задачей) — показываем
       // сообщение, форма остаётся открытой.
@@ -303,7 +303,7 @@ export function TaskFormFields({
     setConfirmDel(false);
     await api.deleteTask(initial.id);
     onChange?.();
-    onAdded();
+    onAdded?.();
   };
 
   const addSub = () => {
@@ -556,105 +556,36 @@ export function TaskFormFields({
                 )}
             {editing &&
               attachments.map((a) => (
-                <div
+                <AttachmentRow
                   key={a.id}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "var(--sp-2)",
-                    border: `1px solid var(--border-color)`,
-                    borderRadius: "var(--radius-md)",
-                    padding: "4px 8px",
+                  name={a.fileName}
+                  size={a.size}
+                  onOpen={async () => {
+                    try {
+                      const p = await api.attachmentPath(a.id);
+                      await openPath(p);
+                    } catch {
+                      /* нет приложения для типа файла — молча */
+                    }
                   }}
-                >
-                  <Icon name="file" size={14} />
-                  <button
-                    type="button"
-                    className="file-name-btn"
-                    onClick={async () => {
-                      try {
-                        const p = await api.attachmentPath(a.id);
-                        await openPath(p);
-                      } catch {
-                        /* нет приложения для типа файла — молча */
-                      }
-                    }}
-                    title="Открыть файл"
-                    style={{
-                      flex: 1,
-                      minWidth: 0,
-                      textAlign: "left",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                      fontSize: "var(--fs-xs)",
-                      color: COLORS.text,
-                      background: "transparent",
-                      border: "none",
-                      cursor: "pointer",
-                      padding: 0,
-                    }}
-                  >
-                    {a.fileName}
-                  </button>
-                  <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted, flexShrink: 0 }}>
-                    {formatFileSize(a.size)}
-                  </span>
-                  <button
-                    type="button"
-                    className="chip-btn"
-                    title="Удалить файл"
-                    onClick={async () => {
-                      await api.deleteAttachment(a.id);
-                      setAttachments(await api.listAttachments(initial.id));
-                    }}
-                  >
-                    <Icon name="close" size={12} />
-                  </button>
-                </div>
+                  onRemove={async () => {
+                    await api.deleteAttachment(a.id);
+                    setAttachments(await api.listAttachments(initial.id));
+                  }}
+                  removeTitle="Удалить файл"
+                />
               ))}
             {!editing &&
               pendingFiles.map((pf) => (
-                <div
+                <AttachmentRow
                   key={pf.key}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "var(--sp-2)",
-                    border: `1px solid var(--border-color)`,
-                    borderRadius: "var(--radius-md)",
-                    padding: "4px 8px",
-                  }}
-                >
-                  <Icon name="file" size={14} />
-                  <span
-                    style={{
-                      flex: 1,
-                      minWidth: 0,
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                      fontSize: "var(--fs-xs)",
-                      color: COLORS.text,
-                    }}
-                    title={pf.file.name}
-                  >
-                    {pf.file.name}
-                  </span>
-                  <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted, flexShrink: 0 }}>
-                    {formatFileSize(pf.file.size)}
-                  </span>
-                  <button
-                    type="button"
-                    className="chip-btn"
-                    title="Убрать файл"
-                    onClick={() =>
-                      setPendingFiles((arr) => arr.filter((f) => f.key !== pf.key))
-                    }
-                  >
-                    <Icon name="close" size={12} />
-                  </button>
-                </div>
+                  name={pf.file.name}
+                  size={pf.file.size}
+                  onRemove={() =>
+                    setPendingFiles((arr) => arr.filter((f) => f.key !== pf.key))
+                  }
+                  removeTitle="Убрать файл"
+                />
               ))}
             <button
               type="button"
@@ -971,7 +902,7 @@ export function TaskFormFields({
             await api.moveTask(initial.id, d);
             setMoveOpen(false);
             onChange?.();
-            onAdded();
+            onAdded?.();
           }}
           onClose={() => setMoveOpen(false)}
         />
@@ -1108,4 +1039,80 @@ function formatFileSize(bytes: number): string {
   if (bytes >= 1_048_576) return `${(bytes / 1_048_576).toFixed(1)} МБ`;
   if (bytes >= 1024) return `${Math.round(bytes / 1024)} КБ`;
   return `${bytes} Б`;
+}
+
+/** Строка вложения в форме: иконка + имя (сохранённые — кнопка «открыть»,
+ *  буферизованные — текст) + размер + удаление. Общее для обоих списков. */
+function AttachmentRow({
+  name,
+  size,
+  onOpen,
+  onRemove,
+  removeTitle,
+}: {
+  name: string;
+  size: number;
+  onOpen?: () => void;
+  onRemove: () => void;
+  removeTitle: string;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "var(--sp-2)",
+        border: "1px solid var(--border-color)",
+        borderRadius: "var(--radius-md)",
+        padding: "4px 8px",
+      }}
+    >
+      <Icon name="file" size={14} />
+      {onOpen ? (
+        <button
+          type="button"
+          className="file-name-btn"
+          onClick={onOpen}
+          title="Открыть файл"
+          style={{
+            flex: 1,
+            minWidth: 0,
+            textAlign: "left",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            fontSize: "var(--fs-xs)",
+            color: COLORS.text,
+            background: "transparent",
+            border: "none",
+            cursor: "pointer",
+            padding: 0,
+          }}
+        >
+          {name}
+        </button>
+      ) : (
+        <span
+          style={{
+            flex: 1,
+            minWidth: 0,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            fontSize: "var(--fs-xs)",
+            color: COLORS.text,
+          }}
+          title={name}
+        >
+          {name}
+        </span>
+      )}
+      <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted, flexShrink: 0 }}>
+        {formatFileSize(size)}
+      </span>
+      <button type="button" className="chip-btn" title={removeTitle} onClick={onRemove}>
+        <Icon name="close" size={12} />
+      </button>
+    </div>
+  );
 }

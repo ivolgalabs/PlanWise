@@ -82,6 +82,90 @@ interface Props {
 const SCALE_PRESETS = [0.7, 0.85, 1.0, 1.25, 1.5, 1.75, 2.0];
 const FONT_PRESETS = [0.8, 0.9, 1.0, 1.1, 1.25, 1.4, 1.6];
 
+/** Переключатель настройки: чекбокс + подпись (общий стиль oled-toggle). */
+function Toggle({
+  checked,
+  onChange,
+  label,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  label: string;
+}) {
+  return (
+    <label className="oled-toggle">
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <span>{label}</span>
+    </label>
+  );
+}
+
+/** Секция слайдера масштаба: заголовок + бейдж + range + метки + пресеты.
+ *  Общая для «Масштаб интерфейса» и «Размер шрифта». */
+function ScaleSection({
+  icon,
+  title,
+  hint,
+  value,
+  min,
+  max,
+  marks,
+  presets,
+  onChange,
+}: {
+  icon?: IconName;
+  title: string;
+  hint: string;
+  value: number;
+  min: number;
+  max: number;
+  marks: string[];
+  presets: number[];
+  onChange: (v: number) => void;
+}) {
+  return (
+    <section className="settings-section">
+      <div className="section-head">
+        <div>
+          <h3
+            className="section-title"
+            style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)" }}
+          >
+            {icon && <Icon name={icon} size={14} />} {title}
+          </h3>
+          <p className="section-hint">{hint}</p>
+        </div>
+        <span className="scale-badge">{Math.round(value * 100)}%</span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={0.05}
+        value={value}
+        onChange={(e) => onChange(parseFloat(e.target.value))}
+        className="scale-slider"
+      />
+      <div className="scale-marks">
+        {marks.map((m) => (
+          <span key={m}>{m}</span>
+        ))}
+      </div>
+      <div className="scale-presets">
+        {presets.map((s) => (
+          <button
+            key={s}
+            onClick={() => onChange(s)}
+            className={`preset-btn ${Math.abs(value - s) < 0.01 ? "active" : ""}`}
+          >
+            {Math.round(s * 100)}%
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 /** Черновик категории для редактирования (id "" = ещё не создана).
  *  clientKey — уникальный ключ строки (crypto.randomUUID): у несохранённых
  *  черновиков id совпадает (""), поэтому React-key и патчи идут по clientKey. */
@@ -601,83 +685,29 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
           {settingsTab === "appearance" && (
           <>
           {/* ── Масштаб ── */}
-          <section className="settings-section">
-            <div className="section-head">
-              <div>
-                <h3
-                  className="section-title"
-                  style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)" }}
-                >
-                  <Icon name="zoom" size={14} /> Масштаб интерфейса
-                </h3>
-                <p className="section-hint">От 70% до 200% — применяется ко всем элементам</p>
-              </div>
-              <span className="scale-badge">{Math.round(uiScale * 100)}%</span>
-            </div>
-            <input
-              type="range"
-              min={0.7}
-              max={2.0}
-              step={0.05}
-              value={uiScale}
-              onChange={(e) => setUiScale(parseFloat(e.target.value))}
-              className="scale-slider"
-            />
-            <div className="scale-marks">
-              <span>70%</span>
-              <span>100%</span>
-              <span>150%</span>
-              <span>200%</span>
-            </div>
-            <div className="scale-presets">
-              {SCALE_PRESETS.map((s) => (
-                <button
-                  key={s}
-                  onClick={() => setUiScale(s)}
-                  className={`preset-btn ${Math.abs(uiScale - s) < 0.01 ? "active" : ""}`}
-                >
-                  {Math.round(s * 100)}%
-                </button>
-              ))}
-            </div>
-          </section>
+          <ScaleSection
+            icon="zoom"
+            title="Масштаб интерфейса"
+            hint="От 70% до 200% — применяется ко всем элементам"
+            value={uiScale}
+            min={0.7}
+            max={2.0}
+            marks={["70%", "100%", "150%", "200%"]}
+            presets={SCALE_PRESETS}
+            onChange={setUiScale}
+          />
 
           {/* ── Размер шрифта ── */}
-          <section className="settings-section">
-            <div className="section-head">
-              <div>
-                <h3 className="section-title">Размер шрифта</h3>
-                <p className="section-hint">Меняет только текст, без масштабирования всего интерфейса</p>
-              </div>
-              <span className="scale-badge">{Math.round(fontScale * 100)}%</span>
-            </div>
-            <input
-              type="range"
-              min={0.8}
-              max={1.6}
-              step={0.05}
-              value={fontScale}
-              onChange={(e) => setFontScale(parseFloat(e.target.value))}
-              className="scale-slider"
-            />
-            <div className="scale-marks">
-              <span>80%</span>
-              <span>100%</span>
-              <span>130%</span>
-              <span>160%</span>
-            </div>
-            <div className="scale-presets">
-              {FONT_PRESETS.map((s) => (
-                <button
-                  key={s}
-                  onClick={() => setFontScale(s)}
-                  className={`preset-btn ${Math.abs(fontScale - s) < 0.01 ? "active" : ""}`}
-                >
-                  {Math.round(s * 100)}%
-                </button>
-              ))}
-            </div>
-          </section>
+          <ScaleSection
+            title="Размер шрифта"
+            hint="Меняет только текст, без масштабирования всего интерфейса"
+            value={fontScale}
+            min={0.8}
+            max={1.6}
+            marks={["80%", "100%", "130%", "160%"]}
+            presets={FONT_PRESETS}
+            onChange={setFontScale}
+          />
 
           {/* ── Оформление: статус + вкладки (стандартные / свой выбор) ── */}
           <section className="settings-section">
@@ -1002,14 +1032,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
           {/* ── Неделя ── */}
           <section className="settings-section">
             <h3 className="section-title">Неделя</h3>
-            <label className="oled-toggle">
-              <input
-                type="checkbox"
-                checked={mondayFirst}
-                onChange={toggleMondayFirst}
-              />
-              <span>Начинается с понедельника</span>
-            </label>
+            <Toggle checked={mondayFirst} onChange={toggleMondayFirst} label="Начинается с понедельника" />
             {/* На тач-экранах и в узком окне неделя всегда списком (narrow-режим),
                 поэтому выбор «Списком/Сеткой» показываем только там, где сетка
                 реально доступна. */}
@@ -1039,34 +1062,13 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
           {/* ── Задачи ── */}
           <section className="settings-section">
             <h3 className="section-title">Задачи</h3>
-            <label className="oled-toggle">
-              <input
-                type="checkbox"
-                checked={archiveEnabled}
-                onChange={(e) => setArchiveEnabled(e.target.checked)}
-              />
-              <span>Авто-архив просроченных задач</span>
-            </label>
-            <label className="oled-toggle">
-              <input
-                type="checkbox"
-                checked={preventOverlaps}
-                onChange={(e) => setPrevent(e.target.checked)}
-              />
-              <span>Запрещать задачи на одно время</span>
-            </label>
+            <Toggle checked={archiveEnabled} onChange={setArchiveEnabled} label="Авто-архив просроченных задач" />
+            <Toggle checked={preventOverlaps} onChange={setPrevent} label="Запрещать задачи на одно время" />
             <p className="section-hint">
               Не даёт поставить задачу на время, занятое другой (можно добавить
               как подзадачу). Наложения у старых задач подсвечиваются красным.
             </p>
-            <label className="oled-toggle">
-              <input
-                type="checkbox"
-                checked={autoDonePastTime}
-                onChange={(e) => setAutoDonePastTime(e.target.checked)}
-              />
-              <span>Прошедшее время = задача выполнена</span>
-            </label>
+            <Toggle checked={autoDonePastTime} onChange={setAutoDonePastTime} label="Прошедшее время = задача выполнена" />
             <p className="section-hint">
               При установке времени: если оно уже прошло — задача автоматически
               выполненная; время в будущем — снимает выполнение.
@@ -1218,14 +1220,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
           <section className="settings-section">
             <h3 className="section-title">Уведомления</h3>
             <p className="section-hint">Приходят, пока приложение работает (в т.ч. в фоне)</p>
-            <label className="oled-toggle">
-              <input
-                type="checkbox"
-                checked={notifyDaySummary}
-                onChange={(e) => setNotifyDaySummary(e.target.checked)}
-              />
-              <span>Список задач на день — утром</span>
-            </label>
+            <Toggle checked={notifyDaySummary} onChange={setNotifyDaySummary} label="Список задач на день — утром" />
             {notifyDaySummary && (
               <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)", padding: "0 0 var(--sp-2)" }}>
                 <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-muted)" }}>Время:</span>
@@ -1248,14 +1243,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
                 />
               </div>
             )}
-            <label className="oled-toggle">
-              <input
-                type="checkbox"
-                checked={notifyReminders}
-                onChange={(e) => setNotifyReminders(e.target.checked)}
-              />
-              <span>Напоминания перед задачами со временем</span>
-            </label>
+            <Toggle checked={notifyReminders} onChange={setNotifyReminders} label="Напоминания перед задачами со временем" />
             {notifyReminders && (
               <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-2)", padding: "0 0 var(--sp-2)", alignItems: "center" }}>
                 {/* Мультиселект: можно выбрать несколько интервалов сразу
@@ -1325,16 +1313,10 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
                 на широких экранах. В десктопном виде на телефоне пункты
                 появляются. */}
             {!touchUI && (
-              <label className="oled-toggle">
-                <input type="checkbox" checked={visibility.datePicker} onChange={(e) => setVisibility("datePicker", e.target.checked)} />
-                <span>Кнопка даты (заголовок-дата остаётся)</span>
-              </label>
+              <Toggle checked={visibility.datePicker} onChange={(v) => setVisibility("datePicker", v)} label="Кнопка даты (заголовок-дата остаётся)" />
             )}
             {!panelNarrow && view !== "month" && (
-              <label className="oled-toggle">
-                <input type="checkbox" checked={visibility.miniCalendar} onChange={(e) => setVisibility("miniCalendar", e.target.checked)} />
-                <span>Мини-календарь справа</span>
-              </label>
+              <Toggle checked={visibility.miniCalendar} onChange={(v) => setVisibility("miniCalendar", v)} label="Мини-календарь справа" />
             )}
             {([
               ["navArrows", "Стрелки навигации ‹ ›"],
@@ -1345,10 +1327,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
               ["someday", "«Когда-нибудь»"],
               ["archiveBanner", "Баннер «Архивировано задач»"],
             ] as [keyof VisibilityState, string][]).map(([k, label]) => (
-              <label key={k} className="oled-toggle">
-                <input type="checkbox" checked={visibility[k]} onChange={(e) => setVisibility(k, e.target.checked)} />
-                <span>{label}</span>
-              </label>
+              <Toggle key={k} checked={visibility[k]} onChange={(v) => setVisibility(k, v)} label={label} />
             ))}
             {/* Расстояние между календарём и «Когда-нибудь» — сохраняется
                 между запусками; 0 = секции вплотную. Показываем, только если
@@ -1562,9 +1541,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
               initial={patternToTask(patternModal)}
               initialSubs={patternModal.subtasks ?? []}
               onCollect={commitPattern}
-              onAdded={() => {}}
               onCancel={() => setPatternModal(null)}
-              onChange={() => {}}
             />
             {patternModal.id && (
               <button
