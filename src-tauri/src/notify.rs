@@ -490,6 +490,21 @@ fn schedule_at(app: &tauri::AppHandle, id: i32, title: &str, body: &str, due: Na
         .show();
 }
 
+/// «1 задача», «2 задачи», «5 задач» — русская плюрализация для заголовков.
+#[cfg(target_os = "android")]
+fn plural_tasks(n: usize) -> String {
+    let n10 = n % 10;
+    let n100 = n % 100;
+    let word = if n10 == 1 && n100 != 11 {
+        "задача"
+    } else if n10 >= 2 && n10 <= 4 && (n100 < 12 || n100 > 14) {
+        "задачи"
+    } else {
+        "задач"
+    };
+    format!("{n} {word}")
+}
+
 /// Дайджест «План на день»: InboxStyle-уведомление — каждая задача строкой.
 /// Задачи с временем — «09:00  Название» (сортировка по времени), без времени —
 /// пунктиром «• Название» в конце (сначала по расписанию, потом «в течение дня»).
@@ -505,7 +520,7 @@ fn schedule_digest(app: &tauri::AppHandle, ts: NaiveDateTime, rows: &[(String, O
         .notification()
         .builder()
         .id(DIGEST_NOTIFICATION_ID)
-        .title(format!("План на сегодня: {n} задач"))
+        .title(format!("План на сегодня: {}", plural_tasks(n)))
         .channel_id(TASKS_CHANNEL_ID)
         .schedule(Schedule::At {
             date: at,
@@ -521,10 +536,8 @@ fn schedule_digest(app: &tauri::AppHandle, ts: NaiveDateTime, rows: &[(String, O
     }
     b = b.summary(if timed == 0 {
         "в течение дня".to_string()
-    } else if timed == 1 {
-        "1 задача со временем".to_string()
     } else {
-        format!("{timed} задач со временем")
+        format!("{} со временем", plural_tasks(timed))
     });
     let _ = b.show();
 }
