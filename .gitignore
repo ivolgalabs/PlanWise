@@ -4,6 +4,10 @@ node_modules/
 # Build artifacts
 dist/
 src-tauri/target/
+# Артефакты tsc -b (инкрементальный кеш) и скомпилированный vite.config.js
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
 # gen/ генерируется Tauri (iOS/Android-проекты), но Android-проект трекаем —
 # там кастомные файлы виджета (Kotlin, layout, манифест), которые иначе
 # перетираются при `tauri android init`.

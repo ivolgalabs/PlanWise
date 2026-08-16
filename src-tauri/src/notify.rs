@@ -304,6 +304,9 @@ fn widget_day() -> &'static Mutex<i64> {
 
 /// Один проход планировщика.
 fn tick(app: &tauri::AppHandle) {
+    // Канал уведомлений создаём один раз с фонового потока (см. ensure_tasks_channel).
+    #[cfg(target_os = "android")]
+    ensure_tasks_channel(app);
     // Виджет: обновляем при старте и при смене календарного дня. Писать файл
     // каждые 60 секунд не нужно — фронтенд и так обновляет данные при каждом
     // изменении задач (write_widget_data), а здесь достаточно поймать смену
@@ -353,7 +356,8 @@ fn to_local(dt: &NaiveDateTime) -> chrono::DateTime<Local> {
         .unwrap_or_else(|| Local.from_utc_datetime(dt))
 }
 
-/// Тело утреннего дайджеста: до 4 заголовков + «…и ещё N задач».
+/// Тело утреннего дайджеста на десктопе: до 4 заголовков + «…и ещё N задач».
+#[cfg(not(target_os = "android"))]
 fn digest_body(titles: &[String]) -> String {
     let mut body = String::new();
     for (i, t) in titles.iter().take(4).enumerate() {
@@ -422,6 +426,30 @@ fn reminder_events(app: &tauri::AppHandle, prefs: &NotifyPrefs) -> Vec<ReminderE
 #[cfg(target_os = "android")]
 const DIGEST_NOTIFICATION_ID: i32 = 1_000_000;
 
+/// Канал уведомлений Android. Плагин по умолчанию создаёт канал с
+/// IMPORTANCE_DEFAULT — уведомления приходят тихо в шторку (без звука и
+/// heads-up) и легко теряются. Свой канал с IMPORTANCE_HIGH: звук, вибрация,
+/// всплывание поверх приложений. Создаётся один раз на фоновом потоке
+/// планировщика (sync-вызов run_mobile_plugin с главного потока — дедлок).
+#[cfg(target_os = "android")]
+const TASKS_CHANNEL_ID: &str = "tasks";
+
+#[cfg(target_os = "android")]
+fn ensure_tasks_channel(app: &tauri::AppHandle) {
+    static DONE: std::sync::Once = std::sync::Once::new();
+    DONE.call_once(|| {
+        use tauri_plugin_notification::{Channel, Importance};
+        let _ = app.notification().create_channel(
+            Channel::builder(TASKS_CHANNEL_ID, "Напоминания и задачи")
+                .description("Напоминания о задачах и утренний список дел")
+                .importance(Importance::High)
+                .vibration(true)
+                .lights(true)
+                .build(),
+        );
+    });
+}
+
 /// Стабильный id уведомления: зависит от задачи, типа («remind»/«travel»)
 /// и момента due с точностью до минуты. Если время задачи меняется — id
 /// меняется, старое уведомление отменяется как «лишнее», новое планируется.
@@ -437,7 +465,8 @@ fn stable_id(salt: &str, task_id: &str, due_minute: i64) -> i32 {
 }
 
 /// Запланировать уведомление на момент `due` (локальное время) через плагин:
-/// AlarmManager доставит его, даже если процесс приложения убит.
+/// AlarmManager доставит его, даже если процесс приложения убит. Канал —
+/// TASKS_CHANNEL_ID (высокая важность: звук и heads-up).
 #[cfg(target_os = "android")]
 fn schedule_at(app: &tauri::AppHandle, id: i32, title: &str, body: &str, due: NaiveDateTime) {
     // Абсолютный момент в unix-секундах — смещение часового пояса в
@@ -452,12 +481,44 @@ fn schedule_at(app: &tauri::AppHandle, id: i32, title: &str, body: &str, due: Na
         .id(id)
         .title(title)
         .body(body)
+        .channel_id(TASKS_CHANNEL_ID)
         .schedule(Schedule::At {
             date: at,
             repeating: false,
             allow_while_idle: true,
         })
         .show();
+}
+
+/// Дайджест «Список дел на день»: InboxStyle-уведомление — каждая задача
+/// строкой («09:00  Задача»), в развёрнутом виде — весь список, а не
+/// обрезанные 4 строки, как в плоском body.
+#[cfg(target_os = "android")]
+fn schedule_digest(app: &tauri::AppHandle, ts: NaiveDateTime, rows: &[(String, Option<i64>)]) {
+    let Ok(at) = time::OffsetDateTime::from_unix_timestamp(to_local(&ts).timestamp()) else {
+        return;
+    };
+    let n = rows.len();
+    let mut b = app
+        .notification()
+        .builder()
+        .id(DIGEST_NOTIFICATION_ID)
+        .title(format!("Задачи на сегодня ({n})"))
+        .channel_id(TASKS_CHANNEL_ID)
+        .schedule(Schedule::At {
+            date: at,
+            repeating: false,
+            allow_while_idle: true,
+        });
+    for (title, time) in rows {
+        let line = match time {
+            Some(m) => format!("{:02}:{:02}  {}", m / 60, m % 60, title),
+            None => title.clone(),
+        };
+        b = b.inbox_line(line);
+    }
+    b = b.summary(if n == 1 { "1 задача".to_string() } else { format!("{n} задач") });
+    let _ = b.show();
 }
 
 /// Android: сверка OS-планировщика с ожидаемыми уведомлениями.
@@ -481,8 +542,9 @@ fn sync_scheduled(app: &tauri::AppHandle, prefs: &NotifyPrefs) {
     let now = Local::now().naive_local();
 
     // 1. Утренний дайджест: одноразовое At на сегодняшний час (пока не
-    // наступил). Тело считается в момент планирования — задачи на день
-    // актуальны. Пустой день не планируем вовсе (не спамим).
+    // наступил). InboxStyle-список всех задач дня с временем. Тело считается
+    // в момент планирования — задачи на день актуальны. Пустой день не
+    // планируем вовсе (не спамим).
     if prefs.day_summary {
         if let Some(ts) = Local::now()
             .date_naive()
@@ -491,15 +553,9 @@ fn sync_scheduled(app: &tauri::AppHandle, prefs: &NotifyPrefs) {
             if ts > now {
                 expected.insert(DIGEST_NOTIFICATION_ID);
                 if !pending_ids.contains(&DIGEST_NOTIFICATION_ID) {
-                    let tasks = today_titles(app);
+                    let tasks = today_task_rows(app);
                     if !tasks.is_empty() {
-                        schedule_at(
-                            app,
-                            DIGEST_NOTIFICATION_ID,
-                            &format!("Задачи на сегодня ({})", tasks.len()),
-                            &digest_body(&tasks),
-                            ts,
-                        );
+                        schedule_digest(app, ts, &tasks);
                     }
                 }
             }
@@ -539,8 +595,15 @@ fn due_unix_minute(due: NaiveDateTime) -> i64 {
     to_local(&due).timestamp() / 60
 }
 
-/// Заголовки невыполненных задач на сегодня (для тела дайджеста).
+/// Заголовки невыполненных задач на сегодня (для тела дайджеста на десктопе).
+#[cfg(not(target_os = "android"))]
 fn today_titles(app: &tauri::AppHandle) -> Vec<String> {
+    today_task_rows(app).into_iter().map(|(t, _)| t).collect()
+}
+
+/// Строки невыполненных задач на сегодня: заголовок + время. Порядок — как
+/// в виджете: сначала задачи с временем (по времени), затем без.
+fn today_task_rows(app: &tauri::AppHandle) -> Vec<(String, Option<i64>)> {
     let today_epoch = crate::commands::today_epoch_day();
     let db = app.state::<Db>();
     // db.lock() — poison-safe (возвращает данные даже при отравленном мьютексе,
@@ -548,11 +611,13 @@ fn today_titles(app: &tauri::AppHandle) -> Vec<String> {
     // в другом потоке, хоть tick() и ловит её через catch_unwind.
     let conn = db.lock();
     conn.prepare(
-      "SELECT title FROM tasks WHERE date = ?1 AND is_done = 0 AND archived = 0 AND someday = 0 ORDER BY sort_order ASC, created_at ASC",
+      "SELECT title, time_minutes FROM tasks WHERE date = ?1 AND is_done = 0 AND archived = 0 AND someday = 0 ORDER BY (time_minutes IS NULL) ASC, time_minutes ASC, sort_order ASC, created_at ASC",
     )
     .and_then(|mut stmt| {
-        stmt.query_map([today_epoch], |r| r.get::<_, String>(0))
-            .and_then(|it| it.collect::<Result<Vec<_>, _>>())
+        stmt.query_map([today_epoch], |r| {
+            Ok((r.get::<_, String>(0)?, r.get::<_, Option<i64>>(1)?))
+        })
+        .and_then(|it| it.collect::<Result<Vec<_>, _>>())
     })
     .unwrap_or_default()
 }
