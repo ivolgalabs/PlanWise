@@ -7,6 +7,7 @@ import { COLORS, accentTint, setHex } from "../theme";
 import { useStore } from "../store";
 import { useMediaQuery } from "../useMediaQuery";
 import { dayId } from "../drag";
+import { useSubtasks } from "../useSubtasks";
 import { TaskFormFields } from "../components/AddTaskModal";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Icon } from "../components/Icon";
@@ -622,25 +623,10 @@ function MonthTaskRow({
  *  вовсе — теперь компактный список под строкой задачи. Без чекбоксов и drag:
  *  клик по тексту — инлайн-переименование, ✕ — удаление. */
 function DayTaskSubs({ taskId, done }: { taskId: string; done: boolean }) {
-  const [subs, setSubs] = useState<Subtask[] | null>(null);
-  // Версия списка: после переименования/удаления перечитываем подзадачи.
+  // Версия списка: после переименования/удаления бампаем — хук перечитает.
   const [rev, setRev] = useState(0);
-  useEffect(() => {
-    let alive = true;
-    setSubs(null);
-    api
-      .getSubtasks(taskId)
-      .then((list) => {
-        if (alive) setSubs(list);
-      })
-      .catch(() => {
-        if (alive) setSubs([]); // ошибка — просто не показываем блок
-      });
-    return () => {
-      alive = false;
-    };
-  }, [taskId, rev]);
-  if (!subs || subs.length === 0) return null;
+  const { items: subs } = useSubtasks(taskId, rev);
+  if (subs.length === 0) return null;
   return (
     <div
       style={{

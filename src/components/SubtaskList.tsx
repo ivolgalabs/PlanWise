@@ -3,9 +3,9 @@ import { useDraggable } from "@dnd-kit/core";
 import type { Subtask } from "../api";
 import { api } from "../api";
 import { COLORS } from "../theme";
-import { useStore } from "../store";
 import { Icon } from "./Icon";
 import { subtaskDragId } from "../drag";
+import { useSubtasks } from "../useSubtasks";
 
 interface Props {
   taskId: string;
@@ -20,40 +20,22 @@ interface Props {
  * задачи открывается ТОЛЬКО кнопкой «✎» в строке задачи.
  */
 export function SubtaskList({ taskId }: Props) {
-  const [items, setItems] = useState<Subtask[]>([]);
   const [newTitle, setNewTitle] = useState("");
-  // Ошибка загрузки: раньше unhandled rejection молча оставлял пустой список
-  // (выглядело как «подзадач нет»). Теперь показываем сообщение с ретраем.
-  const [loadError, setLoadError] = useState(false);
-  // Версия списков подзадач: после promote/смены родителя (drag.tsx) список
-  // должен перечитаться — иначе удалённая подзадача «висит» у старого родителя.
-  const subtaskRev = useStore((s) => s.subtaskRev);
-
-  const load = async () => {
-    try {
-      setLoadError(false);
-      setItems(await api.getSubtasks(taskId));
-    } catch {
-      setLoadError(true);
-    }
-  };
-
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taskId, subtaskRev]);
+  // Подзадачи + перезагрузка (общий хук: защита от гонки размонтирования,
+  // глобальный subtaskRev после promote/смены родителя).
+  const { items, error: loadError, reload } = useSubtasks(taskId);
 
   const add = async () => {
     const t = newTitle.trim();
     if (!t) return;
     await api.upsertSubtask({ taskId, title: t });
     setNewTitle("");
-    load();
+    reload();
   };
 
   const toggle = async (s: Subtask) => {
     await api.upsertSubtask({ ...s, isDone: !s.isDone });
-    load();
+    reload();
   };
 
   const done = items.filter((s) => s.isDone).length;
@@ -82,7 +64,7 @@ export function SubtaskList({ taskId }: Props) {
           onToggle={() => toggle(s)}
           onRename={async (sub, title) => {
             await api.upsertSubtask({ ...sub, title });
-            load();
+            reload();
           }}
         />
       ))}
@@ -99,7 +81,7 @@ export function SubtaskList({ taskId }: Props) {
           }}
         >
           <span>Не удалось загрузить подзадачи</span>
-          <button className="text-chip" onClick={load} style={{ fontSize: "var(--fs-sm)" }}>
+          <button className="text-chip" onClick={reload} style={{ fontSize: "var(--fs-sm)" }}>
             Повторить
           </button>
         </div>

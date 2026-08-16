@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
-import type { Subtask, Task } from "../api";
+import type { Task } from "../api";
 import { api } from "../api";
 import { COLORS, setHex } from "../theme";
 import { isToday, isPast, isSameMonth, fromEpochDay } from "../date";
 import { useStore } from "../store";
+import { useSubtasks } from "../useSubtasks";
 
 /** Фильтр по периоду: все / сегодня / просроченные / ближайшие 7 дней /
  *  календарный месяц / произвольный диапазон «с/по». */
@@ -221,23 +221,8 @@ export function SearchResults({ tasks, query, color, period, status, sort, from,
  *  остальных, чтобы строка не раздувалась. Ошибка загрузки — молча (блок
  *  просто не нужен в результатах поиска). */
 function SearchSubs({ taskId, done }: { taskId: string; done: boolean }) {
-  const [subs, setSubs] = useState<Subtask[] | null>(null);
-  useEffect(() => {
-    let alive = true;
-    setSubs(null);
-    api
-      .getSubtasks(taskId)
-      .then((list) => {
-        if (alive) setSubs(list);
-      })
-      .catch(() => {
-        if (alive) setSubs([]);
-      });
-    return () => {
-      alive = false;
-    };
-  }, [taskId]);
-  if (!subs || subs.length === 0) return null;
+  const { items: subs } = useSubtasks(taskId);
+  if (subs.length === 0) return null;
   const shown = subs.slice(0, 3);
   const rest = subs.length - shown.length;
   return (
