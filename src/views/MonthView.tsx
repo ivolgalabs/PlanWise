@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import type { Task, Subtask, ColorSet } from "../api";
-import { api, fromEpochDay } from "../api";
-import { startOfWeek, firstOfMonth, isSameDay, isSameMonth, isToday, isPast, formatMinutes, sortTasksByMode } from "../date";
+import { api } from "../api";
+import { startOfWeek, firstOfMonth, isSameDay, isSameMonth, isToday, isPast, formatMinutes, sortTasksByMode, fromEpochDay, toEpochDay } from "../date";
 import { COLORS, accentTint, setHex } from "../theme";
 import { useStore } from "../store";
 import { useMediaQuery } from "../useMediaQuery";
@@ -344,9 +344,7 @@ function MonthCell({
 }) {
   const isTd = isToday(day);
   const past = isPast(day);
-  const ed = Math.floor(
-    Date.UTC(day.getFullYear(), day.getMonth(), day.getDate()) / 86_400_000,
-  );
+  const ed = toEpochDay(day);
   const { setNodeRef, isOver } = useDroppable({ id: dayId(ed) });
 
   return (

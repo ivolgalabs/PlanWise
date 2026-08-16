@@ -5,14 +5,12 @@
  * Сортировки совпадают с commands.rs (sortOrder ASC).
  */
 import type { Task, ColorSet, Subtask } from "./api";
+import { toEpochDay } from "./date";
 
 const K = { tasks: "fb:tasks", sets: "fb:sets", subs: "fb:subtasks" };
 
 /** epoch-day «сегодня» по локальной дате (как toEpochDay на фронте). */
-const todayEpochDay = (): number => {
-  const n = new Date();
-  return Math.floor(Date.UTC(n.getFullYear(), n.getMonth(), n.getDate()) / 86_400_000);
-};
+const todayEpochDay = (): number => toEpochDay(new Date());
 
 // Дефолтные категории — как сид V1 в SQLite (ARGB-int = 0xFFRRGGBB).
 // Пишутся при первом обращении, если ключа ещё нет в localStorage.
@@ -85,7 +83,7 @@ export const browserApi = {
   },
   async archiveOverdue(): Promise<number> {
     // Граница «сегодня» — локальная, как на бэкенде.
-    const todayDay = Math.floor(Date.UTC(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()) / 86_400_000);
+    const todayDay = toEpochDay(new Date());
     let n = 0;
     save(K.tasks, load<Task>(K.tasks).map((t) => {
       if (t.date < todayDay && !t.isDone && !t.someday && !t.archived) { n++; return { ...t, archived: true }; }

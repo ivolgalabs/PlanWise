@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import type { Task } from "../api";
-import { toEpochDay } from "../api";
 import {
   startOfWeek,
   firstOfMonth,
@@ -10,6 +9,7 @@ import {
   isPast,
   isToday,
   weekDays,
+  toEpochDay,
 } from "../date";
 import { COLORS, setHex, accentTint, varTint } from "../theme";
 import { useStore } from "../store";
@@ -262,9 +262,7 @@ function CalendarDayCell({
   droppable: boolean;
   onPick: (d: Date) => void;
 }) {
-  const epochDay = Math.floor(
-    Date.UTC(day.getFullYear(), day.getMonth(), day.getDate()) / 86_400_000,
-  );
+  const epochDay = toEpochDay(day);
   const { setNodeRef, isOver } = useDroppable({
     // dc: — отдельное пространство имён, чтобы ячейка календаря не конфликтовала
     // с основной droppable-зоной того же дня (d:). См. calendarDayId в drag.tsx.

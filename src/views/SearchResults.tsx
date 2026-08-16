@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import type { Subtask, Task } from "../api";
-import { api, fromEpochDay } from "../api";
+import { api } from "../api";
 import { COLORS, setHex } from "../theme";
-import { isToday, isPast, isSameMonth } from "../date";
+import { isToday, isPast, isSameMonth, fromEpochDay } from "../date";
 import { useStore } from "../store";
 
 /** Фильтр по периоду: все / сегодня / просроченные / ближайшие 7 дней /

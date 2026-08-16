@@ -9,7 +9,7 @@
  * в зависимости этого приложения.
  */
 
-import type { CustomSlot as UuiCustomSlot, ThemePreset as UuiThemePreset } from "universal-ui/theme-block/themeModel";
+import type { ThemePreset as UuiThemePreset } from "universal-ui/theme-block/themeModel";
 export type { CustomSlot } from "universal-ui/theme-block/themeModel";
 
 // Локальный ThemePreset: в этом приложении тема хранится строкой (может
@@ -46,7 +46,3 @@ export type {
   ThemeFamily,
   ThemeFamilyModes,
 } from "universal-ui/theme-block/themeModel";
-
-// Для типов, где нужен именно UUI-вариант (theme: ThemeId), например
-// store.ts не использует, но экспортируем на случай внешнего потребления.
-export type { UuiCustomSlot, UuiThemePreset };

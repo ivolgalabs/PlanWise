@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import type { Task } from "../api";
-import { api, fromEpochDay } from "../api";
-import { weekDays, isSameDay, isToday, isPast, dayWeight, sortTasksByMode, formatMinutes } from "../date";
+import { api } from "../api";
+import { weekDays, isSameDay, isToday, isPast, dayWeight, sortTasksByMode, formatMinutes, fromEpochDay, toEpochDay } from "../date";
 import { TaskCard } from "../components/TaskCard";
 import { WeekShiftZone } from "../components/WeekShiftZone";
 import { SomedayColumn } from "../components/SomedayColumn";
@@ -52,13 +52,11 @@ export function WeekViewVertical({ tasks, archivedTasks, mobileSections, anchor,
     );
 
   const dayKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-  const epochDay = (d: Date) =>
-    Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86_400_000);
 
   const addTask = async (d: Date) => {
     const title = (titlesByDay[dayKey(d)] ?? "").trim();
     if (!title) return;
-    await api.upsertTask({ title, date: epochDay(d) });
+    await api.upsertTask({ title, date: toEpochDay(d) });
     setTitlesByDay((m) => ({ ...m, [dayKey(d)]: "" }));
     onChange();
   };
@@ -67,7 +65,7 @@ export function WeekViewVertical({ tasks, archivedTasks, mobileSections, anchor,
     const dayTasks = tasksForDay(day);
     const after = dayTasks.find((t) => t.id === afterId);
     const sort = after ? after.sortOrder + 1 : Date.now();
-    await api.upsertTask({ title: "", date: epochDay(day), sortOrder: sort });
+    await api.upsertTask({ title: "", date: toEpochDay(day), sortOrder: sort });
     onChange();
     requestAnimationFrame(() => {
       // Ищем пустую строку ТОЛЬКО в контейнере своего дня — чтобы фокус
@@ -169,9 +167,7 @@ function DayRow({
   const today = isToday(day);
   const past = isPast(day);
   const weight = dayWeight(day);
-  const ed = Math.floor(
-    Date.UTC(day.getFullYear(), day.getMonth(), day.getDate()) / 86_400_000,
-  );
+  const ed = toEpochDay(day);
   const { setNodeRef, isOver } = useDroppable({ id: dayId(ed) });
   const taskPatterns = useStore((s) => s.taskPatterns);
   const weekday = day.toLocaleDateString("ru", { weekday: "short" });

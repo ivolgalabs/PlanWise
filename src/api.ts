@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { toEpochDay } from "./date";
 import { browserApi } from "./api-browser-fallback";
 
 export interface Task {
@@ -52,18 +53,6 @@ export interface Attachment {
   size: number;
   createdAt: number;
 }
-
-/** epoch-day <-> Date. Должно совпадать с Rust-логикой хранения. */
-export const toEpochDay = (d: Date): number => {
-  const utc = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
-  return Math.floor(utc / 86_400_000);
-};
-
-export const fromEpochDay = (n: number): Date => {
-  const ms = n * 86_400_000;
-  const d = new Date(ms);
-  return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
-};
 
 /** Доступен ли Tauri-рантайм (иначе используем браузерный фоллбек). */
 export const isTauri = (): boolean =>

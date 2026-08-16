@@ -1,11 +1,11 @@
 import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import type { Task } from "../api";
-import { api, fromEpochDay } from "../api";
+import { api } from "../api";
 import { COLORS, accentTint, argbToHex } from "../theme";
 import { useStore } from "../store";
 import { showToast } from "../toast";
-import { formatMinutes } from "../date";
+import { formatMinutes, fromEpochDay } from "../date";
 import { useMediaQuery } from "../useMediaQuery";
 import { SubtaskList } from "./SubtaskList";
 import { AddTaskModal } from "./AddTaskModal";

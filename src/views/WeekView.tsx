@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import type { Task } from "../api";
-import { fromEpochDay } from "../api";
+import { fromEpochDay } from "../date";
 import { weekDays, isSameDay, sortTasksByMode } from "../date";
 import { DayColumn } from "../components/DayColumn";
 import { WeekShiftZone } from "../components/WeekShiftZone";

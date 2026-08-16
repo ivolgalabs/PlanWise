@@ -1,5 +1,17 @@
 /** Утилиты дат. Не зависят от Tauri — чистый TS. */
 
+/** epoch-day <-> Date. Должно совпадать с Rust-логикой хранения. */
+export const toEpochDay = (d: Date): number => {
+  const utc = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+  return Math.floor(utc / 86_400_000);
+};
+
+export const fromEpochDay = (n: number): Date => {
+  const ms = n * 86_400_000;
+  const d = new Date(ms);
+  return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+};
+
 /** Полночь данной даты (локальная). */
 export const atMidnight = (d: Date): Date =>
   new Date(d.getFullYear(), d.getMonth(), d.getDate());

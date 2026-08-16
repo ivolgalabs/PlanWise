@@ -28,7 +28,7 @@ import {
 import type { CollisionDetection, DragEndEvent, DragStartEvent } from "@dnd-kit/core";
 import type { Task, Subtask } from "./api";
 import { api } from "./api";
-import { fromEpochDay } from "./api";
+import { fromEpochDay } from "./date";
 import { COLORS, setHex as setHexOf } from "./theme";
 import { useStore } from "./store";
 
@@ -41,7 +41,7 @@ export const dayId = (epochDay: number): string => `d:${epochDay}`;
 export const calendarDayId = (epochDay: number): string => `dc:${epochDay}`;
 
 /** Распарсить epoch-day из id droppable-зоны дня (d: или dc:). null иначе. */
-export const parseDayId = (id: string | number | undefined | null): number | null => {
+const parseDayId = (id: string | number | undefined | null): number | null => {
   if (id == null) return null;
   const s = String(id);
   let rest: string | null = null;
@@ -63,7 +63,7 @@ export const weekShiftNextId = "w:next";
 export const somedayZoneId = "sd:someday";
 
 /** Распарсить id задачи-цели из droppable-зоны. null, если это не задача. */
-export const parseTaskZone = (id: string | number | undefined | null): string | null => {
+const parseTaskZone = (id: string | number | undefined | null): string | null => {
   if (id == null) return null;
   const s = String(id);
   if (!s.startsWith("t:")) return null;

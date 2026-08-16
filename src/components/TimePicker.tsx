@@ -65,14 +65,6 @@ export function TimePicker({
   // Длительность/выезд — своё значение ЧЕРЕЗ КОЛИЧЕСТВО (не время суток):
   // системные селекты «часы» и «минуты» (на Android открывают системный
   // барабан выбора). 0 часов 0 минут = снять значение (null).
-  const durationSel = (
-    value: number | null,
-    apply: ((m: number | null) => void) | undefined,
-    maxHours?: number,
-  ) => {
-    if (!apply) return null;
-    return <DurationSelect value={value} onChange={apply} maxHours={maxHours} />;
-  };
 
   // Меню (общее для модалки и popup). На мобиле кнопка «Готово» закрывает —
   // значения применяются сразу при выборе, как и раньше. Все кнопки с
@@ -133,7 +125,7 @@ export function TimePicker({
                 {v === null ? "—" : `${v} мин`}
               </button>
             ))}
-            {durationSel(travelTime ?? null, onChangeTravel)}
+            {onChangeTravel && <DurationSelect value={travelTime ?? null} onChange={onChangeTravel} />}
           </div>
         </div>
       )}
@@ -152,7 +144,7 @@ export function TimePicker({
                 {v === null ? "—" : fmtDur(v)}
               </button>
             ))}
-            {durationSel(durationMinutes ?? null, onChangeDuration)}
+            {onChangeDuration && <DurationSelect value={durationMinutes ?? null} onChange={onChangeDuration} />}
           </div>
         </div>
       )}

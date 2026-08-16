@@ -1,7 +1,8 @@
 use crate::db::Db;
 use crate::models::{Attachment, ColorSet, Subtask, Task};
-use chrono::{Datelike, Utc};
+use chrono::{Datelike, NaiveDate, Utc};
 use rusqlite::OptionalExtension;
+use serde::Deserialize;
 use tauri::{Manager, State};
 use uuid::Uuid;
 
@@ -84,13 +85,24 @@ fn move_task_to_date(conn: &rusqlite::Connection, id: &str, new_date: i64) -> Re
 /// epoch-day «сегодня» по локальной дате машины (как toEpochDay на фронте:
 /// локальная дата, отсчёт от 1970-01-01). Нужен для правила «перенос задачи
 /// в прошлое = задача выполнена».
+pub(crate) fn today_epoch_day() -> i64 {
+    date_to_epoch(chrono::Local::now().date_naive())
+}
+
+/// Прямое преобразование: дата → epoch-day (счёт от 1970-01-01).
 ///
 /// ВНИМАНИЕ: константа 719_163 — это num_days_from_ce(1970-01-01), а не
 /// 719_162: при неверной константе «сегодня» сдвигалось на день вперёд и
 /// автоархив молча уносил сегодняшние задачи, напоминания не планировались,
 /// а виджет «Сегодня» оставался пустым (баг жил с коммита 13a29e0).
-pub(crate) fn today_epoch_day() -> i64 {
-    chrono::Local::now().date_naive().num_days_from_ce() as i64 - 719_163
+pub(crate) fn date_to_epoch(d: NaiveDate) -> i64 {
+    d.num_days_from_ce() as i64 - 719_163
+}
+
+/// Обратное преобразование: epoch-day → дата.
+pub(crate) fn epoch_to_date(days: i64) -> Option<NaiveDate> {
+    let epoch = NaiveDate::from_ymd_opt(1970, 1, 1)?;
+    epoch.checked_add_days(chrono::Days::new(days.max(0) as u64))
 }
 
 #[tauri::command]
@@ -532,79 +544,51 @@ pub fn delete_subtask(state: State<'_, Db>, id: String) -> Result<(), String> {
 #[tauri::command]
 pub fn export_json(app: tauri::AppHandle, state: State<'_, Db>) -> Result<String, String> {
     let conn = state.lock();
-    let mut sets: Vec<serde_json::Value> = Vec::new();
-    let mut tasks: Vec<serde_json::Value> = Vec::new();
-    let mut subs: Vec<serde_json::Value> = Vec::new();
+    export_to_string(&conn, &attachments_dir(&app))
+}
 
-    {
+/// Сериализация данных в JSON-бэкап (без State — для тестов). Формат:
+/// version 2 + colorSets/tasks/subtasks/attachments. Маппинг колонок —
+/// через структуры моделей (TASK_COLUMNS/task_from_row), а не второй список.
+fn export_to_string(
+    conn: &rusqlite::Connection,
+    files_dir: &std::path::Path,
+) -> Result<String, String> {
+    let sets: Vec<ColorSet> = {
         let mut stmt = conn
             .prepare("SELECT id, name, color, sort_order FROM color_sets ORDER BY sort_order ASC")
             .map_err(|e| e.to_string())?;
         let rows = stmt
             .query_map([], |r| {
-                Ok(serde_json::json!({
-                    "id": r.get::<_, String>(0)?,
-                    "name": r.get::<_, String>(1)?,
-                    "color": r.get::<_, i64>(2)?,
-                    "sortOrder": r.get::<_, f64>(3)?,
-                }))
+                Ok(ColorSet {
+                    id: r.get(0)?,
+                    name: r.get(1)?,
+                    color: r.get(2)?,
+                    sort_order: r.get(3)?,
+                })
             })
             .map_err(|e| e.to_string())?;
-        for row in rows {
-            sets.push(row.map_err(|e| e.to_string())?);
-        }
-    }
-    {
-        let mut stmt = conn
-            .prepare("SELECT id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes, someday, archived, travel_time, duration_minutes, difficulty, notify_minutes FROM tasks ORDER BY sort_order ASC")
-            .map_err(|e| e.to_string())?;
-        let rows = stmt
-            .query_map([], |r| {
-                Ok(serde_json::json!({
-                    "id": r.get::<_, String>(0)?,
-                    "title": r.get::<_, String>(1)?,
-                    "date": r.get::<_, i64>(2)?,
-                    "isDone": r.get::<_, i64>(3)? != 0,
-                    "colorSetId": r.get::<_, Option<String>>(4)?,
-                    "sortOrder": r.get::<_, f64>(5)?,
-                    "createdAt": r.get::<_, i64>(6)?,
-                    "updatedAt": r.get::<_, i64>(7)?,
-                    "deviceId": r.get::<_, String>(8)?,
-                    "timeMinutes": r.get::<_, Option<i64>>(9)?,
-                    "notes": r.get::<_, String>(10)?,
-                    "someday": r.get::<_, i64>(11)? != 0,
-                    "archived": r.get::<_, i64>(12)? != 0,
-                    "travelTime": r.get::<_, Option<i64>>(13)?,
-                    "durationMinutes": r.get::<_, Option<i64>>(14)?,
-                    "difficulty": r.get::<_, i64>(15)?,
-                    "notifyMinutes": r.get::<_, Option<i64>>(16)?,
-                }))
-            })
-            .map_err(|e| e.to_string())?;
-        for row in rows {
-            tasks.push(row.map_err(|e| e.to_string())?);
-        }
-    }
-    {
+        rows.collect::<Result<_, _>>().map_err(|e| e.to_string())?
+    };
+    let tasks = select_tasks(conn, "ORDER BY sort_order ASC", &[])?;
+    let subs: Vec<Subtask> = {
         let mut stmt = conn
             .prepare("SELECT id, task_id, title, is_done, sort_order, created_at FROM subtasks ORDER BY sort_order ASC")
             .map_err(|e| e.to_string())?;
         let rows = stmt
             .query_map([], |r| {
-                Ok(serde_json::json!({
-                    "id": r.get::<_, String>(0)?,
-                    "taskId": r.get::<_, String>(1)?,
-                    "title": r.get::<_, String>(2)?,
-                    "isDone": r.get::<_, i64>(3)? != 0,
-                    "sortOrder": r.get::<_, f64>(4)?,
-                    "createdAt": r.get::<_, i64>(5)?,
-                }))
+                Ok(Subtask {
+                    id: r.get(0)?,
+                    task_id: r.get(1)?,
+                    title: r.get(2)?,
+                    is_done: r.get(3)?,
+                    sort_order: r.get(4)?,
+                    created_at: r.get(5)?,
+                })
             })
             .map_err(|e| e.to_string())?;
-        for row in rows {
-            subs.push(row.map_err(|e| e.to_string())?);
-        }
-    }
+        rows.collect::<Result<_, _>>().map_err(|e| e.to_string())?
+    };
 
     // Вложения: метаданные + base64 самих файлов (иначе бэкап теряет файлы —
     // при импорте FK-каскад DELETE tasks уничтожил бы все вложения).
@@ -628,7 +612,7 @@ pub fn export_json(app: tauri::AppHandle, state: State<'_, Db>) -> Result<String
         for row in rows {
             let (id, task_id, file_name, mime, size, stored_name, created_at) =
                 row.map_err(|e| e.to_string())?;
-            let data = std::fs::read(attachments_dir(&app).join(&stored_name)).ok();
+            let data = std::fs::read(files_dir.join(&stored_name)).ok();
             atts.push(serde_json::json!({
                 "id": id,
                 "taskId": task_id,
@@ -656,56 +640,61 @@ pub fn export_json(app: tauri::AppHandle, state: State<'_, Db>) -> Result<String
     serde_json::to_string_pretty(&payload).map_err(|e| e.to_string())
 }
 
-/// Импорт данных из JSON-строки (полная замена в транзакции: при ошибке —
-/// откат, старые данные остаются). Отсутствующие поля берутся как дефолты,
-/// лишние/неизвестные поля игнорируются. Версии бэкапа: 1 (без вложений) и
-/// 2 (с вложениями).
+/// Структура бэкапа для импорта. Массивы задач/категорий/подзадач
+/// десериализуются в модели (недостающие поля — дефолты, лишние
+/// игнорируются); вложения остаются сырыми JSON — их полей (storedName,
+/// base64) нет в моделях.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BackupDoc {
+    #[serde(default)]
+    color_sets: Vec<ColorSet>,
+    tasks: Vec<Task>,
+    #[serde(default)]
+    subtasks: Vec<Subtask>,
+    #[serde(default)]
+    attachments: Vec<serde_json::Value>,
+}
+
 #[tauri::command]
 pub fn import_json(
     app: tauri::AppHandle,
     state: State<'_, Db>,
     json: String,
 ) -> Result<usize, String> {
+    import_from_string(&mut state.lock(), &attachments_dir(&app), &json)
+}
+
+/// Импорт данных из JSON-строки (полная замена в транзакции: при ошибке —
+/// откат, старые данные остаются). Отсутствующие поля берутся как дефолты,
+/// лишние/неизвестные поля игнорируются. Версии бэкапа: 1 (без вложений) и
+/// 2 (с вложениями). Без State — для тестов.
+fn import_from_string(
+    conn: &mut rusqlite::Connection,
+    files_dir: &std::path::Path,
+    json: &str,
+) -> Result<usize, String> {
     // Защита от гигантских payload: 100 МБ строки достаточно для бэкапа
     // личного планировщика (включая вложения до 25 МБ каждое).
     if json.len() > 100 * 1024 * 1024 {
         return Err("Файл бэкапа больше 100 МБ".to_string());
     }
-    let v: serde_json::Value = serde_json::from_str(&json).map_err(|e| e.to_string())?;
+    let v: serde_json::Value = serde_json::from_str(json).map_err(|e| e.to_string())?;
     // Строгая проверка версии: отсутствие поля или не-целое значение
     // (например, float 1.5) дают unwrap_or(0) → ошибка.
     let version = v.get("version").and_then(|x| x.as_i64()).unwrap_or(0);
     if version != 1 && version != 2 {
         return Err("Неподдерживаемая версия бэкапа".to_string());
     }
-    let tasks = v
-        .get("tasks")
-        .and_then(|t| t.as_array())
-        .ok_or("Нет массива tasks")?;
+    let doc: BackupDoc =
+        serde_json::from_value(v).map_err(|e| format!("Бэкап не читается: {e}"))?;
     // Ограничение числа элементов: 100k задач больше чем достаточно.
-    if tasks.len() > 100_000 {
+    if doc.tasks.len() > 100_000 {
         return Err("Слишком много задач в бэкапе".to_string());
     }
-    // Клонируем в собственные векторы: &Vec::new() не живёт дольше выражения.
-    let sets: Vec<serde_json::Value> = v
-        .get("colorSets")
-        .and_then(|t| t.as_array())
-        .cloned()
-        .unwrap_or_default();
-    let subs: Vec<serde_json::Value> = v
-        .get("subtasks")
-        .and_then(|t| t.as_array())
-        .cloned()
-        .unwrap_or_default();
-    let atts: Vec<serde_json::Value> = v
-        .get("attachments")
-        .and_then(|t| t.as_array())
-        .cloned()
-        .unwrap_or_default();
 
-    // conn — MutexGuard<Connection>, поэтому обычная transaction()
+    // conn — &mut Connection, поэтому обычная transaction()
     // (unchecked_transaction не нужен: активных prepared-стейтментов нет).
-    let mut conn = state.lock();
     let tx = conn.transaction().map_err(|e| e.to_string())?;
     // Соберём имена файлов текущих вложений — после импорта удалим те, что
     // не вошли в новый набор (сироты от каскадного удаления задач).
@@ -730,57 +719,32 @@ pub fn import_json(
     tx.execute("DELETE FROM color_sets", [])
         .map_err(|e| e.to_string())?;
 
-    for s in sets {
+    for s in &doc.color_sets {
         tx.execute(
             "INSERT INTO color_sets (id, name, color, sort_order) VALUES (?1, ?2, ?3, ?4)",
-            rusqlite::params![
-                s.get("id").and_then(|x| x.as_str()).unwrap_or(""),
-                s.get("name").and_then(|x| x.as_str()).unwrap_or(""),
-                s.get("color").and_then(|x| x.as_i64()).unwrap_or(0),
-                s.get("sortOrder").and_then(|x| x.as_f64()).unwrap_or(0.0),
-            ],
+            rusqlite::params![s.id, s.name, s.color, s.sort_order],
         )
         .map_err(|e| e.to_string())?;
     }
-    for t in tasks {
+    for t in &doc.tasks {
         tx.execute(
             &format!(
                 "INSERT INTO tasks ({TASK_COLUMNS})
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
             ),
             rusqlite::params![
-                t.get("id").and_then(|x| x.as_str()).unwrap_or(""),
-                t.get("title").and_then(|x| x.as_str()).unwrap_or(""),
-                t.get("date").and_then(|x| x.as_i64()).unwrap_or(0),
-                t.get("isDone").and_then(|x| x.as_bool()).unwrap_or(false) as i64,
-                t.get("colorSetId").and_then(|x| x.as_str()),
-                t.get("sortOrder").and_then(|x| x.as_f64()).unwrap_or(0.0),
-                t.get("createdAt").and_then(|x| x.as_i64()).unwrap_or(0),
-                t.get("updatedAt").and_then(|x| x.as_i64()).unwrap_or(0),
-                t.get("deviceId").and_then(|x| x.as_str()).unwrap_or(""),
-                t.get("timeMinutes").and_then(|x| x.as_i64()),
-                t.get("notes").and_then(|x| x.as_str()).unwrap_or(""),
-                t.get("someday").and_then(|x| x.as_bool()).unwrap_or(false) as i64,
-                t.get("archived").and_then(|x| x.as_bool()).unwrap_or(false) as i64,
-                t.get("travelTime").and_then(|x| x.as_i64()),
-                t.get("durationMinutes").and_then(|x| x.as_i64()),
-                t.get("difficulty").and_then(|x| x.as_i64()).unwrap_or(0),
-                t.get("notifyMinutes").and_then(|x| x.as_i64()),
+                t.id, t.title, t.date, t.is_done as i64, t.color_set_id, t.sort_order,
+                t.created_at, t.updated_at, t.device_id, t.time_minutes, t.notes,
+                t.someday as i64, t.archived as i64, t.travel_time, t.duration_minutes,
+                t.difficulty, t.notify_minutes
             ],
         )
         .map_err(|e| e.to_string())?;
     }
-    for s in subs {
+    for s in &doc.subtasks {
         tx.execute(
             "INSERT INTO subtasks (id, task_id, title, is_done, sort_order, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            rusqlite::params![
-                s.get("id").and_then(|x| x.as_str()).unwrap_or(""),
-                s.get("taskId").and_then(|x| x.as_str()).unwrap_or(""),
-                s.get("title").and_then(|x| x.as_str()).unwrap_or(""),
-                s.get("isDone").and_then(|x| x.as_bool()).unwrap_or(false) as i64,
-                s.get("sortOrder").and_then(|x| x.as_f64()).unwrap_or(0.0),
-                s.get("createdAt").and_then(|x| x.as_i64()).unwrap_or(0),
-            ],
+            rusqlite::params![s.id, s.task_id, s.title, s.is_done as i64, s.sort_order, s.created_at],
         )
         .map_err(|e| e.to_string())?;
     }
@@ -788,9 +752,8 @@ pub fn import_json(
     // Если файла в бэкапе нет (старый бэкап v1) — только метаданные не пишем:
     // вложения целиком пропускаем, сироты почистим ниже.
     let mut new_files: std::collections::HashSet<String> = std::collections::HashSet::new();
-    let dir = attachments_dir(&app);
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    for a in atts {
+    std::fs::create_dir_all(files_dir).map_err(|e| e.to_string())?;
+    for a in &doc.attachments {
         let stored = a.get("storedName").and_then(|x| x.as_str()).unwrap_or("");
         let b64 = a.get("base64").and_then(|x| x.as_str());
         let Some(b64) = b64 else { continue };
@@ -808,7 +771,7 @@ pub fn import_json(
             continue;
         }
         new_files.insert(stored.to_string());
-        std::fs::write(dir.join(stored), &data).map_err(|e| e.to_string())?;
+        std::fs::write(files_dir.join(stored), &data).map_err(|e| e.to_string())?;
         tx.execute(
             "INSERT INTO attachments (id, task_id, file_name, mime, size, stored_name, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
@@ -827,14 +790,13 @@ pub fn import_json(
         .map_err(|e| e.to_string())?;
     }
     tx.commit().map_err(|e| e.to_string())?;
-    drop(conn);
     // Чистка сирот: файлы старых вложений, не вошедшие в новый набор.
     for f in old_files {
         if !new_files.contains(&f) {
-            let _ = std::fs::remove_file(dir.join(f));
+            let _ = std::fs::remove_file(files_dir.join(f));
         }
     }
-    Ok(tasks.len())
+    Ok(doc.tasks.len())
 }
 
 /// Закрывает приложение (системная кнопка «назад» на Android, когда все
@@ -933,11 +895,10 @@ fn push_widget_refresh(app: &tauri::AppHandle) {
 #[cfg(not(target_os = "android"))]
 fn push_widget_refresh(_app: &tauri::AppHandle) {}
 
-/// Тема (dark), сохранённая в последнем widget.json. Планировщик перезаписывает
-/// файл при смене дня и не должен сбрасывать тему на светлую — берём её из
-/// предыдущей записи.
-pub fn read_widget_dark(app: &tauri::AppHandle) -> bool {
-    #[cfg_attr(not(target_os = "android"), allow(unused_mut))]
+/// Каталог data-файлов: на Android — app_data_dir/files (там читает Kotlin-
+/// виджет через context.filesDir), на десктопе — сам app_data_dir.
+#[cfg_attr(not(target_os = "android"), allow(unused_mut))]
+fn app_files_dir(app: &tauri::AppHandle) -> std::path::PathBuf {
     let mut dir = app
         .path()
         .app_data_dir()
@@ -946,7 +907,14 @@ pub fn read_widget_dark(app: &tauri::AppHandle) -> bool {
     {
         dir = dir.join("files");
     }
-    let raw = std::fs::read_to_string(dir.join("widget.json")).unwrap_or_default();
+    dir
+}
+
+/// Тема (dark), сохранённая в последнем widget.json. Планировщик перезаписывает
+/// файл при смене дня и не должен сбрасывать тему на светлую — берём её из
+/// предыдущей записи.
+pub fn read_widget_dark(app: &tauri::AppHandle) -> bool {
+    let raw = std::fs::read_to_string(app_files_dir(app).join("widget.json")).unwrap_or_default();
     serde_json::from_str::<serde_json::Value>(&raw)
         .ok()
         .and_then(|v| v.get("dark").and_then(|d| d.as_bool()))
@@ -1024,18 +992,7 @@ pub fn refresh_widget(
         "dark": dark,
     });
     // На Android каталог data-файлов — data/files; на десктопе dir не меняется.
-    #[cfg_attr(not(target_os = "android"), allow(unused_mut))]
-    let mut dir = app
-        .path()
-        .app_data_dir()
-        .unwrap_or_else(|_| std::path::PathBuf::from("."));
-    // На Android app_data_dir — корень data-каталога, а Kotlin-виджет читает
-    // context.filesDir (= data/files). Пишем туда же, иначе виджет не видит
-    // данные (старый баг «виджет пустой» — пути не совпадали).
-    #[cfg(target_os = "android")]
-    {
-        dir = dir.join("files");
-    }
+    let dir = app_files_dir(app);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     // Атомарная запись: tmp + rename — виджет (отдельный процесс) никогда не
     // прочитает обрезанный JSON, даже если два писателя (фронт и тикер)
@@ -1107,17 +1064,8 @@ pub fn cleanup_orphan_attachments(app: &tauri::AppHandle, state: &State<'_, Db>)
 
 /// Каталог вложений: на Android app_data_dir/files/attachments (там же, где
 /// widget.json — context.filesDir), на десктопе — app_data_dir/attachments.
-#[cfg_attr(not(target_os = "android"), allow(unused_mut))]
 fn attachments_dir(app: &tauri::AppHandle) -> std::path::PathBuf {
-    let mut dir = app
-        .path()
-        .app_data_dir()
-        .unwrap_or_else(|_| std::path::PathBuf::from("."));
-    #[cfg(target_os = "android")]
-    {
-        dir = dir.join("files");
-    }
-    dir.join("attachments")
+    app_files_dir(app).join("attachments")
 }
 
 /// Расширение из имени файла (санитизированное, до 8 символов): "a.TXT" → "txt".
@@ -1296,4 +1244,145 @@ pub fn attachment_path(app: tauri::AppHandle, id: String) -> Result<String, Stri
         return Err("Файл вложения не найден на диске".to_string());
     }
     Ok(path.to_string_lossy().into_owned())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::open;
+
+    /// Временный каталог вложений для тестов (создаётся, чистится в конце).
+    fn test_files_dir() -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("dp_test_files_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("создать временный каталог вложений");
+        dir
+    }
+
+    /// Экспорт → импорт в чистую БД: данные не теряются (включая новые поля).
+    #[test]
+    fn export_import_roundtrip() {
+        let conn = open(":memory:").expect("open test db");
+        conn.execute(
+            "INSERT INTO color_sets (id, name, color, sort_order) VALUES ('cs1', 'Работа', 4291405948, 1)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            &format!(
+                "INSERT INTO tasks ({TASK_COLUMNS})
+                 VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17)"
+            ),
+            rusqlite::params![
+                "t1",
+                "Задача",
+                20_000,
+                0,
+                Some("cs1"),
+                1.0,
+                1000,
+                1000,
+                "dev",
+                Some(600),
+                "заметка",
+                1,
+                0,
+                None::<i32>,
+                Some(30),
+                2,
+                Some(15)
+            ],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO subtasks (id, task_id, title, is_done, sort_order, created_at)
+             VALUES ('s1', 't1', 'Подзадача', 1, 1.0, 1000)",
+            [],
+        )
+        .unwrap();
+
+        let dir = test_files_dir();
+        let json = export_to_string(&conn, &dir).expect("export");
+        let v: serde_json::Value = serde_json::from_str(&json).expect("json");
+        assert_eq!(v["version"], 2);
+        assert_eq!(v["tasks"][0]["notes"], "заметка");
+        assert_eq!(v["tasks"][0]["isDone"], false);
+
+        let mut conn2 = open(":memory:").expect("open second db");
+        let n = import_from_string(&mut conn2, &dir, &json).expect("import");
+        assert_eq!(n, 1);
+        let task = select_task_by_id(&conn2, "t1")
+            .expect("select")
+            .expect("task exists");
+        assert_eq!(task.title, "Задача");
+        assert_eq!(task.notes, "заметка");
+        assert!(task.someday);
+        assert_eq!(task.difficulty, 2);
+        assert_eq!(task.time_minutes, Some(600));
+        assert_eq!(task.color_set_id.as_deref(), Some("cs1"));
+        let subs: i64 = conn2
+            .query_row(
+                "SELECT COUNT(*) FROM subtasks WHERE task_id = 't1'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(subs, 1);
+        let sets: i64 = conn2
+            .query_row(
+                "SELECT COUNT(*) FROM color_sets WHERE id = 'cs1'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(sets, 1);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Старый бэкап (v1, без notes/someday/archived) импортируется с дефолтами.
+    #[test]
+    fn import_accepts_old_backup_without_new_fields() {
+        let mut conn = open(":memory:").expect("open test db");
+        let json = r#"{
+            "version": 1,
+            "colorSets": [{"id": "cs1", "name": "Работа", "color": 4291405948, "sortOrder": 1}],
+            "tasks": [{"id": "t1", "title": "Старая", "date": 20000, "isDone": true,
+                       "colorSetId": "cs1", "sortOrder": 1.0, "createdAt": 1000,
+                       "updatedAt": 1000, "deviceId": "dev", "timeMinutes": null}],
+            "subtasks": []
+        }"#;
+        let dir = test_files_dir();
+        let n = import_from_string(&mut conn, &dir, json).expect("import old backup");
+        assert_eq!(n, 1);
+        let task = select_task_by_id(&conn, "t1")
+            .expect("select")
+            .expect("task");
+        assert_eq!(task.notes, "", "старый бэкап без notes → ''");
+        assert!(!task.someday);
+        assert!(!task.archived);
+        assert!(task.is_done);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Неверная версия бэкапа отклоняется до разбора содержимого.
+    #[test]
+    fn import_rejects_unknown_version() {
+        let mut conn = open(":memory:").expect("open test db");
+        let dir = test_files_dir();
+        let err = import_from_string(&mut conn, &dir, r#"{"version": 99, "tasks": []}"#)
+            .expect_err("должна быть ошибка версии");
+        assert!(err.contains("Неподдерживаемая версия"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Прямое/обратное преобразование дата ↔ epoch-day согласовано.
+    #[test]
+    fn date_epoch_roundtrip() {
+        let d = NaiveDate::from_ymd_opt(2026, 8, 16).unwrap();
+        let ed = date_to_epoch(d);
+        assert_eq!(epoch_to_date(ed), Some(d));
+        assert_eq!(
+            today_epoch_day(),
+            date_to_epoch(chrono::Local::now().date_naive())
+        );
+    }
 }

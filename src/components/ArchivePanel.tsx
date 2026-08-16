@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Task } from "../api";
-import { api, fromEpochDay } from "../api";
+import { api } from "../api";
+import { fromEpochDay } from "../date";
 import { COLORS } from "../theme";
 import { Icon } from "./Icon";
 import { DatePickerModal } from "./DatePickerModal";

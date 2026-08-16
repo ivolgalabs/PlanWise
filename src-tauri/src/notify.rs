@@ -27,7 +27,7 @@ use std::time::Duration;
 
 #[cfg(not(target_os = "android"))]
 use chrono::Timelike;
-use chrono::{Local, NaiveDate, NaiveDateTime, TimeZone};
+use chrono::{Local, NaiveDateTime, TimeZone};
 use serde::Deserialize as _;
 use tauri::Manager;
 use tauri_plugin_notification::NotificationExt;
@@ -636,7 +636,7 @@ fn task_intervals(notify_minutes: Option<i64>, prefs: &NotifyPrefs) -> Vec<i64> 
 fn task_start(minutes: i64, date_epoch: i64) -> Option<NaiveDateTime> {
     let h = (minutes / 60) as u32;
     let m = (minutes % 60) as u32;
-    let task_date = epoch_to_date(date_epoch)?;
+    let task_date = crate::commands::epoch_to_date(date_epoch)?;
     task_date.and_hms_opt(h, m, 0)
 }
 
@@ -699,15 +699,10 @@ fn check_reminders(app: &tauri::AppHandle, prefs: &NotifyPrefs, now: NaiveDateTi
     }
 }
 
-/// Обратное преобразование: epoch-day → NaiveDate.
-fn epoch_to_date(days: i64) -> Option<NaiveDate> {
-    let epoch = NaiveDate::from_ymd_opt(1970, 1, 1)?;
-    epoch.checked_add_days(chrono::Days::new(days.max(0) as u64))
-}
-
 #[cfg(all(test, not(target_os = "android")))]
 mod tests {
     use super::*;
+    use chrono::NaiveDate;
 
     fn prefs(day_summary: bool, reminders: bool, remind: Vec<i64>) -> NotifyPrefs {
         NotifyPrefs {
@@ -728,10 +723,6 @@ mod tests {
             None,
             notify,
         )
-    }
-
-    fn date_of(d: NaiveDate) -> i64 {
-        (d - NaiveDate::from_ymd_opt(1970, 1, 1).unwrap()).num_days()
     }
 
     /// Уведомления выключены → ближайшее событие — полночь (смена дня виджета).
@@ -795,8 +786,8 @@ mod tests {
         // Задача сегодня 11:00, напоминание за 60 мин → due 10:00.
         // И задача сегодня 8:00 (прошла) — её due не должен победить.
         let tasks = vec![
-            task(11 * 60, date_of(day), None),
-            task(8 * 60, date_of(day), None),
+            task(11 * 60, crate::commands::date_to_epoch(day), None),
+            task(8 * 60, crate::commands::date_to_epoch(day), None),
         ];
         let ev = next_event_from(&prefs(true, true, vec![60]), &tasks, now);
         assert_eq!(ev, day.and_hms_opt(10, 0, 0).unwrap());

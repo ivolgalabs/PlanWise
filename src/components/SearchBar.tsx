@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { fromEpochDay } from "../api";
+import { fromEpochDay, toEpochDay } from "../date";
 import { COLORS, argbToHex, accentTint } from "../theme";
 import { useStore } from "../store";
 import { Icon } from "./Icon";
@@ -182,5 +182,5 @@ const toISODate = (ed: number): string => {
 /** ISO-строка YYYY-MM-DD → epoch-day. */
 const fromISODate = (iso: string): number => {
   const [y, m, d] = iso.split("-").map(Number);
-  return Math.floor(Date.UTC(y, m - 1, d) / 86_400_000);
+  return toEpochDay(new Date(y, m - 1, d));
 };

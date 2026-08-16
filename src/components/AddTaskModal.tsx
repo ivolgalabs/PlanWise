@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { openPath } from "@tauri-apps/plugin-opener";
 import type { Attachment, Subtask, Task } from "../api";
-import { api, toEpochDay } from "../api";
+import { api } from "../api";
+import { toEpochDay } from "../date";
 import { useStore } from "../store";
 import { COLORS, argbToHex } from "../theme";
 import { TimePicker, DurationSelect } from "./TimePicker";
@@ -238,9 +239,7 @@ export function TaskFormFields({
           !initial.archived
         ) {
           const now = new Date();
-          const today = Math.floor(
-            Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / 86_400_000,
-          );
+          const today = toEpochDay(now);
           const nowMin = now.getHours() * 60 + now.getMinutes();
           const past = toEpochDay(day) < today || (toEpochDay(day) === today && time <= nowMin);
           const future = toEpochDay(day) > today || (toEpochDay(day) === today && time > nowMin);

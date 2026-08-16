@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import type { Task } from "../api";
 import { api } from "../api";
-import { isToday, isPast, dayWeight } from "../date";
+import { isToday, isPast, dayWeight, toEpochDay } from "../date";
 import { TaskCard } from "./TaskCard";
 import { COLORS, accentTint } from "../theme";
 import { dayId } from "../drag";
@@ -44,9 +44,7 @@ export function DayColumn({
   const headFs = weight === "past" ? "var(--fs-2xs)" : "var(--fs-sm)";
   const headWeight = weight === "past" ? 400 : weight === "today" || weight === "tomorrow" ? 700 : 600;
 
-  const epochDay = Math.floor(
-    Date.UTC(day.getFullYear(), day.getMonth(), day.getDate()) / 86_400_000,
-  );
+  const epochDay = toEpochDay(day);
   const dayKey = `${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`;
 
   // Зона приёма задач: подсвечивается при наведении (isOver).

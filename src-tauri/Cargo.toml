@@ -1,6 +1,6 @@
 [package]
 name = "daily-planner"
-version = "0.1.2"
+version = "0.1.3"
 description = "Ежедневник — минималистичный планировщик задач (tweek.so-style)"
 authors = ["zkproject"]
 edition = "2021"
@@ -37,12 +37,13 @@ uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 base64 = "0.22"
 
-# Общая библиотека воркспейса: fs для ensure_dir (вместо ручного std::fs).
-core_base = { path = "../../../Rust_Workspace/core_base", default-features = false, features = ["fs"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-notification = "2"
 tauri-plugin-opener = "2"
-# Тип времени для Schedule::At уведомлений (тот же crate, что у плагина).
+
+# Тип времени для Schedule::At уведомлений — нужен только на Android
+# (тот же crate, что у плагина).
+[target.'cfg(target_os = "android")'.dependencies]
 time = "0.3"
 

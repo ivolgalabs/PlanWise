@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import type { Task } from "../api";
-import { api, fromEpochDay, toEpochDay } from "../api";
+import { api } from "../api";
 import { TaskCard } from "../components/TaskCard";
 import { SomedayColumn } from "../components/SomedayColumn";
 import { ArchivePanel } from "../components/ArchivePanel";
@@ -9,7 +9,7 @@ import { AddTaskModal } from "../components/AddTaskModal";
 import { Icon } from "../components/Icon";
 import { COLORS, accentTint } from "../theme";
 import { dayId } from "../drag";
-import { isToday, sortTasksByMode, formatMinutes, isSameDay } from "../date";
+import { isToday, sortTasksByMode, formatMinutes, isSameDay, fromEpochDay, toEpochDay } from "../date";
 import { useMediaQuery } from "../useMediaQuery";
 import { useStore, type TaskPattern } from "../store";
 
@@ -108,9 +108,7 @@ export function DayView({ day, tasks, archivedTasks, onChange }: Props) {
 
 /** Боковая узкая зона для переноса задачи на соседний день. */
 function SideDayZone({ day, label }: { day: Date; label: string }) {
-  const ed = Math.floor(
-    Date.UTC(day.getFullYear(), day.getMonth(), day.getDate()) / 86_400_000,
-  );
+  const ed = toEpochDay(day);
   const { setNodeRef, isOver } = useDroppable({ id: dayId(ed) });
   return (
     <div
@@ -178,9 +176,7 @@ function DayTasksArea({
   const [addOpen, setAddOpen] = useState(false);
   // Шаблон задач: кнопка создаёт задачу на этот день с параметрами шаблона.
   const addPattern = async (p: TaskPattern) => {
-    const ed = Math.floor(
-      Date.UTC(day.getFullYear(), day.getMonth(), day.getDate()) / 86_400_000,
-    );
+    const ed = toEpochDay(day);
     // Задача из шаблона получает ВСЕ его параметры, включая категорию,
     // заметку и подзадачи (как в карточке).
     const created = await api.upsertTask({
