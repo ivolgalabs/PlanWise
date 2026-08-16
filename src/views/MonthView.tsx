@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import type { Task, Subtask, ColorSet } from "../api";
 import { api, fromEpochDay } from "../api";
-import { startOfWeek, firstOfMonth, isSameDay, isToday, isPast, formatMinutes, sortTasksByMode } from "../date";
+import { startOfWeek, firstOfMonth, isSameDay, isSameMonth, isToday, isPast, formatMinutes, sortTasksByMode } from "../date";
 import { COLORS, accentTint, setHex } from "../theme";
 import { useStore } from "../store";
 import { useMediaQuery } from "../useMediaQuery";
@@ -22,8 +22,6 @@ interface Props {
 /** Время задачи: «09:00–10:30» (диапазон при длительности) и «выезд в 08:15».
  *  Диапазон показывается бейджем как единственное время задачи — стартовое
  *  время в нём уже есть, отдельно не дублируется. */
-const fmt = (m: number) =>
-  `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 
 /** Пересекается ли время задачи с другой задачей того же дня (как в TaskCard):
  *  интервал [start, start+duration), без длительности — одна минута. */
@@ -186,7 +184,7 @@ export function MonthView({ tasks, onSelectDay, onSelectWeek, onChange }: Props)
                     // Затемнять надо ячейки вне ОТОБРАЖАЕМОГО месяца (якорь
                     // monthDate), а не выбранной даты — иначе при рассинхроне
                     // якорей весь месяц выглядел бы «чужим».
-                    inMonth={day.getMonth() === (monthDate ?? selectedDate).getMonth()}
+                    inMonth={isSameMonth(day, monthDate ?? selectedDate)}
                     dayTasks={tasksForDay(day)}
                     onClickDay={() => setMenuDay(day)}
                   />
@@ -202,11 +200,7 @@ export function MonthView({ tasks, onSelectDay, onSelectWeek, onChange }: Props)
         <div
           className="modal-overlay"
           onClick={() => setMenuDay(null)}
-          style={{
-            position: "fixed", inset: 0,
-            background: "var(--overlay)", zIndex: 200,
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}
+          style={{ zIndex: 200 }}
         >
           <div
             onClick={(e) => e.stopPropagation()}
@@ -502,12 +496,12 @@ function MonthTaskRow({
       ? (() => {
           const total = task.timeMinutes! + task.durationMinutes!;
           const days = Math.floor(total / (24 * 60));
-          return `${fmt(task.timeMinutes!)}–${fmt(total % (24 * 60))}${days > 0 ? ` (+${days} дн.)` : ""}`;
+          return `${formatMinutes(task.timeMinutes!)}–${formatMinutes(total % (24 * 60))}${days > 0 ? ` (+${days} дн.)` : ""}`;
         })()
       : formatMinutes(task.timeMinutes!)
     : null;
   const travel = hasTime && task.travelTime
-    ? `выезд в ${fmt((task.timeMinutes! - task.travelTime + 24 * 60) % (24 * 60))}`
+    ? `выезд в ${formatMinutes((task.timeMinutes! - task.travelTime + 24 * 60) % (24 * 60))}`
     : null;
   const timeBadge = hasTime ? (
     <span

@@ -1530,9 +1530,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
       {/* Модальная карточка шаблона — ПОЛНАЯ карточка задачи (TaskFormFields):
           время+выезд+длительность, приоритет, категория, заметка, подзадачи,
           уведомление со «Своим значением…». Сохранение отдаёт данные через
-          onCollect (шаблон, а не задача). Оверлею нужны инлайн-стили: у класса
-          .modal-overlay в CSS нет позиционирования (он только для исключения
-          свайпа), без них модалка открывалась бы сбоку в потоке документа. */}
+          onCollect (шаблон, а не задача). z-index 300 — поверх окна настроек. */}
       {patternModal && (
         <div
           className="modal-overlay"
@@ -1540,15 +1538,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
             e.stopPropagation();
             setPatternModal(null);
           }}
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "var(--overlay)",
-            zIndex: 300,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
+          style={{ zIndex: 300 }}
         >
           <div
             role="dialog"

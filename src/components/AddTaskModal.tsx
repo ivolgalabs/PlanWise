@@ -1016,15 +1016,7 @@ export function AddTaskModal({
         if (Date.now() - openedAt.current < 300) return;
         onClose();
       }}
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "var(--overlay)",
-        zIndex: 200,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
+      style={{ zIndex: 200 }}
     >
       <div
         onClick={(e) => e.stopPropagation()}

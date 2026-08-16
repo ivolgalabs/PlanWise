@@ -29,6 +29,10 @@ export const isSameDay = (a: Date, b: Date): boolean =>
   a.getMonth() === b.getMonth() &&
   a.getDate() === b.getDate();
 
+/** Один и тот же месяц (год + месяц). */
+export const isSameMonth = (a: Date, b: Date): boolean =>
+  a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth();
+
 export const isToday = (d: Date): boolean => isSameDay(d, new Date());
 
 /** Первый день месяца. */

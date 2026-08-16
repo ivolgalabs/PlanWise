@@ -343,6 +343,80 @@ fn tick(app: &tauri::AppHandle) {
 
 // ── Android: планирование на уровне ОС (AlarmManager) ────────────────────
 
+/// NaiveDateTime → DateTime<Local> с запасом для DST-неоднозначных времён
+/// (fallback — UTC-интерпретация). Единый для расчёта due, unix-таймстампов
+/// и планирования.
+fn to_local(dt: &NaiveDateTime) -> chrono::DateTime<Local> {
+    Local
+        .from_local_datetime(dt)
+        .single()
+        .unwrap_or_else(|| Local.from_utc_datetime(dt))
+}
+
+/// Тело утреннего дайджеста: до 4 заголовков + «…и ещё N задач».
+fn digest_body(titles: &[String]) -> String {
+    let mut body = String::new();
+    for (i, t) in titles.iter().take(4).enumerate() {
+        if i > 0 {
+            body.push('\n');
+        }
+        body.push_str(t);
+    }
+    if titles.len() > 4 {
+        body.push_str(&format!("\n… и ещё {} задач", titles.len() - 4));
+    }
+    body
+}
+
+/// Кандидат в напоминание: момент due, заголовок/тело и данные для стабильного
+/// id/ключа дедупликации. Расчёт ОДИН для Android (OS-планирование) и десктопа
+/// (поллинг) — окно доставки применяет платформенный потребитель.
+struct ReminderEvent {
+    /// "remind" (за N минут) или "travel" (выехать заранее).
+    kind: &'static str,
+    task_id: String,
+    due: NaiveDateTime,
+    title: &'static str,
+    body: String,
+}
+
+/// Все напоминания задач из горизонта load_timed_tasks (без окон доставки).
+fn reminder_events(app: &tauri::AppHandle, prefs: &NotifyPrefs) -> Vec<ReminderEvent> {
+    let mut out = Vec::new();
+    for (id, title, minutes, date_epoch, travel_time, notify_minutes) in load_timed_tasks(app) {
+        // Своё «не уведомлять» (0) — пропускаем задачу целиком, включая выезд.
+        if notify_minutes == Some(0) {
+            continue;
+        }
+        let Some(start) = task_start(minutes, date_epoch) else {
+            continue;
+        };
+        // Выбранные интервалы напоминаний — каждому своё уведомление.
+        for rm in task_intervals(notify_minutes, prefs) {
+            out.push(ReminderEvent {
+                kind: "remind",
+                task_id: id.clone(),
+                due: due_at(start, rm),
+                title: "Напоминание",
+                body: format!("«{title}» — {}", format_interval(rm)),
+            });
+        }
+        // «Пора выезжать»: за travel_time до начала задачи (если задано).
+        if let Some(tt) = travel_time {
+            if tt > 0 {
+                out.push(ReminderEvent {
+                    kind: "travel",
+                    task_id: id.clone(),
+                    due: due_at(start, tt),
+                    title: "Пора выезжать",
+                    body: format!("«{title}» — в {:02}:{:02}", minutes / 60, minutes % 60),
+                });
+            }
+        }
+    }
+    out
+}
+
 /// ID утреннего дайджеста в OS-планировщике: вне диапазона хэшей задач
 /// (stable_id даёт 1..1_000_000), чтобы не пересечься с напоминаниями.
 #[cfg(target_os = "android")]
@@ -368,11 +442,7 @@ fn stable_id(salt: &str, task_id: &str, due_minute: i64) -> i32 {
 fn schedule_at(app: &tauri::AppHandle, id: i32, title: &str, body: &str, due: NaiveDateTime) {
     // Абсолютный момент в unix-секундах — смещение часового пояса в
     // ISO-строке плагину не нужно: Kotlin ставит будильник по миллисекундам.
-    let ts = Local
-        .from_local_datetime(&due)
-        .single()
-        .unwrap_or_else(|| Local.from_utc_datetime(&due))
-        .timestamp();
+    let ts = to_local(&due).timestamp();
     let Ok(at) = time::OffsetDateTime::from_unix_timestamp(ts) else {
         return;
     };
@@ -423,21 +493,11 @@ fn sync_scheduled(app: &tauri::AppHandle, prefs: &NotifyPrefs) {
                 if !pending_ids.contains(&DIGEST_NOTIFICATION_ID) {
                     let tasks = today_titles(app);
                     if !tasks.is_empty() {
-                        let mut body = String::new();
-                        for (i, t) in tasks.iter().take(4).enumerate() {
-                            if i > 0 {
-                                body.push('\n');
-                            }
-                            body.push_str(t);
-                        }
-                        if tasks.len() > 4 {
-                            body.push_str(&format!("\n… и ещё {} задач", tasks.len() - 4));
-                        }
                         schedule_at(
                             app,
                             DIGEST_NOTIFICATION_ID,
                             &format!("Задачи на сегодня ({})", tasks.len()),
-                            &body,
+                            &digest_body(&tasks),
                             ts,
                         );
                     }
@@ -447,53 +507,19 @@ fn sync_scheduled(app: &tauri::AppHandle, prefs: &NotifyPrefs) {
     }
 
     // 2. Напоминания задач (глобальные интервалы / своё notify_minutes /
-    // travel_time «Пора выезжать»).
+    // travel_time «Пора выезжать»). Расчёт событий общий с десктопом
+    // (reminder_events) — здесь только планирование на уровне ОС.
     if prefs.reminders {
-        for (id, title, minutes, date_epoch, travel_time, notify_minutes) in load_timed_tasks(app) {
-            if notify_minutes == Some(0) {
+        for ev in reminder_events(app, prefs) {
+            // Горизонт: строго в будущем и в пределах выборки (+7 дней) —
+            // просроченные не планируем, слишком далёкие не достаём.
+            if ev.due <= now || ev.due > now + chrono::Duration::days(7) {
                 continue;
             }
-            let Some(start) = task_start(minutes, date_epoch) else {
-                continue;
-            };
-            let intervals: Vec<i64> = task_intervals(notify_minutes, prefs);
-            for rm in intervals {
-                let due = due_at(start, rm);
-                // Горизонт: строго в будущем и в пределах выборки (+7 дней) —
-                // просроченные не планируем, слишком далёкие не достаём.
-                if due <= now || due > now + chrono::Duration::days(7) {
-                    continue;
-                }
-                let nid = stable_id("remind", &id, due_unix_minute(due));
-                expected.insert(nid);
-                if !pending_ids.contains(&nid) {
-                    schedule_at(
-                        app,
-                        nid,
-                        "Напоминание",
-                        &format!("«{title}» — {}", format_interval(rm)),
-                        due,
-                    );
-                }
-            }
-            // «Пора выезжать»: за travel_time до начала задачи.
-            if let Some(tt) = travel_time {
-                if tt > 0 {
-                    let due = due_at(start, tt);
-                    if due > now && due <= now + chrono::Duration::days(7) {
-                        let nid = stable_id("travel", &id, due_unix_minute(due));
-                        expected.insert(nid);
-                        if !pending_ids.contains(&nid) {
-                            schedule_at(
-                                app,
-                                nid,
-                                "Пора выезжать",
-                                &format!("«{title}» — в {:02}:{:02}", minutes / 60, minutes % 60),
-                                due,
-                            );
-                        }
-                    }
-                }
+            let nid = stable_id(ev.kind, &ev.task_id, due_unix_minute(ev.due));
+            expected.insert(nid);
+            if !pending_ids.contains(&nid) {
+                schedule_at(app, nid, ev.title, &ev.body, ev.due);
             }
         }
     }
@@ -510,12 +536,7 @@ fn sync_scheduled(app: &tauri::AppHandle, prefs: &NotifyPrefs) {
 /// Момент due как unix-минута — для стабильного id (не зависит от таймзоны).
 #[cfg(target_os = "android")]
 fn due_unix_minute(due: NaiveDateTime) -> i64 {
-    Local
-        .from_local_datetime(&due)
-        .single()
-        .unwrap_or_else(|| Local.from_utc_datetime(&due))
-        .timestamp()
-        / 60
+    to_local(&due).timestamp() / 60
 }
 
 /// Заголовки невыполненных задач на сегодня (для тела дайджеста).
@@ -556,17 +577,7 @@ fn check_digest(app: &tauri::AppHandle, prefs: &NotifyPrefs, now: NaiveDateTime)
         return;
     }
 
-    let mut body = String::new();
-    let shown = tasks.iter().take(4).collect::<Vec<_>>();
-    for (i, t) in shown.iter().enumerate() {
-        if i > 0 {
-            body.push('\n');
-        }
-        body.push_str(t);
-    }
-    if tasks.len() > shown.len() {
-        body.push_str(&format!("\n… и ещё {} задач", tasks.len() - shown.len()));
-    }
+    let body = digest_body(&tasks);
 
     let _ = app
         .notification()
@@ -648,12 +659,7 @@ fn format_interval(rm: i64) -> String {
 /// NaiveDateTime в дни перехода времени (DST) сдвигает момент на час — считаем
 /// через Local (знает смещение), затем возвращаем локальную дату-время.
 fn due_at(start: NaiveDateTime, minutes: i64) -> NaiveDateTime {
-    let local = Local
-        .from_local_datetime(&start)
-        .single()
-        .unwrap_or_else(|| Local.from_utc_datetime(&start))
-        - chrono::Duration::minutes(minutes);
-    local.naive_local()
+    (to_local(&start) - chrono::Duration::minutes(minutes)).naive_local()
 }
 
 /// Напоминания (десктоп): за remind_minutes до задач со временем.
@@ -668,63 +674,28 @@ fn check_reminders(app: &tauri::AppHandle, prefs: &NotifyPrefs, now: NaiveDateTi
     // интервалы из настроек, 0 = не уведомлять, N = напомнить за N минут (одно
     // уведомление вместо всех глобальных). Если задано travel_time — дополнительно
     // «Пора выезжать» за это время до начала.
-    for (id, title, minutes, date_epoch, travel_time, notify_minutes) in load_timed_tasks(app) {
-        // Своё «не уведомлять» (0) — пропускаем задачу целиком, включая выезд.
-        if notify_minutes == Some(0) {
+    for ev in reminder_events(app, prefs) {
+        // Окно отправки: 2 минуты после наступления момента.
+        if now < ev.due || now > ev.due + chrono::Duration::minutes(2) {
             continue;
         }
-        let Some(start) = task_start(minutes, date_epoch) else {
-            continue;
+        // Ключ дедупликации: id + момент due достаточны — разные интервалы
+        // одной задачи дают разные due (разница ≥ 1 мин), коллизий нет.
+        let key = if ev.kind == "travel" {
+            format!("remind|travel|{}|{}", ev.task_id, ev.due)
+        } else {
+            format!("remind|{}|{}", ev.task_id, ev.due)
         };
-
-        // Своё время уведомления задачи (одно значение) вместо глобальных
-        // интервалов, если задано.
-        let intervals: Vec<i64> = task_intervals(notify_minutes, prefs);
-
-        // 1. Выбранные интервалы напоминаний — каждому своё уведомление.
-        for rm in intervals {
-            let due = due_at(start, rm);
-            // Окно отправки: 2 минуты после наступления момента.
-            if now < due || now > due + chrono::Duration::minutes(2) {
-                continue;
-            }
-            let key = format!("remind|{}|{}|{}", id, rm, due);
-            if fired().lock().unwrap().contains_key(&key) {
-                continue;
-            }
-            let _ = app
-                .notification()
-                .builder()
-                .title("Напоминание")
-                .body(format!("«{}» — {}", title, format_interval(rm)))
-                .show();
-            mark_fired(key);
+        if fired().lock().unwrap().contains_key(&key) {
+            continue;
         }
-
-        // 2. «Пора выезжать»: за travel_time до начала задачи (если задано).
-        if let Some(tt) = travel_time {
-            if tt > 0 {
-                let due = due_at(start, tt);
-                if now >= due && now <= due + chrono::Duration::minutes(2) {
-                    let key = format!("remind|travel|{}|{}", id, due);
-                    if fired().lock().unwrap().contains_key(&key) {
-                        continue;
-                    }
-                    let _ = app
-                        .notification()
-                        .builder()
-                        .title("Пора выезжать")
-                        .body(format!(
-                            "«{}» — в {:02}:{:02}",
-                            title,
-                            minutes / 60,
-                            minutes % 60
-                        ))
-                        .show();
-                    mark_fired(key);
-                }
-            }
-        }
+        let _ = app
+            .notification()
+            .builder()
+            .title(ev.title)
+            .body(ev.body)
+            .show();
+        mark_fired(key);
     }
 }
 

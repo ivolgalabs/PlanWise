@@ -24,6 +24,18 @@
   --row-h: calc(38px * var(--ui-scale));
 }
 
+/* Модальный оверлей: общее позиционирование для всех модалок (раньше каждый
+ * файл дублировал inline-стили). z-index задаётся на месте — модалки
+ * настроек/задач (300) поверх остальных (200). */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--overlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 /* Масштаб интерфейса: font-size на <html> задаёт 1rem, на который
  * завязаны ВСЕ --fs-* токены Universal UI. База — clamp по ширине окна;
  * множители применяются инлайн из App.tsx (document.zoom для всего UI

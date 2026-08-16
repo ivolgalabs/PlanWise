@@ -107,7 +107,7 @@ export function TimePicker({
         <div style={labelStyle}>Своё время</div>
         <input
           type="time"
-          value={value !== null ? toHHMM(value) : ""}
+          value={value !== null ? formatMinutes(value) ?? "" : ""}
           onChange={(e) => pickTime(e.target.value)}
           onInput={(e) => pickTime(e.currentTarget.value)}
           // Некоторые WebView-сборки коммитят значение только при закрытии
@@ -203,11 +203,6 @@ export function TimePicker({
       )}
     </div>
   );
-}
-
-/** ЧЧ:ММ для value системного input type=time. */
-function toHHMM(m: number): string {
-  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 }
 
 /** Числовые поля «ч» и «мин» для ввода КОЛИЧЕСТВА времени (длительность,

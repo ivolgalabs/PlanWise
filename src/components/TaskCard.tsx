@@ -388,12 +388,10 @@ export const TaskCard = memo(function TaskCard({
   // Время в строке — ТОЛЬКО отображение (изменение — в карточке задачи).
   // Бейдж: при длительности — диапазон «09:00–10:30» (стартовое время в нём
   // уже есть, отдельно не дублируется), без неё — «09:00». Мета: выезд.
-  const fmt = (m: number) =>
-    `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
   const timeMeta: string[] = [];
   if (task.timeMinutes != null && task.travelTime) {
     const dep = (task.timeMinutes - task.travelTime + 24 * 60) % (24 * 60);
-    timeMeta.push(`выезд в ${fmt(dep)}`);
+    timeMeta.push(`выезд в ${formatMinutes(dep)}`);
   }
   const timeText =
     task.timeMinutes != null
@@ -401,7 +399,7 @@ export const TaskCard = memo(function TaskCard({
         ? (() => {
             const total = task.timeMinutes! + task.durationMinutes!;
             const days = Math.floor(total / (24 * 60));
-            return `${fmt(task.timeMinutes!)}–${fmt(total % (24 * 60))}${days > 0 ? ` (+${days} дн.)` : ""}`;
+            return `${formatMinutes(task.timeMinutes!)}–${formatMinutes(total % (24 * 60))}${days > 0 ? ` (+${days} дн.)` : ""}`;
           })()
         : formatMinutes(task.timeMinutes)
       : null;

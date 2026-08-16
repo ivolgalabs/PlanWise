@@ -268,15 +268,7 @@ export function TaskDndContext({ children, onChange }: TaskDndContextProps) {
         <div
           className="modal-overlay"
           onClick={() => setPending(null)}
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "var(--overlay)",
-            zIndex: 300,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
+          style={{ zIndex: 300 }}
         >
           <div
             onClick={(e) => e.stopPropagation()}

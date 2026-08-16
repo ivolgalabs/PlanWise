@@ -9,6 +9,78 @@ fn now_ms() -> i64 {
     Utc::now().timestamp_millis()
 }
 
+/// Колонки таблицы tasks — единый список для SELECT и INSERT: новая колонка
+/// добавляется в одном месте (маппинг в Task — см. task_from_row).
+const TASK_COLUMNS: &str = "id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes, someday, archived, travel_time, duration_minutes, difficulty, notify_minutes";
+
+/// Маппинг строки tasks в Task (единый для всех выборок — колонки не разъезжаются).
+fn task_from_row(row: &rusqlite::Row) -> rusqlite::Result<Task> {
+    Ok(Task {
+        id: row.get(0)?,
+        title: row.get(1)?,
+        date: row.get(2)?,
+        is_done: row.get::<_, i64>(3)? != 0,
+        color_set_id: row.get(4)?,
+        sort_order: row.get(5)?,
+        created_at: row.get(6)?,
+        updated_at: row.get(7)?,
+        device_id: row.get(8)?,
+        time_minutes: row.get(9)?,
+        notes: row.get(10)?,
+        someday: row.get::<_, i64>(11)? != 0,
+        archived: row.get::<_, i64>(12)? != 0,
+        travel_time: row.get(13)?,
+        duration_minutes: row.get(14)?,
+        difficulty: row.get(15)?,
+        notify_minutes: row.get(16)?,
+    })
+}
+
+/// Задачи, подходящие под tail (всё после «FROM tasks»: WHERE и ORDER BY).
+/// params — параметры tail; единая точка маппинга колонок (task_from_row).
+fn select_tasks(
+    conn: &rusqlite::Connection,
+    tail: &str,
+    params: &[&dyn rusqlite::ToSql],
+) -> Result<Vec<Task>, String> {
+    let sql = format!("SELECT {TASK_COLUMNS} FROM tasks {tail}");
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params, task_from_row)
+        .map_err(|e| e.to_string())?;
+    let mut out = Vec::new();
+    for r in rows {
+        // Ошибка чтения строки — возвращаем, а не молча теряем задачу.
+        out.push(r.map_err(|e| e.to_string())?);
+    }
+    Ok(out)
+}
+
+/// Одна задача по id (None, если такой задачи нет).
+fn select_task_by_id(conn: &rusqlite::Connection, id: &str) -> Result<Option<Task>, String> {
+    let sql = format!("SELECT {TASK_COLUMNS} FROM tasks WHERE id = ?1");
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    stmt.query_row([id], task_from_row)
+        .optional()
+        .map_err(|e| e.to_string())
+}
+
+/// Перенос задачи на дату: в прошлое = выполнена, в будущее (из прошлого) =
+/// актуальна. Общее для переноса и возврата из архива.
+fn move_task_to_date(conn: &rusqlite::Connection, id: &str, new_date: i64) -> Result<(), String> {
+    conn.execute(
+        "UPDATE tasks SET date = ?1, someday = 0, archived = 0,
+           is_done = CASE
+             WHEN ?1 < ?2 THEN 1
+             WHEN ?1 > ?2 AND is_done = 1 THEN 0
+             ELSE is_done END,
+           updated_at = ?3 WHERE id = ?4",
+        rusqlite::params![new_date, today_epoch_day(), now_ms(), id],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// epoch-day «сегодня» по локальной дате машины (как toEpochDay на фронте:
 /// локальная дата, отсчёт от 1970-01-01). Нужен для правила «перенос задачи
 /// в прошлое = задача выполнена».
@@ -29,42 +101,11 @@ pub fn get_tasks(state: State<'_, Db>, start_day: i64, end_day: i64) -> Result<V
         return Err("Недопустимый диапазон дат".to_string());
     }
     let conn = state.lock();
-    let mut stmt = conn
-        .prepare(
-            "SELECT id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes, someday, archived, travel_time, duration_minutes, difficulty, notify_minutes
-             FROM tasks WHERE date BETWEEN ?1 AND ?2 AND someday = 0 AND archived = 0
-             ORDER BY sort_order ASC, created_at ASC, id ASC",
-        )
-        .map_err(|e| e.to_string())?;
-    let rows = stmt
-        .query_map([start_day, end_day], |row| {
-            Ok(Task {
-                id: row.get(0)?,
-                title: row.get(1)?,
-                date: row.get(2)?,
-                is_done: row.get::<_, i64>(3)? != 0,
-                color_set_id: row.get(4)?,
-                sort_order: row.get(5)?,
-                created_at: row.get(6)?,
-                updated_at: row.get(7)?,
-                device_id: row.get(8)?,
-                time_minutes: row.get(9)?,
-                notes: row.get(10)?,
-                someday: row.get::<_, i64>(11)? != 0,
-                archived: row.get::<_, i64>(12)? != 0,
-                travel_time: row.get(13)?,
-                duration_minutes: row.get(14)?,
-                difficulty: row.get(15)?,
-                notify_minutes: row.get(16)?,
-            })
-        })
-        .map_err(|e| e.to_string())?;
-    let mut out = Vec::new();
-    for r in rows {
-        // Ошибка чтения строки — возвращаем, а не молча теряем задачу.
-        out.push(r.map_err(|e| e.to_string())?);
-    }
-    Ok(out)
+    select_tasks(
+        &conn,
+        "WHERE date BETWEEN ?1 AND ?2 AND someday = 0 AND archived = 0 ORDER BY sort_order ASC, created_at ASC, id ASC",
+        &[&start_day, &end_day],
+    )
 }
 
 #[tauri::command]
@@ -109,16 +150,18 @@ pub fn upsert_task(state: State<'_, Db>, mut task: Task) -> Result<Task, String>
     }
     task.updated_at = now_ms();
     conn.execute(
-        "INSERT INTO tasks (id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes, someday, archived, travel_time, duration_minutes, difficulty, notify_minutes)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
-         ON CONFLICT(id) DO UPDATE SET
-           title=excluded.title, date=excluded.date, is_done=excluded.is_done,
-           color_set_id=excluded.color_set_id, sort_order=excluded.sort_order,
-           updated_at=excluded.updated_at, device_id=excluded.device_id,
-           time_minutes=excluded.time_minutes, notes=excluded.notes,
-           someday=excluded.someday, archived=excluded.archived,
-           travel_time=excluded.travel_time, duration_minutes=excluded.duration_minutes,
-           difficulty=excluded.difficulty, notify_minutes=excluded.notify_minutes",
+        &format!(
+            "INSERT INTO tasks ({TASK_COLUMNS})
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
+             ON CONFLICT(id) DO UPDATE SET
+               title=excluded.title, date=excluded.date, is_done=excluded.is_done,
+               color_set_id=excluded.color_set_id, sort_order=excluded.sort_order,
+               updated_at=excluded.updated_at, device_id=excluded.device_id,
+               time_minutes=excluded.time_minutes, notes=excluded.notes,
+               someday=excluded.someday, archived=excluded.archived,
+               travel_time=excluded.travel_time, duration_minutes=excluded.duration_minutes,
+               difficulty=excluded.difficulty, notify_minutes=excluded.notify_minutes",
+        ),
         rusqlite::params![
             task.id,
             task.title,
@@ -238,35 +281,7 @@ pub fn move_task(state: State<'_, Db>, id: String, new_date: i64) -> Result<(), 
     let conn = state.lock();
     // Запрет наложений действует и при переносе: читаем задачу, подставляем
     // новую дату и проверяем пересечение (как при сохранении времени).
-    let task: Option<Task> = conn
-        .query_row(
-            "SELECT id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes, someday, archived, travel_time, duration_minutes, difficulty, notify_minutes
-             FROM tasks WHERE id = ?1",
-            [&id],
-            |row| {
-                Ok(Task {
-                    id: row.get(0)?,
-                    title: row.get(1)?,
-                    date: row.get(2)?,
-                    is_done: row.get::<_, i64>(3)? != 0,
-                    color_set_id: row.get(4)?,
-                    sort_order: row.get(5)?,
-                    created_at: row.get(6)?,
-                    updated_at: row.get(7)?,
-                    device_id: row.get(8)?,
-                    time_minutes: row.get(9)?,
-                    notes: row.get(10)?,
-                    someday: row.get::<_, i64>(11)? != 0,
-                    archived: row.get::<_, i64>(12)? != 0,
-                    travel_time: row.get(13)?,
-                    duration_minutes: row.get(14)?,
-                    difficulty: row.get(15)?,
-                    notify_minutes: row.get(16)?,
-                })
-            },
-        )
-        .optional()
-        .map_err(|e| e.to_string())?;
+    let task = select_task_by_id(&conn, &id)?;
     let Some(task) = task else {
         return Ok(()); // задачи нет — идемпотентно
     };
@@ -277,16 +292,7 @@ pub fn move_task(state: State<'_, Db>, id: String, new_date: i64) -> Result<(), 
     }
     // Перенос в прошлое = задача закрыта (выполнена); перенос в будущее из
     // прошлого = снова актуальна (не выполнена). Сегодня не трогаем.
-    conn.execute(
-        "UPDATE tasks SET date = ?1, someday = 0, archived = 0,
-           is_done = CASE
-             WHEN ?1 < ?2 THEN 1
-             WHEN ?1 > ?2 AND is_done = 1 THEN 0
-             ELSE is_done END,
-           updated_at = ?3 WHERE id = ?4",
-        rusqlite::params![new_date, today_epoch_day(), now_ms(), id],
-    )
-    .map_err(|e| e.to_string())?;
+    move_task_to_date(&conn, &id, new_date)?;
     Ok(())
 }
 
@@ -294,40 +300,11 @@ pub fn move_task(state: State<'_, Db>, id: String, new_date: i64) -> Result<(), 
 #[tauri::command]
 pub fn get_someday_tasks(state: State<'_, Db>) -> Result<Vec<Task>, String> {
     let conn = state.lock();
-    let mut stmt = conn
-        .prepare(
-            "SELECT id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes, someday, archived, travel_time, duration_minutes, difficulty, notify_minutes
-             FROM tasks WHERE someday = 1 AND archived = 0 ORDER BY sort_order ASC, created_at ASC",
-        )
-        .map_err(|e| e.to_string())?;
-    let rows = stmt
-        .query_map([], |row| {
-            Ok(Task {
-                id: row.get(0)?,
-                title: row.get(1)?,
-                date: row.get(2)?,
-                is_done: row.get::<_, i64>(3)? != 0,
-                color_set_id: row.get(4)?,
-                sort_order: row.get(5)?,
-                created_at: row.get(6)?,
-                updated_at: row.get(7)?,
-                device_id: row.get(8)?,
-                time_minutes: row.get(9)?,
-                notes: row.get(10)?,
-                someday: row.get::<_, i64>(11)? != 0,
-                archived: row.get::<_, i64>(12)? != 0,
-                travel_time: row.get(13)?,
-                duration_minutes: row.get(14)?,
-                difficulty: row.get(15)?,
-                notify_minutes: row.get(16)?,
-            })
-        })
-        .map_err(|e| e.to_string())?;
-    let mut out = Vec::new();
-    for r in rows {
-        out.push(r.map_err(|e| e.to_string())?);
-    }
-    Ok(out)
+    select_tasks(
+        &conn,
+        "WHERE someday = 1 AND archived = 0 ORDER BY sort_order ASC, created_at ASC",
+        &[],
+    )
 }
 
 /// Переместить задачу в «Когда-нибудь» (дата сбрасывается).
@@ -456,40 +433,11 @@ pub fn archive_overdue(state: State<'_, Db>) -> Result<i64, String> {
 #[tauri::command]
 pub fn get_archived_tasks(state: State<'_, Db>) -> Result<Vec<Task>, String> {
     let conn = state.lock();
-    let mut stmt = conn
-        .prepare(
-            "SELECT id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes, someday, archived, travel_time, duration_minutes, difficulty, notify_minutes
-             FROM tasks WHERE archived = 1 ORDER BY date DESC, updated_at DESC",
-        )
-        .map_err(|e| e.to_string())?;
-    let rows = stmt
-        .query_map([], |row| {
-            Ok(Task {
-                id: row.get(0)?,
-                title: row.get(1)?,
-                date: row.get(2)?,
-                is_done: row.get::<_, i64>(3)? != 0,
-                color_set_id: row.get(4)?,
-                sort_order: row.get(5)?,
-                created_at: row.get(6)?,
-                updated_at: row.get(7)?,
-                device_id: row.get(8)?,
-                time_minutes: row.get(9)?,
-                notes: row.get(10)?,
-                someday: row.get::<_, i64>(11)? != 0,
-                archived: row.get::<_, i64>(12)? != 0,
-                travel_time: row.get(13)?,
-                duration_minutes: row.get(14)?,
-                difficulty: row.get(15)?,
-                notify_minutes: row.get(16)?,
-            })
-        })
-        .map_err(|e| e.to_string())?;
-    let mut out = Vec::new();
-    for r in rows {
-        out.push(r.map_err(|e| e.to_string())?);
-    }
-    Ok(out)
+    select_tasks(
+        &conn,
+        "WHERE archived = 1 ORDER BY date DESC, updated_at DESC",
+        &[],
+    )
 }
 
 /// Вернуть задачу из «Архива» на выбранную дату (archived снимается).
@@ -498,35 +446,7 @@ pub fn restore_archived(state: State<'_, Db>, id: String, date: i64) -> Result<(
     let conn = state.lock();
     // Запрет наложений действует и при возврате из архива: проверяем время
     // восстановленной задачи на целевой дате (как при переносе).
-    let task: Option<Task> = conn
-        .query_row(
-            "SELECT id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes, someday, archived, travel_time, duration_minutes, difficulty, notify_minutes
-             FROM tasks WHERE id = ?1",
-            [&id],
-            |row| {
-                Ok(Task {
-                    id: row.get(0)?,
-                    title: row.get(1)?,
-                    date: row.get(2)?,
-                    is_done: row.get::<_, i64>(3)? != 0,
-                    color_set_id: row.get(4)?,
-                    sort_order: row.get(5)?,
-                    created_at: row.get(6)?,
-                    updated_at: row.get(7)?,
-                    device_id: row.get(8)?,
-                    time_minutes: row.get(9)?,
-                    notes: row.get(10)?,
-                    someday: row.get::<_, i64>(11)? != 0,
-                    archived: row.get::<_, i64>(12)? != 0,
-                    travel_time: row.get(13)?,
-                    duration_minutes: row.get(14)?,
-                    difficulty: row.get(15)?,
-                    notify_minutes: row.get(16)?,
-                })
-            },
-        )
-        .optional()
-        .map_err(|e| e.to_string())?;
+    let task = select_task_by_id(&conn, &id)?;
     let Some(task) = task else {
         return Ok(());
     };
@@ -538,16 +458,7 @@ pub fn restore_archived(state: State<'_, Db>, id: String, date: i64) -> Result<(
     }
     // Возврат на прошедший день = задача закрыта (иначе на следующем старте
     // она снова уйдёт в архив как просроченная); в будущее = снова актуальна.
-    conn.execute(
-        "UPDATE tasks SET archived = 0, date = ?1, someday = 0,
-           is_done = CASE
-             WHEN ?1 < ?2 THEN 1
-             WHEN ?1 > ?2 AND is_done = 1 THEN 0
-             ELSE is_done END,
-           updated_at = ?3 WHERE id = ?4",
-        rusqlite::params![date, today_epoch_day(), now_ms(), id],
-    )
-    .map_err(|e| e.to_string())?;
+    move_task_to_date(&conn, &id, date)?;
     Ok(())
 }
 
@@ -833,8 +744,10 @@ pub fn import_json(
     }
     for t in tasks {
         tx.execute(
-            "INSERT INTO tasks (id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes, someday, archived, travel_time, duration_minutes, difficulty, notify_minutes)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
+            &format!(
+                "INSERT INTO tasks ({TASK_COLUMNS})
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
+            ),
             rusqlite::params![
                 t.get("id").and_then(|x| x.as_str()).unwrap_or(""),
                 t.get("title").and_then(|x| x.as_str()).unwrap_or(""),
@@ -1061,36 +974,28 @@ pub fn refresh_widget(
             "isDone": r.get::<_, i64>(3)? != 0,
         }))
     };
-    // Задачи по одному аргументу-дате (someday-запрос параметров не имеет —
-    // для него отдельная ветка ниже).
+    // Строка виджета: одна для всех выборок, отличается только LIMIT (?2).
+    // Порядок — как просил пользователь: сначала задачи С временем (по времени),
+    // затем без времени по приоритету (difficulty), tie-break — ручной порядок.
+    const WIDGET_TASK_SQL: &str = "SELECT id, title, time_minutes, is_done FROM tasks WHERE date = ?1 AND archived = 0 AND someday = 0 ORDER BY (time_minutes IS NULL) ASC, time_minutes ASC, difficulty DESC, sort_order ASC, created_at ASC LIMIT ?2";
     let query_by_day =
-        |conn: &rusqlite::Connection, sql: &str, day: i64| -> Vec<serde_json::Value> {
-            conn.prepare(sql)
+        |conn: &rusqlite::Connection, day: i64, limit: i64| -> Vec<serde_json::Value> {
+            conn.prepare(WIDGET_TASK_SQL)
                 .and_then(|mut stmt| {
-                    stmt.query_map([day], task_row)
+                    stmt.query_map([day, limit], task_row)
                         .and_then(|it| it.collect::<Result<Vec<_>, _>>())
                 })
                 .unwrap_or_default()
         };
-    // Сегодня — до 8 задач (Android-виджет и день на macOS). Порядок — как
-    // просил пользователь: сначала задачи С временем (по времени), затем без
-    // времени по приоритету (difficulty), tie-break — ручной порядок.
+    // Сегодня — до 8 задач (Android-виджет и день на macOS).
     // Лимит 4 в неделе: остальное — в приложении.
-    let tasks = query_by_day(
-        &conn,
-        "SELECT id, title, time_minutes, is_done FROM tasks WHERE date = ?1 AND archived = 0 AND someday = 0 ORDER BY (time_minutes IS NULL) ASC, time_minutes ASC, difficulty DESC, sort_order ASC, created_at ASC LIMIT 8",
-        today,
-    );
+    let tasks = query_by_day(&conn, today, 8);
     // Неделя: 7 дней с сегодня, до 4 задач на день (самые значимые: сначала
     // с временем, затем по приоритету) — для виджета «Неделя».
     let week: Vec<serde_json::Value> = (0..7)
         .map(|off| {
             let day = today + off;
-            let day_tasks = query_by_day(
-                &conn,
-                "SELECT id, title, time_minutes, is_done FROM tasks WHERE date = ?1 AND archived = 0 AND someday = 0 ORDER BY (time_minutes IS NULL) ASC, time_minutes ASC, difficulty DESC, sort_order ASC, created_at ASC LIMIT 4",
-                day,
-            );
+            let day_tasks = query_by_day(&conn, day, 4);
             serde_json::json!({ "date": day, "tasks": day_tasks })
         })
         .collect();
@@ -1106,11 +1011,7 @@ pub fn refresh_widget(
     let day_window: Vec<serde_json::Value> = (-1..=13)
         .map(|off| {
             let day = today + off;
-            let day_tasks = query_by_day(
-                &conn,
-                "SELECT id, title, time_minutes, is_done FROM tasks WHERE date = ?1 AND archived = 0 AND someday = 0 ORDER BY (time_minutes IS NULL) ASC, time_minutes ASC, difficulty DESC, sort_order ASC, created_at ASC LIMIT 8",
-                day,
-            );
+            let day_tasks = query_by_day(&conn, day, 8);
             serde_json::json!({ "date": day, "tasks": day_tasks })
         })
         .collect();

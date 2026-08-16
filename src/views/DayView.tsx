@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import type { Task } from "../api";
-import { api, fromEpochDay } from "../api";
+import { api, fromEpochDay, toEpochDay } from "../api";
 import { TaskCard } from "../components/TaskCard";
 import { SomedayColumn } from "../components/SomedayColumn";
 import { ArchivePanel } from "../components/ArchivePanel";
@@ -9,7 +9,7 @@ import { AddTaskModal } from "../components/AddTaskModal";
 import { Icon } from "../components/Icon";
 import { COLORS, accentTint } from "../theme";
 import { dayId } from "../drag";
-import { isToday, sortTasksByMode, formatMinutes } from "../date";
+import { isToday, sortTasksByMode, formatMinutes, isSameDay } from "../date";
 import { useMediaQuery } from "../useMediaQuery";
 import { useStore, type TaskPattern } from "../store";
 
@@ -43,19 +43,12 @@ export function DayView({ day, tasks, archivedTasks, onChange }: Props) {
     tasks.filter((t) => {
       // «Когда-нибудь» не показывается в дне (своя колонка).
       if (t.someday) return false;
-      const d = fromEpochDay(t.date);
-      return (
-        d.getFullYear() === day.getFullYear() &&
-        d.getMonth() === day.getMonth() &&
-        d.getDate() === day.getDate()
-      );
+      return isSameDay(fromEpochDay(t.date), day);
     }),
     sortMode,
   );
 
-  const epochDay = Math.floor(
-    Date.UTC(day.getFullYear(), day.getMonth(), day.getDate()) / 86_400_000,
-  );
+  const epochDay = toEpochDay(day);
   const dayKey = `${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`;
 
   const addTask = async () => {

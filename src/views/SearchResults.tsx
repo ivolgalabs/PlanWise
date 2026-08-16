@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { Subtask, Task } from "../api";
 import { api, fromEpochDay } from "../api";
 import { COLORS, setHex } from "../theme";
-import { isToday, isPast } from "../date";
+import { isToday, isPast, isSameMonth } from "../date";
 import { useStore } from "../store";
 
 /** Фильтр по периоду: все / сегодня / просроченные / ближайшие 7 дней /
@@ -65,7 +65,7 @@ export function SearchResults({ tasks, query, color, period, status, sort, from,
         return d >= today && d <= end;
       }
       if (period === "month") {
-        const n = new Date(); return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth();
+        return isSameMonth(d, new Date());
       }
       if (period === "custom") {
         // Произвольный диапазон: epoch-day задачи сравниваем напрямую;

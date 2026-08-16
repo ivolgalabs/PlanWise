@@ -6,6 +6,7 @@ import {
   startOfWeek,
   firstOfMonth,
   isSameDay,
+  isSameMonth,
   isPast,
   isToday,
   weekDays,
@@ -199,7 +200,7 @@ export function MiniCalendar({ tasks, large, onSelect, droppable = true, fill = 
         }}
       >
         {cells.map((day, i) => {
-          const inMonth = day.getMonth() === first.getMonth();
+          const inMonth = isSameMonth(day, first);
           const selected = isSameDay(day, selectedDate);
           const inSelectedWeek =
             selectedWeek?.some((w) => isSameDay(w, day)) ?? false;
