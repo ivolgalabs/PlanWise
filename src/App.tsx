@@ -19,6 +19,7 @@ import { MonthView } from "./views/MonthView";
 import { RightPanel } from "./components/RightPanel";
 import { TaskDndContext } from "./drag";
 import { setToastListener } from "./toast";
+import { scheduleAutoExport, startAutoSync } from "./autoSync";
 import "./App.css";
 
 /** Ширина правой панели (общая для «Недели» и «Дня»): resize-ручка в неделе,
@@ -342,11 +343,22 @@ function App() {
     // виджет должен выглядеть как приложение, а не по системной теме устройства.
     if (isTauri()) {
       scheduleWidgetWrite(isDarkTheme());
+      // Автоэкспорт в заданную папку — тот же принцип: правки коаллесится.
+      scheduleAutoExport();
     }
   }, [setTasks, setArchivedTasks]);
 
   useEffect(() => {
     reload();
+  }, [reload]);
+
+  // Автоимпорт из заданной папки: при старте и раз в минуту проверяем, не
+  // появился ли более свежий файл синхронизации (писал другой экземпляр
+  // приложения). Импорт — полная замена; после него перезагружаем данные.
+  useEffect(() => {
+    if (!isTauri()) return;
+    const stop = startAutoSync(() => void reload());
+    return stop;
   }, [reload]);
 
   // Загрузка категорий (цвет-сетов) — при старте и после правок в настройках.

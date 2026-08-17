@@ -4,6 +4,7 @@ import { open, save } from "@tauri-apps/plugin-dialog";
 // Файловый ввод-вывод: на Android системные диалоги возвращают content://,
 // который std::fs не читает — плагин fs умеет работать с такими URI.
 import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
+import { scheduleAutoExport } from "../autoSync";
 import { useStore, resolveActiveTheme } from "../store";
 import {
   COLORS, THEME_FAMILIES, argbToHex, hexToArgb,
@@ -230,6 +231,10 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
     setPreventOverlaps,
     autoDonePastTime,
     setAutoDonePastTime,
+    autoSyncEnabled,
+    autoSyncPath,
+    setAutoSyncEnabled,
+    setAutoSyncPath,
   } = useStore();
 
   // ── Черновики категорий для редактирования (служебный cs-none скрыт).
@@ -428,10 +433,29 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
   // ── Экспорт/импорт данных (JSON-бэкап) ──
   const [dataMsg, setDataMsg] = useState("");
   const [dataError, setDataError] = useState(false);
+  const [syncMsg, setSyncMsg] = useState("");
   // Своё значение интервала напоминания: держим в локальном состоянии, чтобы
   // селекты «ч/мин» показывали выбранное, а не сбрасывались на 0 (раньше
   // value={null} — после выбора всё выглядело «не применённым»).
   const [customRemind, setCustomRemind] = useState<number | null>(null);
+  // Выбор папки автосинхронизации (десктоп — абсолютный путь). На Android
+  // системный диалог отдаёт content://, который std::fs не умеет, — там
+  // автосинк не включаем (подсказка в UI).
+  const onPickSyncFolder = async () => {
+    if (!isTauri()) {
+      setSyncMsg("Доступно в приложении");
+      return;
+    }
+    try {
+      const dir = await open({ directory: true });
+      if (typeof dir === "string" && dir) {
+        setAutoSyncPath(dir);
+        setSyncMsg(`Папка: ${dir}`);
+      }
+    } catch (e) {
+      setSyncMsg(String(e));
+    }
+  };
   const onExport = async () => {
     // В браузере диалог сохранения недоступен — только в Tauri-приложении.
     if (!isTauri()) {
@@ -1489,6 +1513,52 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><Icon name="upload" size={14} /> Импорт…</span>
               </button>
               {dataMsg && <span style={{ fontSize: "var(--fs-2xs)", color: dataError ? "var(--danger, #c0392b)" : COLORS.muted }}>{dataMsg}</span>}
+            </div>
+
+            {/* Автосинхронизация: полный бэкап в заданную папку при каждом
+                изменении данных + проверка файла раз в минуту (если его писал
+                другой экземпляр — данные заменяются). Для одного пользователя
+                на нескольких устройствах. На Android папка через системный
+                диалог отдаёт content:// — std::fs не умеет, поэтому автосинк
+                там недоступен (работает ручной экспорт/импорт). */}
+            <div style={{ marginTop: "var(--sp-4)", display: "flex", flexDirection: "column", gap: "var(--sp-2)" }}>
+              <Toggle checked={autoSyncEnabled} onChange={setAutoSyncEnabled} label="Автосинхронизация (в заданную папку)" />
+              {autoSyncEnabled && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-2)", alignItems: "center" }}>
+                  <button className="preset-btn" onClick={onPickSyncFolder} title="Выбрать папку для бэкапа">
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>Папка…</span>
+                  </button>
+                  <button className="preset-btn" onClick={() => { scheduleAutoExport(); setSyncMsg("Бэкап сохраняется…"); }} title="Сохранить бэкап сейчас">
+                    Сохранить сейчас
+                  </button>
+                  <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted, wordBreak: "break-all" }}>
+                    {autoSyncPath || "папка не выбрана"}
+                  </span>
+                  {syncMsg && <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted }}>{syncMsg}</span>}
+                  <p className="section-hint" style={{ width: "100%" }}>
+                    При изменении данных бэкап пишется в файл daily-planner-sync.json;
+                    раз в минуту приложение проверяет, не появился ли более свежий файл
+                    (с другого устройства) — и заменяет данные. На Android доступен
+                    только ручной экспорт/импорт.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Выход: на macOS приложение живёт в фоне после закрытия окна
+                (уведомления продолжают приходить) — выйти можно только здесь. */}
+            <div style={{ marginTop: "var(--sp-4)" }}>
+              <button
+                className="preset-btn"
+                onClick={() => {
+                  import("@tauri-apps/api/core")
+                    .then(({ invoke }) => invoke("exit_app"))
+                    .catch(() => {});
+                }}
+                title="Закрыть приложение (на macOS продолжает работать в фоне, пока не выйдете здесь)"
+              >
+                Выйти из приложения…
+              </button>
             </div>
           </section>
           </>)}

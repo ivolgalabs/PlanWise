@@ -15,13 +15,16 @@
 - Dev (веб): `npm run dev` (браузерный бэкенд, StrictMode double-render).
 - Сборка фронтенда: `npm run build` (tsc + vite).
 - Release macOS: `npm run build:macos` (= `scripts/bundle-macos.sh`: cargo tauri build + виджет + подпись).
+- Android APK: `cd src-tauri && npx tauri android build --apk` (universal в gen/android/app/build/outputs/apk/universal/release/).
 - Rust-тесты: `cd src-tauri && cargo test --lib notify::`.
 - Статанализ Rust: `cargo fmt && cargo clippy --fix --allow-dirty && cargo check`.
 
 ## Ключевые решения
 
-- **Смена данных**: любое действие → `reload()` в App (полная перезагрузка задач 3 запросами) → `write_widget_data` через дебаунс 600 мс (см. `scheduleWidgetWrite` в App.tsx).
-- **Планировщик** (`notify.rs`): тик → сон до ближайшего события (due напоминаний/дайджест/полночь), потолок 30 мин; `wake_scheduler()` будит при изменении настроек и (десктоп) задач. Android — фиксированный 60-с цикл sync-модели.
+- **Смена данных**: любое действие → `reload()` в App (полная перезагрузка задач 3 запросами) → `write_widget_data` через дебаунс 600 мс (см. `scheduleWidgetWrite` в App.tsx) + автоэкспорт `autoSync.ts` (debounce 2 с, если включён).
+- **Автосинхронизация** (`src/autoSync.ts`): файл `daily-planner-sync.json` в заданной папке — полный бэкап при изменении данных + проверка раз в минуту (last-write-wins). Rust-команды `write_sync_file`/`read_sync_file`; на Android недоступна (content://), там ручной экспорт.
+- **Выход из приложения**: на macOS закрытие последнего окна НЕ завершает процесс (run-цикл в lib.rs: `ExitRequested` → `prevent_exit`, клик по Dock → `Reopen` возвращает окно). Явный выход — кнопка «Выйти» в настройках / BACK на Android (команда `exit_app` ставит флаг `ALLOW_EXIT`).
+- **Планировщик** (`notify.rs`): тик → сон до ближайшего события (due напоминаний/дайджест/полночь), потолок 30 мин; `wake_scheduler()` будит при изменении настроек и (десктоп) задач. Android — фиксированный 60-с цикл sync-модели. Точные алармы — SCHEDULE_EXACT_ALARM + USE_EXACT_ALARM в AndroidManifest (иначе плагин ставит неточные, уведомления задерживаются).
 - **TaskCard мемоизирован** (React.memo + `taskEquals` по полям): после reload все объекты задач новые, сравнение по ссылке всегда ложно.
 - **Конфликты времени**: селектор `conflictId` возвращает примитив (id|null) — подписка на весь `s.tasks` рендерила бы все карточки.
 

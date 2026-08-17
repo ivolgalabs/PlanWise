@@ -799,11 +799,31 @@ fn import_from_string(
     Ok(doc.tasks.len())
 }
 
-/// Закрывает приложение (системная кнопка «назад» на Android, когда все
-/// модалки закрыты). app.exit(0) завершает и десктоп, и мобильный процесс.
+/// Закрывает приложение (системная кнопка «назад» на Android, кнопка «Выйти»
+/// в настройках на десктопе). Сначала разрешаем выход: run-цикл в lib.rs
+/// отклоняет ExitRequested, пока процесс держат уведомления.
 #[tauri::command]
 pub fn exit_app(app: tauri::AppHandle) {
+    crate::request_exit();
     app.exit(0);
+}
+
+/// Прочитать файл автосинхронизации (полный путь — как выбрал пользователь).
+/// None, если файла нет или он не читается — фронт тихо пропускает проверку.
+#[tauri::command]
+pub fn read_sync_file(path: String) -> Option<String> {
+    std::fs::read_to_string(&path).ok()
+}
+
+/// Записать файл автосинхронизации (полный путь). На Android не используется:
+/// content:// из системных диалогов std::fs не понимает (там — ручной экспорт).
+#[tauri::command]
+pub fn write_sync_file(path: String, content: String) -> Result<(), String> {
+    // Создаём каталог, если пользователь выбрал ещё не существующую папку.
+    if let Some(dir) = std::path::Path::new(&path).parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    std::fs::write(&path, content).map_err(|e| e.to_string())
 }
 
 /// Сохранить настройки уведомлений (планировщик подхватит сразу: сохранение

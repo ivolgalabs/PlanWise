@@ -13,14 +13,41 @@ interface Props {
 }
 
 /** Развёрнутый архив на всю правую панель: список скрытых задач и возврат
- *  на выбранную пользователем дату (DatePickerModal). */
+ *  на выбранную пользователем дату (DatePickerModal). Отдельной кнопкой —
+ *  «Вернуть все на дату…»: все задачи архива возвращаются на выбранный день
+ *  (например, на сегодня или любую дату в будущем). */
 export function ArchivePanel({ tasks, onClose, onChange }: Props) {
   // Задача, для которой открыт выбор даты возврата.
   const [restoring, setRestoring] = useState<Task | null>(null);
+  // Режим «вернуть все»: одна дата для всех задач архива.
+  const [restoringAll, setRestoringAll] = useState(false);
+  // Результат массового возврата (конфликты времени пропускаются, остальные
+  // возвращаются — пользователь видит итог).
+  const [restoreMsg, setRestoreMsg] = useState("");
 
   const restore = async (t: Task, d: Date) => {
     await api.restoreArchived(t.id, d);
     setRestoring(null);
+    onChange();
+  };
+
+  const restoreAll = async (d: Date) => {
+    setRestoringAll(false);
+    let ok = 0;
+    let conflicts = 0;
+    for (const t of tasks) {
+      try {
+        await api.restoreArchived(t.id, d);
+        ok += 1;
+      } catch {
+        conflicts += 1; // наложение по времени — задача осталась в архиве
+      }
+    }
+    setRestoreMsg(
+      conflicts === 0
+        ? `Возвращено задач: ${ok}`
+        : `Возвращено ${ok} из ${tasks.length}`,
+    );
     onChange();
   };
 
@@ -44,7 +71,32 @@ export function ArchivePanel({ tasks, onClose, onChange }: Props) {
         <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted }}>
           {tasks.length}
         </span>
+        {tasks.length > 0 && (
+          <button
+            onClick={() => setRestoringAll(true)}
+            title="Вернуть все задачи архива на выбранную дату"
+            style={{
+              marginLeft: "auto",
+              fontSize: "var(--fs-2xs)",
+              border: `1px solid var(--border-color)`,
+              background: "transparent",
+              borderRadius: "var(--radius-md)",
+              padding: "4px 10px",
+              cursor: "pointer",
+              color: COLORS.text,
+              whiteSpace: "nowrap",
+            }}
+          >
+            Вернуть все…
+          </button>
+        )}
       </div>
+      {restoreMsg && (
+        <div style={{ padding: "var(--sp-1) var(--sp-3)", fontSize: "var(--fs-2xs)", color: COLORS.muted, borderBottom: `1px solid var(--border-color)` }}>
+          {restoreMsg}
+          {restoreMsg.includes("из") && " — задачи с пересечением по времени остались в архиве"}
+        </div>
+      )}
       <div style={{ flex: 1, overflowY: "auto", minHeight: 0, padding: "var(--sp-2)" }}>
         {tasks.length === 0 && (
           <p style={{ margin: 0, padding: "var(--sp-2) var(--sp-3)", fontSize: "var(--fs-2xs)", color: COLORS.muted }}>
@@ -116,6 +168,13 @@ export function ArchivePanel({ tasks, onClose, onChange }: Props) {
           tasks={[]}
           onPick={(d) => restore(restoring, d)}
           onClose={() => setRestoring(null)}
+        />
+      )}
+      {restoringAll && (
+        <DatePickerModal
+          tasks={[]}
+          onPick={(d) => void restoreAll(d)}
+          onClose={() => setRestoringAll(false)}
         />
       )}
     </div>

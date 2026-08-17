@@ -93,6 +93,11 @@ pub fn run() {
             // диалогов, где std::fs не работает).
             commands::export_json,
             commands::import_json,
+            // Автосинхронизация: запись/чтение JSON-файла в заданной папке
+            // (десктоп; на Android content:// не понимает std::fs — там
+            // ручной экспорт через плагин fs).
+            commands::read_sync_file,
+            commands::write_sync_file,
             // Настройки уведомлений + ручное перепланирование.
             commands::set_notification_prefs,
             commands::write_widget_data,
@@ -106,6 +111,57 @@ pub fn run() {
             commands::delete_attachment,
             commands::attachment_path,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(
+            // На Android app в матче не используется (Reopen — только macOS);
+            // параметр обязателен сигнатурой RunEvent-колбэка.
+            #[cfg_attr(not(target_os = "macos"), allow(unused_variables))]
+            |app, event| match event {
+            tauri::RunEvent::Ready => {
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.show();
+                    let _ = w.set_focus();
+                }
+            }
+            // Закрытие последнего окна НЕ завершает процесс: окно скрывается,
+            // приложение остаётся в фоне (Dock), чтобы работали напоминания
+            // и утренний дайджест. Явный выход — Cmd+Q или кнопка «Выйти»
+            // в настройках (exit_app ставит флаг ALLOW_EXIT).
+            tauri::RunEvent::WindowEvent {
+                label,
+                event: tauri::WindowEvent::CloseRequested { api, .. },
+                ..
+            } => {
+                api.prevent_close();
+                if let Some(w) = app.get_webview_window(&label) {
+                    let _ = w.hide();
+                }
+            }
+            // Защита от не-оконного выхода (например, завершение системы):
+            // процесс держим, пока не разрешён явный выход.
+            tauri::RunEvent::ExitRequested { api, .. }
+                if !ALLOW_EXIT.load(std::sync::atomic::Ordering::SeqCst) =>
+            {
+                api.prevent_exit();
+            }
+            // Клик по иконке в Dock — снова показать главное окно (оно скрыто,
+            // а не уничтожено — пересоздание не нужно).
+            #[cfg(target_os = "macos")]
+            tauri::RunEvent::Reopen { .. } => {
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.show();
+                    let _ = w.set_focus();
+                }
+            }
+            _ => {}
+        });
+}
+
+/// Флаг «разрешено выйти»: ставится перед явным выходом (exit_app), чтобы
+/// RunEvent::ExitRequested не был отклонён prevent_exit.
+pub static ALLOW_EXIT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub fn request_exit() {
+    ALLOW_EXIT.store(true, std::sync::atomic::Ordering::SeqCst);
 }

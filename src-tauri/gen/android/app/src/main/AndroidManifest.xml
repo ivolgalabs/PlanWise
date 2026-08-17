@@ -12,6 +12,14 @@
          (самообновление виджета через AlarmManager; планировщик уведомлений
          плагина). -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Точные алармы напоминаний. Без них tauri-plugin-notification на
+         Android 12+ планирует НЕТОЧНО (setAndAllowWhileIdle): уведомление
+         может прийти с задержкой или вообще, когда система решит. С этими
+         разрешениями canScheduleExactAlarms() = true → setExactAndAllowWhileIdle.
+         USE_EXACT_ALARM действует сразу (без диалога); SCHEDULE_EXACT_ALARM —
+         запасной вариант для старых версий/политики. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 
     <!-- AndroidTV support -->
     <uses-feature android:name="android.software.leanback" android:required="false" />

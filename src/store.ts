@@ -108,6 +108,11 @@ interface PlannerState {
    *  сегодня и время ≤ текущего) — задача автоматически выполнена;
    *  время в будущем — снимает выполнение. Применяется при установке времени. */
   autoDonePastTime: boolean;
+  /** Автосинхронизация: включена, папка (абсолютный путь, десктоп),
+   *  момент последней синхронизации (exportedAt последнего принятого файла). */
+  autoSyncEnabled: boolean;
+  autoSyncPath: string;
+  autoSyncLastAt: number;
   setSelectedDate: (d: Date) => void;
   setWeekDate: (d: Date) => void;
   setMonthDate: (d: Date) => void;
@@ -142,6 +147,9 @@ interface PlannerState {
   setSortMode: (m: SortMode) => void;
   setPreventOverlaps: (v: boolean) => void;
   setAutoDonePastTime: (v: boolean) => void;
+  setAutoSyncEnabled: (v: boolean) => void;
+  setAutoSyncPath: (p: string) => void;
+  setAutoSyncLastAt: (t: number) => void;
 }
 
 /** Разрешить активный id темы по mode и предпочтениям (производное состояния).
@@ -198,6 +206,9 @@ export const useStore = create<PlannerState>()(
       sortMode: "time",
       preventOverlaps: true,
       autoDonePastTime: true,
+      autoSyncEnabled: false,
+      autoSyncPath: "",
+      autoSyncLastAt: 0,
       setSelectedDate: (d) => set({ selectedDate: d }),
       setWeekDate: (d) => set({ weekDate: d }),
       setMonthDate: (d) => set({ monthDate: d }),
@@ -240,6 +251,9 @@ export const useStore = create<PlannerState>()(
       setSortMode: (m) => set({ sortMode: m }),
       setPreventOverlaps: (v) => set({ preventOverlaps: v }),
       setAutoDonePastTime: (v) => set({ autoDonePastTime: v }),
+      setAutoSyncEnabled: (v) => set({ autoSyncEnabled: v }),
+      setAutoSyncPath: (p) => set({ autoSyncPath: p }),
+      setAutoSyncLastAt: (t) => set({ autoSyncLastAt: t }),
     }),
     {
       name: "todo-settings",
@@ -268,6 +282,9 @@ export const useStore = create<PlannerState>()(
         taskPatterns: s.taskPatterns,
         sortMode: s.sortMode,
         autoDonePastTime: s.autoDonePastTime,
+        autoSyncEnabled: s.autoSyncEnabled,
+        autoSyncPath: s.autoSyncPath,
+        autoSyncLastAt: s.autoSyncLastAt,
       }),
       // Дефолтный shallow-merge zustand заменяет visibility целиком —
       // новые флаги (например, notes) терялись бы у старых установок.
