@@ -34,6 +34,9 @@
 - **zustand селекторы**: селектор, возвращающий массив/объект без shallow — бесконечный цикл/лишние рендеры; возвращает примитив.
 - Vite кэширует node_modules: патчи библиотек требуют `vite dev --force`.
 - APFS case-insensitive; Rust-сборки — в общий `~/.cargo-shared-target` (см. `~/My Project/Rust_Workspace/ARCHITECTURE.md`), локальных target/ быть не должно.
+- **Android-сборка**: gradle-кэш `~/.gradle/caches/8.14.3` может биться при аварийных обрывах (metadata.bin kotlin-dsl) — сброс `rm -rf` каталога. libsqlite3-sys требует NDK clang в PATH: `export PATH="$HOME/Library/Android/sdk/ndk/*/toolchains/llvm/prebuilt/darwin-x86_64/bin:$PATH"` перед `tauri android build` (иначе «sccache: cannot find binary path»). gradlew напрямую не работает (rust-задача ждёт WebSocket от tauri CLI).
+- **Force-stop на Android отменяет все алармы** (включая At-уведомления) — защита ОС, не баг: свайп из недавних безопасен, force-stop из настроек — нет.
+- `~/.cargo-shared-target/release` может исчезать (фоновые чистки/чужие проекты) — пересобирать перед раздачей артефактов.
 
 ## Замеры батареи (методика: `top -l 2 -pid <PID> -stats cpu,power,rsize`)
 
