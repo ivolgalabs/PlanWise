@@ -368,6 +368,15 @@
   background: var(--bg-primary, var(--bg));
   z-index: 2;
 }
+
+/* На узком экране лента вкладок не скроллится (WebView-свайп перехватывается
+   жестами) — переносим вкладки на несколько строк, чтобы все были видны. */
+@media (max-width: 560px) {
+  .settings-tabs {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+}
 .settings-tab {
   flex-shrink: 0;
   font-size: var(--fs-2xs);
