@@ -44,7 +44,8 @@ function taskEquals(a: Task, b: Task): boolean {
     a.travelTime === b.travelTime &&
     a.durationMinutes === b.durationMinutes &&
     a.difficulty === b.difficulty &&
-    a.notifyMinutes === b.notifyMinutes
+    a.notifyMinutes === b.notifyMinutes &&
+    a.travelNotifyMinutes === b.travelNotifyMinutes
   );
 }
 

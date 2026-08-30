@@ -26,6 +26,9 @@ export interface Task {
   /** Своё уведомление задачи: null=по умолчанию (из настроек), 0=не уведомлять,
    *  N=напомнить за N минут до начала. */
   notifyMinutes?: number | null;
+  /** Напомнить за N минут до выезда (выезд = время начала − travelTime);
+   *  null = отдельно не напоминать. Актуально при заданном travelTime. */
+  travelNotifyMinutes?: number | null;
 }
 
 export interface ColorSet {
@@ -80,6 +83,7 @@ export const api = {
       durationMinutes: task.durationMinutes ?? null,
       difficulty: task.difficulty ?? 0,
       notifyMinutes: task.notifyMinutes ?? null,
+      travelNotifyMinutes: task.travelNotifyMinutes ?? null,
     };
     return isTauri() ? invoke<Task>("upsert_task", { task: t }) : browserApi.upsertTask(t);
   },

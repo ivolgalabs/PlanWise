@@ -67,6 +67,7 @@ interface FieldsProps {
     durationMinutes: number | null;
     travelTime: number | null;
     notifyMinutes: number | null;
+    travelNotifyMinutes: number | null;
     colorSetId: string | null;
     notes: string;
     subs: string[];
@@ -101,6 +102,7 @@ export function TaskFormFields({
   const [priority, setPriority] = useState(initial?.difficulty ?? 0);
   const [duration, setDuration] = useState<number | null>(initial?.durationMinutes ?? null);
   const [travel, setTravel] = useState<number | null>(initial?.travelTime ?? null);
+  const [travelNotify, setTravelNotify] = useState<number | null>(initial?.travelNotifyMinutes ?? null);
   const [color, setColor] = useState<string | null>(initial?.colorSetId ?? null);
   const [notes, setNotes] = useState(initial?.notes ?? "");
   // Своё уведомление: null = по умолчанию; select хранит -1 для «по умолчанию»,
@@ -121,6 +123,17 @@ export function TaskFormFields({
   const [editSubId, setEditSubId] = useState<string | null>(null);
   const [editSubVal, setEditSubVal] = useState("");
   const editSubInputRef = useRef<HTMLInputElement>(null);
+  // Авто-высота заголовка: длинный текст переносится, а не обрезается в одну
+  // строку. Было однострочное <input> — хвост длинной задачи «не виден» при
+  // редактировании и после сохранения (см. «если задача длинная — не видно»).
+  const titleRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = titleRef.current;
+    if (el) {
+      el.style.height = "auto";
+      el.style.height = `${el.scrollHeight}px`;
+    }
+  }, [title]);
   const startEditSub = (s: Subtask) => {
     setEditSubId(s.id);
     setEditSubVal(s.title);
@@ -213,6 +226,8 @@ export function TaskFormFields({
       colorSetId: color,
       notes,
       notifyMinutes: notify,
+      // «До выезда» отправляем только когда выезд задан (иначе поле лишнее).
+      travelNotifyMinutes: travel != null ? travelNotify : null,
     };
     // Шаблон задачи: задачу не сохраняем — отдаём собранные данные наружу
     // (родитель пишет их в шаблон).
@@ -319,6 +334,9 @@ export function TaskFormFields({
     await api.upsertSubtask({ taskId: initial.id, title: s });
     setNewSub("");
     setSubItems(await api.getSubtasks(initial.id));
+    // Bump: списки подзадач под задачей в главном окне перечитаются сразу,
+    // иначе добавление в карточке «не доходит» до основного окна.
+    useStore.getState().bumpSubtasks();
   };
 
   const fieldRow: React.CSSProperties = {
@@ -336,12 +354,21 @@ export function TaskFormFields({
 
   return (
     <form onSubmit={submit}>
-      <input
+      <textarea
+        ref={titleRef}
         value={title}
         onChange={(e) => setTitle(e.target.value)}
+        onKeyDown={(e) => {
+          // Enter — сохранить (как было у <input>); Shift+Enter — перенос строки.
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            e.currentTarget.form?.requestSubmit();
+          }
+        }}
         enterKeyHint="done"
         placeholder="Название задачи"
         autoFocus={autoFocus}
+        rows={1}
         style={{
           width: "100%",
           fontSize: "var(--fs-md)",
@@ -352,6 +379,9 @@ export function TaskFormFields({
           background: "transparent",
           color: COLORS.text,
           outline: "none",
+          resize: "none",
+          overflow: "hidden",
+          lineHeight: 1.4,
         }}
       />
 
@@ -447,6 +477,37 @@ export function TaskFormFields({
           <DurationSelect value={notify != null && notify > 0 ? notify : null} onChange={setNotify} maxHours={168} />
         )}
       </div>
+
+      {/* «До выезда»: напомнить за N минут ДО момента выезда (раньше, чем
+          «Пора выезжать» в сам выезд). Виден только когда задан выезд. */}
+      {travel != null && (
+        <div style={fieldRow}>
+          <span style={labelStyle}>До выезда</span>
+          <select
+            value={travelNotify ?? 0}
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              setTravelNotify(v > 0 ? v : null);
+            }}
+            style={{
+              fontSize: "var(--fs-sm)",
+              padding: "6px 8px",
+              border: `1px solid var(--border-color)`,
+              borderRadius: "var(--radius-md)",
+              background: "transparent",
+              color: COLORS.text,
+              outline: "none",
+              maxWidth: "100%",
+            }}
+          >
+            <option value={0}>Не напоминать</option>
+            <option value={5}>За 5 минут до выезда</option>
+            <option value={15}>За 15 минут до выезда</option>
+            <option value={30}>За 30 минут до выезда</option>
+            <option value={60}>За 1 час до выезда</option>
+          </select>
+        </div>
+      )}
 
       {/* Категория — свотчи с подписями. */}
       <div style={fieldRow}>
@@ -688,6 +749,7 @@ export function TaskFormFields({
                     onChange={async () => {
                       await api.upsertSubtask({ ...s, isDone: !s.isDone });
                       setSubItems(await api.getSubtasks(s.taskId));
+                      useStore.getState().bumpSubtasks();
                     }}
                     style={{ margin: 0, flexShrink: 0 }}
                   />
@@ -743,6 +805,7 @@ export function TaskFormFields({
                     onClick={async () => {
                       await api.deleteSubtask(s.id);
                       setSubItems(await api.getSubtasks(s.taskId));
+                      useStore.getState().bumpSubtasks();
                     }}
                     title="Удалить подзадачу"
                   >

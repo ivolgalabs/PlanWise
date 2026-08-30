@@ -275,7 +275,8 @@ fn next_event_from(
     // Напоминания: ближайший due по тем же правилам, что и отправка
     // (интервалы глобальные/свои + «пора выезжать»).
     if prefs.reminders {
-        for (_, _, minutes, date_epoch, travel_time, notify_minutes) in tasks.iter() {
+        for (_, _, minutes, date_epoch, travel_time, notify_minutes, travel_notify) in tasks.iter()
+        {
             if *notify_minutes == Some(0) {
                 continue;
             }
@@ -288,6 +289,11 @@ fn next_event_from(
             if let Some(tt) = travel_time {
                 if *tt > 0 {
                     consider(Some(due_at(start, *tt)));
+                    if let Some(tn) = travel_notify {
+                        if *tn > 0 {
+                            consider(Some(due_at(start, *tt + *tn)));
+                        }
+                    }
                 }
             }
         }
@@ -387,7 +393,9 @@ struct ReminderEvent {
 /// Все напоминания задач из горизонта load_timed_tasks (без окон доставки).
 fn reminder_events(app: &tauri::AppHandle, prefs: &NotifyPrefs) -> Vec<ReminderEvent> {
     let mut out = Vec::new();
-    for (id, title, minutes, date_epoch, travel_time, notify_minutes) in load_timed_tasks(app) {
+    for (id, title, minutes, date_epoch, travel_time, notify_minutes, travel_notify) in
+        load_timed_tasks(app)
+    {
         // Своё «не уведомлять» (0) — пропускаем задачу целиком, включая выезд.
         if notify_minutes == Some(0) {
             continue;
@@ -415,6 +423,20 @@ fn reminder_events(app: &tauri::AppHandle, prefs: &NotifyPrefs) -> Vec<ReminderE
                     title: "Пора выезжать",
                     body: format!("«{title}» — в {:02}:{:02}", minutes / 60, minutes % 60),
                 });
+                // «Пора собираться»: напомнить за travel_notify минут ДО выезда
+                // (выезд = start - tt), т.е. раньше, чем само «пора выезжать».
+                if let Some(tn) = travel_notify {
+                    if tn > 0 {
+                        let dep = (minutes - tt).max(0);
+                        out.push(ReminderEvent {
+                            kind: "travel_prepare",
+                            task_id: id.clone(),
+                            due: due_at(start, tt + tn),
+                            title: "Пора собираться",
+                            body: format!("«{title}» — выезд в {:02}:{:02}", dep / 60, dep % 60),
+                        });
+                    }
+                }
             }
         }
     }
@@ -676,7 +698,15 @@ fn check_digest(app: &tauri::AppHandle, prefs: &NotifyPrefs, now: NaiveDateTime)
 }
 
 /// Строка задачи с полями, нужными для расчёта напоминания.
-type ReminderRow = (String, String, i64, i64, Option<i64>, Option<i64>);
+type ReminderRow = (
+    String,
+    String,
+    i64,
+    i64,
+    Option<i64>,
+    Option<i64>,
+    Option<i64>,
+);
 
 /// Задачи со временем в горизонте (сегодня..+7 дней) для расчёта напоминаний.
 /// +7 дней покрывает глобальные интервалы и свои notify_minutes до 7 суток
@@ -687,7 +717,7 @@ fn load_timed_tasks(app: &tauri::AppHandle) -> Vec<ReminderRow> {
     let db = app.state::<Db>();
     let conn = db.lock();
     let mut stmt = match conn.prepare(
-      "SELECT id, title, time_minutes, date, travel_time, notify_minutes FROM tasks WHERE date BETWEEN ?1 AND ?2 AND time_minutes IS NOT NULL AND is_done = 0 AND archived = 0 AND someday = 0",
+      "SELECT id, title, time_minutes, date, travel_time, notify_minutes, travel_notify_minutes FROM tasks WHERE date BETWEEN ?1 AND ?2 AND time_minutes IS NOT NULL AND is_done = 0 AND archived = 0 AND someday = 0",
     ) {
       Ok(s) => s,
       Err(e) => {
@@ -703,6 +733,7 @@ fn load_timed_tasks(app: &tauri::AppHandle) -> Vec<ReminderRow> {
             r.get::<_, i64>(3)?,
             r.get::<_, Option<i64>>(4)?,
             r.get::<_, Option<i64>>(5)?,
+            r.get::<_, Option<i64>>(6)?,
         ))
     })
     .and_then(|it| it.collect::<Result<Vec<_>, _>>())
@@ -769,6 +800,8 @@ fn check_reminders(app: &tauri::AppHandle, prefs: &NotifyPrefs, now: NaiveDateTi
         // одной задачи дают разные due (разница ≥ 1 мин), коллизий нет.
         let key = if ev.kind == "travel" {
             format!("remind|travel|{}|{}", ev.task_id, ev.due)
+        } else if ev.kind == "travel_prepare" {
+            format!("remind|travel_prepare|{}|{}", ev.task_id, ev.due)
         } else {
             format!("remind|{}|{}", ev.task_id, ev.due)
         };
@@ -788,7 +821,7 @@ fn check_reminders(app: &tauri::AppHandle, prefs: &NotifyPrefs, now: NaiveDateTi
 #[cfg(all(test, not(target_os = "android")))]
 mod tests {
     use super::*;
-    use chrono::NaiveDate;
+    use chrono::{Datelike, NaiveDate};
 
     fn prefs(day_summary: bool, reminders: bool, remind: Vec<i64>) -> NotifyPrefs {
         NotifyPrefs {
@@ -808,6 +841,7 @@ mod tests {
             date_epoch,
             None,
             notify,
+            None,
         )
     }
 
@@ -824,6 +858,38 @@ mod tests {
             NaiveDate::from_ymd_opt(2026, 8, 16)
                 .unwrap()
                 .and_hms_opt(0, 0, 5)
+                .unwrap()
+        );
+    }
+
+    /// «Пора собираться» учитывается при расчёте ближайшего события: при
+    /// travel=30 и travel_notify=15 ближайшее будущее напоминание — за 45 мин
+    /// до начала задачи (09:15), раньше и «пора выезжать» (09:30).
+    #[test]
+    fn next_event_considers_travel_prepare() {
+        let now = NaiveDate::from_ymd_opt(2026, 8, 16)
+            .unwrap()
+            .and_hms_opt(8, 0, 0)
+            .unwrap();
+        let date_epoch = NaiveDate::from_ymd_opt(2026, 8, 16)
+            .unwrap()
+            .num_days_from_ce() as i64
+            - 719163;
+        let task: ReminderRow = (
+            "t1".into(),
+            "Задача".into(),
+            600, // 10:00
+            date_epoch,
+            Some(30), // travel_time
+            None,     // notify_minutes → глобальные
+            Some(15), // travel_notify_minutes
+        );
+        let ev = next_event_from(&prefs(false, true, vec![1440]), &[task], now);
+        assert_eq!(
+            ev,
+            NaiveDate::from_ymd_opt(2026, 8, 16)
+                .unwrap()
+                .and_hms_opt(9, 15, 0)
                 .unwrap()
         );
     }

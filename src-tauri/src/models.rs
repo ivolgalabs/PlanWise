@@ -28,6 +28,8 @@ pub struct Task {
     pub difficulty: i32, // «класс» задачи: 0=не задана, 1=лёгкая, 2=средняя, 3=сложная
     #[serde(default)]
     pub notify_minutes: Option<i32>, // своё уведомление: NULL=по умолчанию, 0=нет, N=за N мин
+    #[serde(default)]
+    pub travel_notify_minutes: Option<i32>, // напомнить за N мин до выезда; NULL = не напоминать
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
