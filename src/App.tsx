@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import { api, isTauri } from "./api";
 import type { Task } from "./api";
 import { useStore } from "./store";
@@ -11,11 +11,19 @@ import { SettingsPanel } from "./components/SettingsPanel";
 import { DatePickerModal } from "./components/DatePickerModal";
 import { SearchBar } from "./components/SearchBar";
 import { Icon } from "./components/Icon";
-import { SearchResults } from "./views/SearchResults";
 import type { PeriodFilter, StatusFilter, SortKey } from "./views/SearchResults";
+// Тяжёлые не-дефолтные виды грузим лениво: на холодном старте не парсим
+// Месяц/Поиск (меньше JS → быстрее первый запуск). Чанки подтягиваются при
+// первом переключении на вид (Suspense ниже). День и Неделю держим eager —
+// дефолт в сторе — "week", ленивый стартовый вид дал бы вспышку «Загрузка».
+const SearchResults = lazy(() =>
+  import("./views/SearchResults").then((m) => ({ default: m.SearchResults })),
+);
+const MonthView = lazy(() =>
+  import("./views/MonthView").then((m) => ({ default: m.MonthView })),
+);
 import { DayView } from "./views/DayView";
 import { WeekView } from "./views/WeekView";
-import { MonthView } from "./views/MonthView";
 import { RightPanel } from "./components/RightPanel";
 import { TaskDndContext } from "./drag";
 import { setToastListener } from "./toast";
@@ -607,6 +615,22 @@ function App() {
             )}
             <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", minHeight: 0 }}>
               {/* Активный поиск заменяет вид списком результатов по всем задачам. */}
+              <Suspense
+                fallback={
+                  <div
+                    style={{
+                      flex: 1,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: COLORS.muted,
+                      fontSize: "var(--fs-sm)",
+                    }}
+                  >
+                    Загрузка…
+                  </div>
+                }
+              >
               {searchActive ? (
                 <SearchResults
                   tasks={tasks}
@@ -661,6 +685,7 @@ function App() {
                   )}
                 </>
               )}
+              </Suspense>
             </div>
           </div>
           {/* Правая панель — одна на все виды (в месяце без мини-календаря,
