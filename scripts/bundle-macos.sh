@@ -6,7 +6,11 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TAURI="$ROOT/src-tauri"
-APP_BUNDLE="$HOME/.cargo-shared-target/release/bundle/macos/Ежедневник.app"
+# Общий target каталог (единая папка сборки для всех проектов машины) —
+# берём из CARGO_TARGET_DIR или значения по умолчанию (см. ~/.cargo/config.toml).
+TARGET_DIR="${CARGO_TARGET_DIR:-/Volumes/Kingston/My_projects/.cache/target}"
+# Имя .app — productName из tauri.conf.json (сейчас «PlanWise»).
+APP_BUNDLE="$TARGET_DIR/release/bundle/macos/PlanWise.app"
 APPEX_SRC="$TAURI/build/widgets/ЕжедневникWidgets.appex"
 APPEX_DST="$APP_BUNDLE/Contents/PlugIns/ЕжедневникWidgets.appex"
 

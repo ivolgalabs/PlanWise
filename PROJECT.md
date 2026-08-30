@@ -2,7 +2,7 @@
 
 Task planner: Tauri v2 + React 19 + TypeScript + zustand + SQLite (rusqlite) + @dnd-kit.
 Platforms: macOS (WidgetKit widget), Android (AlarmManager/Kotlin widgets). Web mode (browser, localStorage backend in `src/api.ts: browserApi`) — for development without Tauri.
-Current version: 0.1.5 (releases in «Готовые версии приложений/Ежедневник»).
+Current version: 0.1.6 (releases in «Ready-made versions of applications/PlanWise»).
 
 ## Structure
 
@@ -34,11 +34,11 @@ Current version: 0.1.5 (releases in «Готовые версии приложе
 - **dnd-kit sensors**: option literals in render break `useSensor` memoization → `activators` → internalContext is recreated → RE-RENDER OF ALL useDraggable/useDroppable on any store change. Options — module-level constants (`drag.tsx`), DndContext callbacks — useCallback.
 - **zustand selectors**: a selector returning an array/object without shallow — infinite loop/excess renders; return a primitive.
 - Vite caches node_modules: library patches require `vite dev --force`.
-- APFS case-insensitive; Rust builds — into the shared `~/.cargo-shared-target` (see `~/My Project/Rust_Workspace/ARCHITECTURE.md`), there must be no local target/.
+- APFS case-insensitive; Rust builds — into the shared `/Volumes/Kingston/My_projects/.cache/target` (see `~/My Project/Rust_Workspace/ARCHITECTURE.md`), there must be no local target/.
 - **Android build**: gradle cache `~/.gradle/caches/8.14.3` can corrupt on abrupt interruptions (metadata.bin kotlin-dsl) — reset with `rm -rf` of the directory. libsqlite3-sys requires NDK clang in PATH: `export PATH="$HOME/Library/Android/sdk/ndk/*/toolchains/llvm/prebuilt/darwin-x86_64/bin:$PATH"` before `tauri android build` (otherwise "sccache: cannot find binary path"). gradlew does not work directly (the rust task waits for a WebSocket from the tauri CLI).
 - **Android build under memory pressure**: the gradle daemon dies ("daemon disappeared", corrupted kotlin-dsl metadata) when RAM is low — this is NOT the cache. Fix: free memory (close Android Studio — it holds a lock on gen/android!), temporarily add to `gradle.properties` `org.gradle.workers.max=1` + `kotlin.compiler.execution.strategy=in-process`; revert after the build. The universal build (4 ABIs) is finicky — `--target aarch64` is enough for a phone.
 - **Force-stop on Android cancels all alarms** (including At notifications) — OS protection, not a bug: swipe from recents is safe, force-stop from settings is not.
-- `~/.cargo-shared-target/release` may disappear (background cleanups/other projects) — rebuild before distributing artifacts.
+- The shared target dir `/Volumes/Kingston/My_projects/.cache/target/release` may disappear (background cleanups/other projects) — rebuild before distributing artifacts.
 
 ## Battery measurements (method: `top -l 2 -pid <PID> -stats cpu,power,rsize`)
 
