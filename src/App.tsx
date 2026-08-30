@@ -216,6 +216,14 @@ function App() {
   useEffect(() => {
     const apply = () => {
       applyTheme(resolveActiveTheme(useStore.getState()));
+      // Ранний фон из инлайн-скрипта index.html больше не нужен: тему теперь
+      // задаёт data-theme (и кастомный слот — инлайн-переменными). Снимаем
+      // инлайн background-color, иначе он перебивал бы тему при переключении.
+      // colorScheme оставляем актуальным по эффективной теме.
+      const root = document.documentElement;
+      root.style.removeProperty("background-color");
+      document.body.style.removeProperty("background-color");
+      root.style.colorScheme = isDarkTheme() ? "dark" : "light";
       if (isTauri()) {
         scheduleWidgetWrite(isDarkTheme());
       }

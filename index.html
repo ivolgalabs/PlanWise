@@ -6,6 +6,35 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="description" content="Ежедневник — планировщик задач: день, неделя, месяц, когда-нибудь, архив." />
     <title>Ежедневник</title>
+    <!-- Ранний фон до загрузки бандла: universal-ui задаёт --bg-primary на
+         :root СВЕТЛЫЙ (#f4f5f7), поэтому в тёмной теме при старте мелькал
+         белый экран, пока React не применил тему. Читаем сохранённую тему
+         (zustand persist "todo-settings") и сразу красим html/body в нужный
+         цвет; после applyTheme инлайн-фон снимается (см. App.tsx), и тему
+         подхватывает data-theme. -->
+    <script>
+      (function () {
+        var dark = (function () {
+          try {
+            var s = JSON.parse(localStorage.getItem("todo-settings") || "{}").state;
+            var m = s && s.themeMode;
+            if (m === "dark") return true;
+            if (m === "light") return false;
+            return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+          } catch (e) {
+            return false;
+          }
+        })();
+        var apply = function () {
+          var bg = dark ? "#121316" : "#f4f5f7";
+          document.documentElement.style.backgroundColor = bg;
+          document.documentElement.style.colorScheme = dark ? "dark" : "light";
+          if (document.body) document.body.style.backgroundColor = bg;
+        };
+        apply(); // documentElement уже есть; body может ещё не разобраться
+        document.addEventListener("DOMContentLoaded", apply);
+      })();
+    </script>
   </head>
 
   <body>
