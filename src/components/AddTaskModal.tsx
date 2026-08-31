@@ -240,6 +240,15 @@ export function TaskFormFields({
     }
     try {
       if (editing && initial) {
+        // Флашим набранную, но не добавленную через «+» подзадачу: кнопка
+        // «Сохранить» должна сохранить и то, что в поле «+ подзадача», иначе
+        // она выглядит как «ничего не произошло» (submit не читал newSub).
+        const pendingSub = newSub.trim();
+        if (pendingSub) {
+          await api.upsertSubtask({ taskId: initial.id, title: pendingSub });
+          setNewSub("");
+          useStore.getState().bumpSubtasks();
+        }
         await api.upsertTask({ ...initial, ...payload });
         // Авто-выполнение при смене времени (настройка): прошлое → выполнена,
         // будущее → выполнение снимается. Только если время изменилось и у
@@ -273,6 +282,12 @@ export function TaskFormFields({
           for (const s of subs) {
             const st = s.trim();
             if (st) await api.upsertSubtask({ taskId: created.id, title: st });
+          }
+          // Флашим набранную, но не добавленную через «+» подзадачу.
+          const pendingSub = newSub.trim();
+          if (pendingSub) {
+            await api.upsertSubtask({ taskId: created.id, title: pendingSub });
+            setNewSub("");
           }
         } else {
           // Повторная попытка после ошибки прикрепления: задача уже создана,
