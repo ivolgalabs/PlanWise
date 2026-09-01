@@ -12,7 +12,7 @@ fn now_ms() -> i64 {
 
 /// Колонки таблицы tasks — единый список для SELECT и INSERT: новая колонка
 /// добавляется в одном месте (маппинг в Task — см. task_from_row).
-const TASK_COLUMNS: &str = "id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes, someday, archived, travel_time, duration_minutes, difficulty, notify_minutes, travel_notify_minutes";
+const TASK_COLUMNS: &str = "id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes, someday, archived, travel_time, duration_minutes, difficulty, notify_minutes, travel_notify_minutes, due_epoch_day";
 
 /// Маппинг строки tasks в Task (единый для всех выборок — колонки не разъезжаются).
 fn task_from_row(row: &rusqlite::Row) -> rusqlite::Result<Task> {
@@ -35,6 +35,7 @@ fn task_from_row(row: &rusqlite::Row) -> rusqlite::Result<Task> {
         difficulty: row.get(15)?,
         notify_minutes: row.get(16)?,
         travel_notify_minutes: row.get(17)?,
+        due_epoch_day: row.get(18)?,
     })
 }
 
@@ -165,7 +166,7 @@ pub fn upsert_task(state: State<'_, Db>, mut task: Task) -> Result<Task, String>
     conn.execute(
         &format!(
             "INSERT INTO tasks ({TASK_COLUMNS})
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)
              ON CONFLICT(id) DO UPDATE SET
                title=excluded.title, date=excluded.date, is_done=excluded.is_done,
                color_set_id=excluded.color_set_id, sort_order=excluded.sort_order,
@@ -174,7 +175,8 @@ pub fn upsert_task(state: State<'_, Db>, mut task: Task) -> Result<Task, String>
                someday=excluded.someday, archived=excluded.archived,
                travel_time=excluded.travel_time, duration_minutes=excluded.duration_minutes,
                difficulty=excluded.difficulty, notify_minutes=excluded.notify_minutes,
-               travel_notify_minutes=excluded.travel_notify_minutes",
+               travel_notify_minutes=excluded.travel_notify_minutes,
+               due_epoch_day=excluded.due_epoch_day",
         ),
         rusqlite::params![
             task.id,
@@ -195,6 +197,7 @@ pub fn upsert_task(state: State<'_, Db>, mut task: Task) -> Result<Task, String>
             task.difficulty,
             task.notify_minutes,
             task.travel_notify_minutes,
+            task.due_epoch_day,
         ],
     )
     .map_err(|e| e.to_string())?;
@@ -317,7 +320,7 @@ pub fn get_someday_tasks(state: State<'_, Db>) -> Result<Vec<Task>, String> {
     let conn = state.lock();
     select_tasks(
         &conn,
-        "WHERE someday = 1 AND archived = 0 ORDER BY sort_order ASC, created_at ASC",
+        "WHERE someday = 1 AND archived = 0 ORDER BY (due_epoch_day IS NULL) ASC, due_epoch_day ASC, sort_order ASC, created_at ASC",
         &[],
     )
 }
@@ -733,13 +736,13 @@ fn import_from_string(
         tx.execute(
             &format!(
                 "INSERT INTO tasks ({TASK_COLUMNS})
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)",
             ),
             rusqlite::params![
                 t.id, t.title, t.date, t.is_done as i64, t.color_set_id, t.sort_order,
                 t.created_at, t.updated_at, t.device_id, t.time_minutes, t.notes,
                 t.someday as i64, t.archived as i64, t.travel_time, t.duration_minutes,
-                t.difficulty, t.notify_minutes, t.travel_notify_minutes
+                t.difficulty, t.notify_minutes, t.travel_notify_minutes, t.due_epoch_day
             ],
         )
         .map_err(|e| e.to_string())?;
@@ -1293,7 +1296,7 @@ mod tests {
         conn.execute(
             &format!(
                 "INSERT INTO tasks ({TASK_COLUMNS})
-                 VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18)"
+                 VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19)"
             ),
             rusqlite::params![
                 "t1",
@@ -1313,7 +1316,8 @@ mod tests {
                 Some(30),
                 2,
                 Some(15),
-                Some(10)
+                Some(10),
+                Some(20_010)
             ],
         )
         .unwrap();

@@ -5,7 +5,7 @@ import { api } from "../api";
 import { COLORS, accentTint, argbToHex } from "../theme";
 import { useStore } from "../store";
 import { showToast } from "../toast";
-import { fromEpochDay, intervalsOverlap, taskTimeRange, travelTimeText } from "../date";
+import { fromEpochDay, intervalsOverlap, taskTimeRange, travelTimeText, dueEpochLabel } from "../date";
 import { useMediaQuery } from "../useMediaQuery";
 import { SubtaskList } from "./SubtaskList";
 import { AddTaskModal } from "./AddTaskModal";
@@ -45,7 +45,8 @@ function taskEquals(a: Task, b: Task): boolean {
     a.durationMinutes === b.durationMinutes &&
     a.difficulty === b.difficulty &&
     a.notifyMinutes === b.notifyMinutes &&
-    a.travelNotifyMinutes === b.travelNotifyMinutes
+    a.travelNotifyMinutes === b.travelNotifyMinutes &&
+    a.dueEpochDay === b.dueEpochDay
   );
 }
 
@@ -374,6 +375,8 @@ export const TaskCard = memo(function TaskCard({
   // Время показываем, только если его запросил родитель И настройка
   // «Время задач» включена.
   const effectiveShowTime = showTime && visibility.taskTime;
+  // «Когда-нибудь»: мягкий срок (чип + сортировка). Чип — только если срок задан.
+  const due = task.someday && task.dueEpochDay != null ? task.dueEpochDay : null;
 
   // Наложение: задача, чьё время пересекается с другой (видны и старые
   // конфликты). Подсветка — цветной фон строки и красное время.
@@ -402,6 +405,13 @@ export const TaskCard = memo(function TaskCard({
     </span>
   );
 
+  // Чип мягкого срока «Когда-нибудь»: просрочено / в течение недели/месяца / до даты.
+  const dueBadge = due != null ? (
+    <span className="task-time has" title="Мягкий срок задачи «Когда-нибудь»">
+      {dueEpochLabel(due)}
+    </span>
+  ) : null;
+
   // Цветная точка приоритета. В compact-сетке — в строке времени (ровно с
   // бейджем); в остальных видах — в ряду задачи, по центру.
   const prioDot = prioMeta ? (
@@ -423,7 +433,7 @@ export const TaskCard = memo(function TaskCard({
   // compact (сетка недели): строка времени НАД текстом, с отступом сверху
   // (иначе прижимается к предыдущей задаче). Не-compact (День, список):
   // в ряду с текстом.
-  const showTimeRow = !mobileRow && (compact ? (prioMeta != null || task.timeMinutes != null) : (effectiveShowTime || prioMeta != null));
+  const showTimeRow = !mobileRow && (compact ? (prioMeta != null || task.timeMinutes != null || due != null) : (effectiveShowTime || prioMeta != null || due != null));
   // Выравнивание элемента строки по центру ПЕРВОЙ строки текста в компактной
   // сетке: строка «шапки» (время/приоритет, shift) + фактический padding
   // текста (padTop, в em — меняется со шрифтом) + пол-разницы высот. Центр
@@ -469,6 +479,7 @@ export const TaskCard = memo(function TaskCard({
           {timeMeta.join(" · ")}
         </span>
       )}
+      {dueBadge}
     </div>
   ) : null;
 

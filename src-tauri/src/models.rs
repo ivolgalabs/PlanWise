@@ -30,6 +30,8 @@ pub struct Task {
     pub notify_minutes: Option<i32>, // своё уведомление: NULL=по умолчанию, 0=нет, N=за N мин
     #[serde(default)]
     pub travel_notify_minutes: Option<i32>, // напомнить за N мин до выезда; NULL = не напоминать
+    #[serde(default)]
+    pub due_epoch_day: Option<i64>, // «Когда-нибудь»: мягкий срок (epoch-day); NULL = без срока
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

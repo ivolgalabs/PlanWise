@@ -121,6 +121,35 @@ export const sortTasksByMode = <T extends { timeMinutes?: number | null; difficu
   });
 };
 
+/** «Когда-нибудь»: сортировка по мягкому сроку — задачи со сроком вверх
+ *  (сначала просроченные/близкие, потом дальние), без срока — вниз, внутри
+ *  сохраняется порядок обычного режима (sortTasksByMode — стабильная). */
+export const sortSomedayTasks = <
+  T extends { dueEpochDay?: number | null; timeMinutes?: number | null; difficulty?: number; sortOrder: number },
+>(tasks: T[], mode: "time" | "manual" | "priority"): T[] => {
+  const byMode = sortTasksByMode(tasks, mode);
+  return [...byMode].sort((a, b) => {
+    const ad = a.dueEpochDay ?? null;
+    const bd = b.dueEpochDay ?? null;
+    if (ad != null && bd != null) return ad - bd;
+    if (ad != null) return -1;
+    if (bd != null) return 1;
+    return 0;
+  });
+};
+
+/** Подпись мягкого срока «Когда-нибудь»: просрочено / в течение недели /
+ *  в течение месяца / до конкретной даты. */
+export const dueEpochLabel = (dueEpochDay: number): string => {
+  const today = toEpochDay(new Date());
+  const d = fromEpochDay(dueEpochDay);
+  const dateStr = d.toLocaleDateString("ru", { day: "numeric", month: "short" });
+  if (dueEpochDay < today) return `просрочено · ${dateStr}`;
+  if (dueEpochDay <= today + 7) return "в течение недели";
+  if (dueEpochDay <= today + 30) return "в течение месяца";
+  return `до ${dateStr}`;
+};
+
 /** Задачи конкретного дня: «Когда-нибудь» не дублируется в днях, сортировка —
  *  по выбранному режиму. Единая точка для всех видов (день/неделя/месяц). */
 export const tasksForDay = <

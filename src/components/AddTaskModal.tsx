@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { openPath } from "@tauri-apps/plugin-opener";
 import type { Attachment, Subtask, Task } from "../api";
 import { api } from "../api";
-import { toEpochDay } from "../date";
+import { toEpochDay, dueEpochLabel } from "../date";
 import { useStore } from "../store";
 import { COLORS, argbToHex } from "../theme";
 import { TimePicker, DurationSelect } from "./TimePicker";
@@ -109,6 +109,10 @@ export function TaskFormFields({
   // -2 для «Своё значение…» (показывает системные часы).
   const [notify, setNotify] = useState<number | null>(initial?.notifyMinutes ?? null);
   const [customNotify, setCustomNotify] = useState(false);
+  // «Когда-нибудь»: мягкий срок (epoch-day). null = без срока. Смысл только
+  // у задачи «Когда-нибудь» (initial.someday) — у задач дня не показываем.
+  const [dueEpochDay, setDueEpochDay] = useState<number | null>(initial?.dueEpochDay ?? null);
+  const [dueDateOpen, setDueDateOpen] = useState(false);
   const [error, setError] = useState("");
   const [confirmDel, setConfirmDel] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
@@ -228,6 +232,7 @@ export function TaskFormFields({
       notifyMinutes: notify,
       // «До выезда» отправляем только когда выезд задан (иначе поле лишнее).
       travelNotifyMinutes: travel != null ? travelNotify : null,
+      dueEpochDay,
     };
     // Шаблон задачи: задачу не сохраняем — отдаём собранные данные наружу
     // (родитель пишет их в шаблон).
@@ -453,6 +458,34 @@ export function TaskFormFields({
           ))}
         </div>
       </div>
+
+      {/* «Когда-нибудь»: мягкий срок — сделать в течение недели/месяца/к дате. */}
+      {editing && initial?.someday && (
+        <div style={fieldRow}>
+          <span style={labelStyle}>Срок</span>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-2)", alignItems: "center" }}>
+            <button type="button" className="text-chip" onClick={() => setDueEpochDay(null)}>Без срока</button>
+            <button type="button" className="text-chip" onClick={() => setDueEpochDay(toEpochDay(new Date()) + 7)}>В течение недели</button>
+            <button type="button" className="text-chip" onClick={() => setDueEpochDay(toEpochDay(new Date()) + 30)}>В течение месяца</button>
+            <button type="button" className="text-chip" onClick={() => setDueDateOpen(true)}>Дата…</button>
+            {dueEpochDay != null && (
+              <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted }}>
+                {dueEpochLabel(dueEpochDay)}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+      {dueDateOpen && (
+        <DatePickerModal
+          tasks={[]}
+          onPick={(d) => {
+            setDueEpochDay(toEpochDay(d));
+            setDueDateOpen(false);
+          }}
+          onClose={() => setDueDateOpen(false)}
+        />
+      )}
 
       {/* Своё уведомление задачи: по умолчанию / не уведомлять / за N минут /
           своё значение системными часами. Подзадачи наследуют уведомление. */}
