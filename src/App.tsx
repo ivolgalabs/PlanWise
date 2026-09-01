@@ -9,6 +9,8 @@ import { useMediaQuery } from "./useMediaQuery";
 import { TopBar } from "./components/TopBar";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { DatePickerModal } from "./components/DatePickerModal";
+import { AddTaskModal } from "./components/AddTaskModal";
+import { fromEpochDay } from "./date";
 import { SearchBar } from "./components/SearchBar";
 import { Icon } from "./components/Icon";
 import type { PeriodFilter, StatusFilter, SortKey } from "./views/SearchResults";
@@ -104,6 +106,8 @@ function App() {
     setArchivedTasks,
     setColorSets,
     setPreventOverlaps,
+    focusTaskId,
+    setFocusTask,
   } = useStore();
 
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -473,6 +477,11 @@ function App() {
     else setView(ORDER[(idx - 1 + ORDER.length) % ORDER.length]); // вправо — предыдущий
   };
 
+  // Задача из глубокой ссылки (тап по уведомлению): карточка открывается,
+  // когда задача появилась в tasks (cold-start → reload ещё не отдал список,
+  // поэтому ждём, пока не найдём её по id).
+  const focusTask = focusTaskId ? (tasks.find((t) => t.id === focusTaskId) ?? null) : null;
+
   return (
     // <main>-landmark для скринридеров и навигации (Lighthouse a11y).
     <main style={{ height: "100%" }}>
@@ -719,6 +728,19 @@ function App() {
           tasks={tasks}
           onPick={pickDate}
           onClose={() => setDatePickerOpen(false)}
+        />
+      )}
+      {/* Карточка задачи из уведомления (deep-link). Открывается, как только
+          задача подгрузилась; после сохранения/закрытия фокус сбрасывается. */}
+      {focusTask && (
+        <AddTaskModal
+          day={fromEpochDay(focusTask.date)}
+          initial={focusTask}
+          onChange={reload}
+          onClose={() => {
+            setFocusTask(null);
+            reload();
+          }}
         />
       )}
     </div>

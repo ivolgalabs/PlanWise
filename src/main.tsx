@@ -7,9 +7,13 @@ window.addEventListener("error", (e) => {
   // дожмёт изменение на следующем кадре), оверлей на нём не нужен.
   if (e.message?.includes("ResizeObserver loop")) return;
   document.title = "ERR: " + e.message;
+  const dark = document.documentElement.style.backgroundColor === "rgb(18, 19, 22)" ||
+    ((localStorage.getItem("todo-settings") ?? "").includes('"themeMode":"dark"'));
   const div = document.createElement("div");
   div.style.cssText =
-    "position:fixed;inset:0;z-index:99999;background:#fff;color:#c00;padding:20px;font:14px monospace;white-space:pre-wrap";
+    "position:fixed;inset:0;z-index:99999;" +
+    (dark ? "background:#121316;color:#ff8a80;" : "background:#fff;color:#c00;") +
+    "padding:20px;font:14px monospace;white-space:pre-wrap";
   div.textContent = "JS ERROR: " + e.message + "\n" + (e.error?.stack ?? "");
   document.body.appendChild(div);
 });
@@ -37,6 +41,25 @@ import "./App.css";
 // классы App.css, и должны перекрывать их на тач-устройствах/узком окне.
 import "universal-ui/mobile.css";
 import App from "./App";
+import { useStore } from "./store";
+
+// Deep-link: тап по уведомлению (Android/Mac) → плагин шлёт событие
+// «actionPerformed», в notification.extra.taskId — id задачи. Слушаем на
+// уровне модуля (до маунта React), чтобы поймать событие и при холодном
+// старте: Tauri ставит его в очередь и отдаёт после загрузки страницы
+// (внутри React-based подписки могли бы его пропустить). В браузере-фолбэке
+// импорт просто резолвится, listen отклоняется без Tauri — гасим.
+try {
+  import("@tauri-apps/api/event")
+    .then(({ listen }) =>
+      listen("actionPerformed", (e) => {
+        const p = e.payload as { notification?: { extra?: { taskId?: string } } };
+        const taskId = p?.notification?.extra?.taskId;
+        if (taskId) useStore.getState().setFocusTask(String(taskId));
+      }),
+    )
+    .catch(() => {});
+} catch { /* не критично */ }
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

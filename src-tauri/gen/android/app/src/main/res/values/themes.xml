@@ -1,7 +1,10 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Base application theme. -->
     <style name="Theme.daily_planner" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-        <!-- Customize your theme here. -->
+        <!-- Фон окна при холодном старте: совпадает с фоном приложения
+             (светлая тема), чтобы не мелькал белый сплеш до рендера
+             WebView. Тёмная тема — в values-night. -->
+        <item name="android:windowBackground">#f4f5f7</item>
     </style>
 
     <!-- Тема быстрого добавления: прозрачное окно-диалог по центру экрана. -->

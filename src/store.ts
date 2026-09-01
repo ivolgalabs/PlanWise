@@ -86,6 +86,9 @@ interface PlannerState {
    *  подзадачи (promote, смена родителя) — SubtaskList перезагружается,
    *  чтобы исчезнувшая подзадача не «зависала» у старого родителя. */
   subtaskRev: number;
+  /** id задачи, чью карточку открыли по тапу на уведомление (deep-link).
+   *  Не персистится: это проброс «открой карточку», живёт до закрытия. */
+  focusTaskId: string | null;
   /** Уведомления: утренний список задач на день (включён, час). */
   notifyDaySummary: boolean;
   notifyDayHour: number;
@@ -135,6 +138,7 @@ interface PlannerState {
   setVisibility: (k: keyof VisibilityState, v: boolean) => void;
   setPanelGap: (v: number) => void;
   bumpSubtasks: () => void;
+  setFocusTask: (id: string | null) => void;
   setNotifyDaySummary: (v: boolean) => void;
   setNotifyDayHour: (v: number) => void;
   setNotifyReminders: (v: boolean) => void;
@@ -197,6 +201,7 @@ export const useStore = create<PlannerState>()(
       visibility: DEFAULT_VISIBILITY,
       panelGap: 20,
       subtaskRev: 0,
+      focusTaskId: null,
       notifyDaySummary: true,
       notifyDayHour: 8,
       notifyReminders: true,
@@ -232,6 +237,7 @@ export const useStore = create<PlannerState>()(
         set((s) => ({ visibility: { ...s.visibility, [k]: v } })),
       setPanelGap: (v) => set({ panelGap: v }),
       bumpSubtasks: () => set((s) => ({ subtaskRev: s.subtaskRev + 1 })),
+      setFocusTask: (id) => set({ focusTaskId: id }),
       setNotifyDaySummary: (v) => set({ notifyDaySummary: v }),
       setNotifyDayHour: (v) => set({ notifyDayHour: v }),
       setNotifyReminders: (v) => set({ notifyReminders: v }),

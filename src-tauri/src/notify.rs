@@ -490,7 +490,7 @@ fn stable_id(salt: &str, task_id: &str, due_minute: i64) -> i32 {
 /// AlarmManager доставит его, даже если процесс приложения убит. Канал —
 /// TASKS_CHANNEL_ID (высокая важность: звук и heads-up).
 #[cfg(target_os = "android")]
-fn schedule_at(app: &tauri::AppHandle, id: i32, title: &str, body: &str, due: NaiveDateTime) {
+fn schedule_at(app: &tauri::AppHandle, id: i32, task_id: &str, title: &str, body: &str, due: NaiveDateTime) {
     // Абсолютный момент в unix-секундах — смещение часового пояса в
     // ISO-строке плагину не нужно: Kotlin ставит будильник по миллисекундам.
     let ts = to_local(&due).timestamp();
@@ -504,6 +504,9 @@ fn schedule_at(app: &tauri::AppHandle, id: i32, title: &str, body: &str, due: Na
         .title(title)
         .body(body)
         .channel_id(TASKS_CHANNEL_ID)
+        // taskId в extra — фронт читает его в событии «actionPerformed» и
+        // открывает карточку задачи по тапу на уведомление (deep-link).
+        .extra("taskId", task_id)
         .schedule(Schedule::At {
             date: at,
             repeating: false,
@@ -618,7 +621,7 @@ fn sync_scheduled(app: &tauri::AppHandle, prefs: &NotifyPrefs) {
             let nid = stable_id(ev.kind, &ev.task_id, due_unix_minute(ev.due));
             expected.insert(nid);
             if !pending_ids.contains(&nid) {
-                schedule_at(app, nid, ev.title, &ev.body, ev.due);
+                schedule_at(app, nid, &ev.task_id, ev.title, &ev.body, ev.due);
             }
         }
     }
@@ -813,6 +816,7 @@ fn check_reminders(app: &tauri::AppHandle, prefs: &NotifyPrefs, now: NaiveDateTi
             .builder()
             .title(ev.title)
             .body(ev.body)
+            .extra("taskId", &ev.task_id)
             .show();
         mark_fired(key);
     }
