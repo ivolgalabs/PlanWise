@@ -2,7 +2,7 @@
 
 Task planner: Tauri v2 + React 19 + TypeScript + zustand + SQLite (rusqlite) + @dnd-kit.
 Platforms: macOS (WidgetKit widget), Android (AlarmManager/Kotlin widgets). Web mode (browser, localStorage backend in `src/api.ts: browserApi`) — for development without Tauri.
-Current version: 0.1.8 (releases in «Ready-made versions of applications/PlanWise»).
+Current version: 0.1.9 (0.1.8 — предыдущий релиз; releases in «Ready-made versions of applications/PlanWise»).
 
 ## Structure
 
