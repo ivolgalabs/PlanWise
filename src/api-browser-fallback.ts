@@ -55,13 +55,21 @@ export const browserApi = {
   async moveTask(id: string, newDay: number): Promise<void> {
     // Перенос в прошлое = задача выполнена; в будущее = снова актуальна.
     const today = todayEpochDay();
-    save(K.tasks, load<Task>(K.tasks).map((t) => (t.id === id ? { ...t, date: newDay, someday: false, archived: false, isDone: newDay < today ? true : newDay > today ? false : t.isDone, notes: t.notes ?? "" } : t)));
+    save(K.tasks, load<Task>(K.tasks).map((t) => {
+      if (t.id !== id) return t;
+      // План-задача («Когда-нибудь» со сроком): перенос меняет мягкий срок,
+      // задача остаётся план-задачей (ср. move_task в commands.rs).
+      if (t.someday) {
+        return { ...t, dueEpochDay: newDay, date: 0, archived: false, notes: t.notes ?? "" };
+      }
+      return { ...t, date: newDay, someday: false, archived: false, isDone: newDay < today ? true : newDay > today ? false : t.isDone, notes: t.notes ?? "" };
+    }));
   },
   async getSomedayTasks(): Promise<Task[]> {
     return sortTasks(load<Task>(K.tasks).filter((t) => t.someday && !t.archived));
   },
   async setSomeday(id: string): Promise<void> {
-    save(K.tasks, load<Task>(K.tasks).map((t) => (t.id === id ? { ...t, someday: true, date: 0, archived: false, notes: t.notes ?? "" } : t)));
+    save(K.tasks, load<Task>(K.tasks).map((t) => (t.id === id ? { ...t, someday: true, date: 0, dueEpochDay: null, archived: false, notes: t.notes ?? "" } : t)));
   },
   async getColorSets(): Promise<ColorSet[]> {
     // Первый запуск (или после очистки storage): создаём дефолтные категории.

@@ -151,7 +151,9 @@ export const dueEpochLabel = (dueEpochDay: number): string => {
 };
 
 /** Задачи конкретного дня: «Когда-нибудь» не дублируется в днях, сортировка —
- *  по выбранному режиму. Единая точка для всех видов (день/неделя/месяц). */
+ *  по выбранному режиму. Единая точка для всех видов (день/неделя/месяц).
+ *  План-задачи («В течение недели/месяца») показываются на день СВОЕГО мягкого
+ *  срока (dueEpochDay): так «на неделю» попадает в неделю, «на месяц» — в месяц. */
 export const tasksForDay = <
   T extends {
     someday: boolean;
@@ -159,6 +161,7 @@ export const tasksForDay = <
     sortOrder: number;
     timeMinutes?: number | null;
     difficulty?: number;
+    dueEpochDay?: number | null;
   },
 >(
   tasks: T[],
@@ -166,7 +169,11 @@ export const tasksForDay = <
   mode: "time" | "manual" | "priority",
 ): T[] =>
   sortTasksByMode(
-    tasks.filter((t) => !t.someday && isSameDay(fromEpochDay(t.date), d)),
+    tasks.filter((t) =>
+      t.someday
+        ? t.dueEpochDay === toEpochDay(d)
+        : isSameDay(fromEpochDay(t.date), d),
+    ),
     mode,
   );
 

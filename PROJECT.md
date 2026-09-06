@@ -2,7 +2,7 @@
 
 Task planner: Tauri v2 + React 19 + TypeScript + zustand + SQLite (rusqlite) + @dnd-kit.
 Platforms: macOS (WidgetKit widget), Android (AlarmManager/Kotlin widgets). Web mode (browser, localStorage backend in `src/api.ts: browserApi`) — for development without Tauri.
-Current version: 0.1.11 (0.1.10 — ErrorBoundary + развёрнутые уведомления; releases in «Ready-made versions of applications/PlanWise»).
+Current version: 0.1.12 (0.1.11 — фикс наложения план-групп + тематический сплеш; releases in «Ready-made versions of applications/PlanWise»).
 
 ## Structure
 
@@ -30,7 +30,7 @@ Current version: 0.1.11 (0.1.10 — ErrorBoundary + развёрнутые ув�
 - **Time conflicts**: the `conflictId` selector returns a primitive (id|null) — subscribing to the whole `s.tasks` would re-render all cards.
 - **Notification → task card (deep-link)**: a reminder carries `taskId` via `.extra("taskId", …)`; the frontend listens to the plugin's `actionPerformed` at module scope (catches cold start) → `focusTaskId` → a global `AddTaskModal`. Cold-start splash — themed `windowBackground` `#f4f5f7`/`#121316`. Android reminders use `large_body` (BigTextStyle) so the full text is visible expanded.
 - **ErrorBoundary** around `App` (`main.tsx`): any unhandled render error shows a visible error + reload button instead of a silent white screen. On the device the white screen is NOT reproduced (launcher/fresh-install/notification-intent launch all load fine) — likely a data- or WebView-version-specific render crash; the boundary surfaces its cause.
-- **«Когда-нибудь» plan groups**: the section is split into collapsible «Когда-нибудь» / «В течение недели» / «В течение месяца» by the soft deadline `dueEpochDay` (no separate task types).
+- **«Когда-нибудь» plan groups**: the section is split into collapsible «Когда-нибудь» / «В течение недели» / «В течение месяца» by the soft deadline `dueEpochDay` (no separate task types). Plan-tasks are ALSO shown in the week/month grid on their deadline day (`tasksForDay` matches `dueEpochDay` for someday tasks). Protection from desync: `move_task` keeps a someday task as a plan-task (updates `due_epoch_day`), `set_someday` clears it — so dragging/editing a plan-task in the grid does NOT turn it into a day task.
 
 ## Pitfalls (verified by measurements 15.08)
 

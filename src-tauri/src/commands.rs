@@ -303,6 +303,18 @@ pub fn move_task(state: State<'_, Db>, id: String, new_date: i64) -> Result<(), 
     let Some(task) = task else {
         return Ok(()); // задачи нет — идемпотентно
     };
+    // План-задача («Когда-нибудь» с мягким сроком): перенос в ячейку дня меняет
+    // её мягкий срок (дедлайн переезжает на этот день), но задача остаётся
+    // план-задачей «В течение недели/месяца» — не превращается в обычную
+    // дневную (иначе она «выпадала» бы из план-группы при переносе).
+    if task.someday {
+        conn.execute(
+            "UPDATE tasks SET due_epoch_day = ?1, date = 0, archived = 0, updated_at = ?2 WHERE id = ?3",
+            rusqlite::params![new_date, now_ms(), id],
+        )
+        .map_err(|e| e.to_string())?;
+        return Ok(());
+    }
     if !task.someday && !task.archived && !task.is_done && task.time_minutes.is_some() {
         let mut moved = task.clone();
         moved.date = new_date;
@@ -325,12 +337,13 @@ pub fn get_someday_tasks(state: State<'_, Db>) -> Result<Vec<Task>, String> {
     )
 }
 
-/// Переместить задачу в «Когда-нибудь» (дата сбрасывается).
+/// Переместить задачу в «Когда-нибудь» (дата и мягкий срок сбрасываются —
+/// перенос из план-группы «Неделя/Месяц» снимает привязку к дедлайну).
 #[tauri::command]
 pub fn set_someday(state: State<'_, Db>, id: String) -> Result<(), String> {
     let conn = state.lock();
     conn.execute(
-        "UPDATE tasks SET someday = 1, date = 0, archived = 0, updated_at = ?1 WHERE id = ?2",
+        "UPDATE tasks SET someday = 1, date = 0, due_epoch_day = NULL, archived = 0, updated_at = ?1 WHERE id = ?2",
         rusqlite::params![now_ms(), id],
     )
     .map_err(|e| e.to_string())?;
