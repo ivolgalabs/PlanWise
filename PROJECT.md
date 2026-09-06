@@ -2,7 +2,7 @@
 
 Task planner: Tauri v2 + React 19 + TypeScript + zustand + SQLite (rusqlite) + @dnd-kit.
 Platforms: macOS (WidgetKit widget), Android (AlarmManager/Kotlin widgets). Web mode (browser, localStorage backend in `src/api.ts: browserApi`) — for development without Tauri.
-Current version: 0.1.12 (0.1.11 — фикс наложения план-групп + тематический сплеш; releases in «Ready-made versions of applications/PlanWise»).
+Current version: 0.1.12 (белый/светлый сплеш убран: тематический системный сплеш + прозрачный WebView на Android через `tauri.android.conf.json`; releases in «Ready-made versions of applications/PlanWise»).
 
 ## Structure
 
@@ -43,6 +43,7 @@ Current version: 0.1.12 (0.1.11 — фикс наложения план-гру�
 - **Force-stop on Android cancels all alarms** (including At notifications) — OS protection, not a bug: swipe from recents is safe, force-stop from settings is not.
 - **Plan-group containers («Когда-нибудь»/«Неделя»/«Месяц»)**: don't use `flex: 1 1 0` on them — in a short panel three expanded groups each collapse to 0 height and their headers overlap. Each group `flex: 0 0 auto` (natural height), the whole column scrolls.
 - **Android 12+ cold-start splash**: `windowSplashScreenBackground` defaults to WHITE and flashes before the themed window (esp. in dark theme). Set splash bg + icon bg in `values/themes.xml` and `values-night/themes.xml` (`tools:targetApi="s"`).
+- **Android WebView still flashed light over the dark window**: `tauri.conf.json` `backgroundColor` is a STATIC color (Wry `main_pipe.rs` sets it as the WebView bg regardless of theme) — in dark mode it flashed `#f4f5f7`. Fix: `src-tauri/tauri.android.conf.json` overrides `app.windows[].backgroundColor` → `#00000000` (WebView transparent; the themed `windowBackground` shows through). Desktop keeps `#f4f5f7` from the base config. Note: android/platform config `merge` uses `json_patch::merge` — arrays (e.g. `app.windows`) are REPLACED, so repeat the full window object.
 - The shared target dir `/Volumes/Kingston/My_projects/.cache/target/release` may disappear (background cleanups/other projects) — rebuild before distributing artifacts.
 
 ## Battery measurements (method: `top -l 2 -pid <PID> -stats cpu,power,rsize`)
