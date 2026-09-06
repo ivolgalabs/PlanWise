@@ -13,12 +13,12 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useStore } from "./store";
 
-export const SYNC_FILE_NAME = "daily-planner-sync.json";
+const SYNC_FILE_NAME = "daily-planner-sync.json";
 const IMPORT_CHECK_MS = 60_000;
 const EXPORT_DEBOUNCE_MS = 2_000;
 
 /** Полный путь файла синхронизации в заданной папке (без хвостовых «/»). */
-export function syncFilePath(dir: string): string {
+function syncFilePath(dir: string): string {
   return `${dir.replace(/\/+$/, "")}/${SYNC_FILE_NAME}`;
 }
 

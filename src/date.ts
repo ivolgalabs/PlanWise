@@ -13,7 +13,7 @@ export const fromEpochDay = (n: number): Date => {
 };
 
 /** Полночь данной даты (локальная). */
-export const atMidnight = (d: Date): Date =>
+const atMidnight = (d: Date): Date =>
   new Date(d.getFullYear(), d.getMonth(), d.getDate());
 
 /** Начало недели, содержащей d. mondayFirst=true -> ISO-неделя. */
@@ -100,7 +100,7 @@ export const parseTimeToMinutes = (s: string): number | null => {
  *                 без приоритета — в самый низ;
  *  - "manual"   — ручной порядок (sortOrder, перетаскиванием).
  *  Стабильная: при равенстве ключей сохраняется ручной порядок. */
-export const sortTasksByMode = <T extends { timeMinutes?: number | null; difficulty?: number; sortOrder: number }>(
+const sortTasksByMode = <T extends { timeMinutes?: number | null; difficulty?: number; sortOrder: number }>(
   tasks: T[],
   mode: "time" | "manual" | "priority",
 ): T[] => {
