@@ -55,14 +55,69 @@ try {
       listen("actionPerformed", (e) => {
         const p = e.payload as { notification?: { extra?: { taskId?: string } } };
         const taskId = p?.notification?.extra?.taskId;
-        if (taskId) useStore.getState().setFocusTask(String(taskId));
+        // Лог для диагностики deep-link (виден в консоли WebView при
+        // отладке): помогает понять, дошло ли событие при холодном старте.
+        if (taskId) {
+          console.log("[deep-link] taskId", taskId);
+          useStore.getState().setFocusTask(String(taskId));
+        }
       }),
     )
     .catch(() => {});
 } catch { /* не критично */ }
 
+/** ErrorBoundary вокруг всего приложения: необработанная ошибка рендера React
+ *  размонтирует всё дерево — пользователь видит белый экран без объяснения.
+ *  Здесь любая такая ошибка превращается в видимое сообщение + кнопку
+ *  перезагрузки, чтобы не гадать и можно было починить. */
+class RootErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { error: Error | null }
+> {
+  state: { error: Error | null } = { error: null };
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexDirection: "column",
+            gap: 12,
+            padding: 24,
+            textAlign: "center",
+          }}
+        >
+          <div style={{ fontSize: 16, fontWeight: 600 }}>Что-то пошло не так</div>
+          <pre
+            style={{
+              fontSize: 12,
+              maxWidth: 640,
+              overflow: "auto",
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+            }}
+          >
+            {String(this.state.error?.message ?? this.state.error)}
+          </pre>
+          <button onClick={() => location.reload()}>Перезагрузить</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    <App />
+    <RootErrorBoundary>
+      <App />
+    </RootErrorBoundary>
   </React.StrictMode>,
 );

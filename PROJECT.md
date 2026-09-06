@@ -2,7 +2,7 @@
 
 Task planner: Tauri v2 + React 19 + TypeScript + zustand + SQLite (rusqlite) + @dnd-kit.
 Platforms: macOS (WidgetKit widget), Android (AlarmManager/Kotlin widgets). Web mode (browser, localStorage backend in `src/api.ts: browserApi`) — for development without Tauri.
-Current version: 0.1.9 (0.1.8 — предыдущий релиз; releases in «Ready-made versions of applications/PlanWise»).
+Current version: 0.1.10 (0.1.9 — глубокие линк + план-группы; releases in «Ready-made versions of applications/PlanWise»).
 
 ## Structure
 
@@ -28,7 +28,8 @@ Current version: 0.1.9 (0.1.8 — предыдущий релиз; releases in �
 - **Scheduler** (`notify.rs`): tick → sleep until the nearest event (reminder due/digest/midnight), cap 30 min; `wake_scheduler()` wakes on settings changes and (desktop) task changes. Android — fixed 60 s sync-model loop. Exact alarms — SCHEDULE_EXACT_ALARM + USE_EXACT_ALARM in AndroidManifest (otherwise the plugin sets inexact ones, notifications get delayed). Per-task reminder «До выезда» (`travelNotifyMinutes`): «Пора собираться» за N мин до выезда (= start − `travelTime`), раньше, чем «Пора выезжать».
 - **TaskCard memoized** (React.memo + `taskEquals` by fields): after reload all task objects are new, reference comparison is always false.
 - **Time conflicts**: the `conflictId` selector returns a primitive (id|null) — subscribing to the whole `s.tasks` would re-render all cards.
-- **Notification → task card (deep-link)**: a reminder carries `taskId` via `.extra("taskId", …)`; the frontend listens to the plugin's `actionPerformed` at module scope (catches cold start) → `focusTaskId` → a global `AddTaskModal`. Cold-start splash — themed `windowBackground` `#f4f5f7`/`#121316`.
+- **Notification → task card (deep-link)**: a reminder carries `taskId` via `.extra("taskId", …)`; the frontend listens to the plugin's `actionPerformed` at module scope (catches cold start) → `focusTaskId` → a global `AddTaskModal`. Cold-start splash — themed `windowBackground` `#f4f5f7`/`#121316`. Android reminders use `large_body` (BigTextStyle) so the full text is visible expanded.
+- **ErrorBoundary** around `App` (`main.tsx`): any unhandled render error shows a visible error + reload button instead of a silent white screen. On the device the white screen is NOT reproduced (launcher/fresh-install/notification-intent launch all load fine) — likely a data- or WebView-version-specific render crash; the boundary surfaces its cause.
 - **«Когда-нибудь» plan groups**: the section is split into collapsible «Когда-нибудь» / «В течение недели» / «В течение месяца» by the soft deadline `dueEpochDay` (no separate task types).
 
 ## Pitfalls (verified by measurements 15.08)

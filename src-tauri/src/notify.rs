@@ -490,7 +490,14 @@ fn stable_id(salt: &str, task_id: &str, due_minute: i64) -> i32 {
 /// AlarmManager доставит его, даже если процесс приложения убит. Канал —
 /// TASKS_CHANNEL_ID (высокая важность: звук и heads-up).
 #[cfg(target_os = "android")]
-fn schedule_at(app: &tauri::AppHandle, id: i32, task_id: &str, title: &str, body: &str, due: NaiveDateTime) {
+fn schedule_at(
+    app: &tauri::AppHandle,
+    id: i32,
+    task_id: &str,
+    title: &str,
+    body: &str,
+    due: NaiveDateTime,
+) {
     // Абсолютный момент в unix-секундах — смещение часового пояса в
     // ISO-строке плагину не нужно: Kotlin ставит будильник по миллисекундам.
     let ts = to_local(&due).timestamp();
@@ -503,6 +510,10 @@ fn schedule_at(app: &tauri::AppHandle, id: i32, task_id: &str, title: &str, body
         .id(id)
         .title(title)
         .body(body)
+        // large_body → BigTextStyle: уведомление разворачивается и показывает
+        // полный текст целиком, а не одну строку (по умолчанию body в Android
+        // обрезается).
+        .large_body(body)
         .channel_id(TASKS_CHANNEL_ID)
         // taskId в extra — фронт читает его в событии «actionPerformed» и
         // открывает карточку задачи по тапу на уведомление (deep-link).
