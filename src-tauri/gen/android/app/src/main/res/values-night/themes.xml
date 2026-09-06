@@ -3,5 +3,9 @@
     <style name="Theme.daily_planner" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <!-- Тёмный фон окна при холодном старте (см. values/themes.xml). -->
         <item name="android:windowBackground">#121316</item>
+        <!-- Системный сплеш Android 12+ в тёмной теме: фон и подложка иконки
+             в цвет темы, чтобы не мелькал белый экран до контента. -->
+        <item name="android:windowSplashScreenBackground" tools:targetApi="s">#121316</item>
+        <item name="android:windowSplashScreenIconBackgroundColor" tools:targetApi="s">#121316</item>
     </style>
 </resources>

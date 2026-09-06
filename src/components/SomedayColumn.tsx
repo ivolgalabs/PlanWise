@@ -60,8 +60,12 @@ export function SomedayColumn({ tasks, onChange, stretch = false }: Props) {
         display: "flex",
         flexDirection: "column",
         flex: "1 1 auto",
+        // Скроллится весь столбец, а не отдельные группы: раньше развёрнутые
+        // группы (flex: 1 1 0) при нехватке высоты сжимались в 0 и их
+        // заголовки наслаивались друг на друга.
         maxHeight: stretch ? "none" : "45%",
         minHeight: 0,
+        overflowY: "auto",
         borderTop: `1px solid var(--border-color)`,
         background: isOver ? accentTint(0.08) : undefined,
       }}
@@ -75,9 +79,9 @@ export function SomedayColumn({ tasks, onChange, stretch = false }: Props) {
               display: "flex",
               flexDirection: "column",
               minHeight: 0,
-              // Развёрнутая группа растягивается; свёрнутая — по высоте
-              // заголовка (не тянет панель на себя).
-              flex: isCollapsed ? "0 0 auto" : "1 1 0",
+              // Группа всегда по высоте контента (заголовок + задачи/поля),
+              // чтобы заголовки не налезали друг на друга. Колонка скроллится.
+              flex: "0 0 auto",
             }}
           >
             <button
@@ -121,7 +125,7 @@ export function SomedayColumn({ tasks, onChange, stretch = false }: Props) {
             </button>
             {!isCollapsed && (
               <>
-                <div style={{ flex: 1, overflowY: "auto", minHeight: 0, padding: 4 }}>
+                <div style={{ display: "flex", flexDirection: "column", padding: 4 }}>
                   {g.items.map((t) => (
                     <TaskCard key={t.id} task={t} onChange={onChange} showTime={false} />
                   ))}

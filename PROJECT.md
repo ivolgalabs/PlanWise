@@ -2,7 +2,7 @@
 
 Task planner: Tauri v2 + React 19 + TypeScript + zustand + SQLite (rusqlite) + @dnd-kit.
 Platforms: macOS (WidgetKit widget), Android (AlarmManager/Kotlin widgets). Web mode (browser, localStorage backend in `src/api.ts: browserApi`) — for development without Tauri.
-Current version: 0.1.10 (0.1.9 — глубокие линк + план-группы; releases in «Ready-made versions of applications/PlanWise»).
+Current version: 0.1.11 (0.1.10 — ErrorBoundary + развёрнутые уведомления; releases in «Ready-made versions of applications/PlanWise»).
 
 ## Structure
 
@@ -41,6 +41,8 @@ Current version: 0.1.10 (0.1.9 — глубокие линк + план-груп
 - **Android build**: gradle cache `~/.gradle/caches/8.14.3` can corrupt on abrupt interruptions (metadata.bin kotlin-dsl) — reset with `rm -rf` of the directory. libsqlite3-sys requires NDK clang in PATH: `export PATH="$HOME/Library/Android/sdk/ndk/*/toolchains/llvm/prebuilt/darwin-x86_64/bin:$PATH"` before `tauri android build` (otherwise "sccache: cannot find binary path"). gradlew does not work directly (the rust task waits for a WebSocket from the tauri CLI).
 - **Android build under memory pressure**: the gradle daemon dies ("daemon disappeared", corrupted kotlin-dsl metadata) when RAM is low — this is NOT the cache. Fix: free memory (close Android Studio — it holds a lock on gen/android!), temporarily add to `gradle.properties` `org.gradle.workers.max=1` + `kotlin.compiler.execution.strategy=in-process`; revert after the build. The universal build (4 ABIs) is finicky — `--target aarch64` is enough for a phone.
 - **Force-stop on Android cancels all alarms** (including At notifications) — OS protection, not a bug: swipe from recents is safe, force-stop from settings is not.
+- **Plan-group containers («Когда-нибудь»/«Неделя»/«Месяц»)**: don't use `flex: 1 1 0` on them — in a short panel three expanded groups each collapse to 0 height and their headers overlap. Each group `flex: 0 0 auto` (natural height), the whole column scrolls.
+- **Android 12+ cold-start splash**: `windowSplashScreenBackground` defaults to WHITE and flashes before the themed window (esp. in dark theme). Set splash bg + icon bg in `values/themes.xml` and `values-night/themes.xml` (`tools:targetApi="s"`).
 - The shared target dir `/Volumes/Kingston/My_projects/.cache/target/release` may disappear (background cleanups/other projects) — rebuild before distributing artifacts.
 
 ## Battery measurements (method: `top -l 2 -pid <PID> -stats cpu,power,rsize`)
