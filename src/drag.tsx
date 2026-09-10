@@ -28,7 +28,7 @@ import {
 import type { CollisionDetection, DragEndEvent, DragStartEvent } from "@dnd-kit/core";
 import type { Task, Subtask } from "./api";
 import { api } from "./api";
-import { fromEpochDay } from "./date";
+import { fromEpochDay, toEpochDay } from "./date";
 import { COLORS, setHex as setHexOf } from "./theme";
 import { useStore } from "./store";
 
@@ -61,6 +61,23 @@ export const weekShiftNextId = "w:next";
 
 /** id droppable-зоны «Когда-нибудь» (колонка задач без даты). */
 export const somedayZoneId = "sd:someday";
+
+/** id droppable-группы внутри панели плана: сброс на конкретную группу задаёт
+ *  мягкий срок («неделя» → +7, «месяц» → +30), «когда-нибудь» — снимает. Без
+ *  этих зон попадание в группу не отличалось от попадания в колонку, и задача
+ *  всегда становилась «когда-нибудь» — перенести именно в «неделю/месяц» было
+ *  нельзя. */
+export const planGroupZoneId = (key: "someday" | "week" | "month"): string => `pg:${key}`;
+
+/** Тип группы плана из droppable-зоны (null — это не зона группы). */
+const parsePlanGroup = (
+  id: string | number | undefined | null,
+): "someday" | "week" | "month" | null => {
+  const s = String(id ?? "");
+  if (!s.startsWith("pg:")) return null;
+  const key = s.slice(3);
+  return key === "someday" || key === "week" || key === "month" ? key : null;
+};
 
 /** Распарсить id задачи-цели из droppable-зоны. null, если это не задача. */
 const parseTaskZone = (id: string | number | undefined | null): string | null => {
@@ -183,15 +200,35 @@ export function TaskDndContext({ children, onChange }: TaskDndContextProps) {
 
     // ── Задача → день: перенос задачи.
     if (task) {
-      // Задача → «Когда-нибудь»: снять привязку ко дню.
+      // Задача → группа плана («когда-нибудь»/«неделя»/«месяц»): «неделя» и
+      // «месяц» задают мягкий срок (задача становится план-задачей), сброс на
+      // «когда-нибудь» — снимает срок. Сначала снимаем прежний срок
+      // (set_someday), затем задаём новый: move_task у план-задачи меняет
+      // due_epoch_day, а у обычной перенёс бы её на этот день как дневную.
+      const group = parsePlanGroup(over);
+      if (group) {
+        if (group === "someday") {
+          await api.setSomeday(task.id);
+        } else {
+          const today = toEpochDay(new Date());
+          await api.setSomeday(task.id);
+          await api.moveTask(task.id, fromEpochDay(today + (group === "week" ? 7 : 30)));
+        }
+        onChange();
+        return;
+      }
+      // Задача → «Когда-нибудь» (вся колонка): снять привязку ко дню.
       if (over === somedayZoneId) {
         await api.setSomeday(task.id);
         onChange();
         return;
       }
       // Боковая зона «следующая неделя»: перенос на +7 дней от позиции задачи.
+      // У план-задачи date = 0, поэтому базой берём её мягкий срок — иначе +7
+      // увело бы срок в 1970 (epoch-day 7).
       if (over === weekShiftNextId) {
-        await api.moveTask(task.id, fromEpochDay(task.date + 7));
+        const base = task.someday ? (task.dueEpochDay ?? toEpochDay(new Date())) : task.date;
+        await api.moveTask(task.id, fromEpochDay(base + 7));
         onChange();
         return;
       }

@@ -1,10 +1,11 @@
 import { useState } from "react";
+import type { ReactNode } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import type { Task } from "../api";
 import { api } from "../api";
 import { COLORS, accentTint } from "../theme";
 import { TaskCard } from "./TaskCard";
-import { somedayZoneId } from "../drag";
+import { somedayZoneId, planGroupZoneId } from "../drag";
 import { useStore } from "../store";
 import { sortSomedayTasks, toEpochDay } from "../date";
 
@@ -73,17 +74,7 @@ export function SomedayColumn({ tasks, onChange, stretch = false }: Props) {
       {groups.map((g) => {
         const isCollapsed = collapsed[g.key];
         return (
-          <div
-            key={g.key}
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              minHeight: 0,
-              // Группа всегда по высоте контента (заголовок + задачи/поля),
-              // чтобы заголовки не налезали друг на друга. Колонка скроллится.
-              flex: "0 0 auto",
-            }}
-          >
+          <PlanGroup key={g.key} groupKey={g.key}>
             <button
               type="button"
               onClick={() =>
@@ -145,9 +136,33 @@ export function SomedayColumn({ tasks, onChange, stretch = false }: Props) {
                 />
               </>
             )}
-          </div>
+          </PlanGroup>
         );
       })}
+    </div>
+  );
+}
+
+/** Обёртка группы: droppable-зона для переноса задачи именно в эту группу.
+ *  Внешняя колонка тоже droppable («когда-нибудь»), но вложенная зона группы
+ *  выигрывает у неё при наведении (pointerWithin — сначала точная зона под
+ *  курсором), поэтому сброс на «неделю/месяц» задаёт срок, а не снимает его. */
+function PlanGroup({ groupKey, children }: { groupKey: GroupKey; children: ReactNode }) {
+  const { setNodeRef, isOver } = useDroppable({ id: planGroupZoneId(groupKey) });
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        minHeight: 0,
+        // Группа всегда по высоте контента (заголовок + задачи/поля),
+        // чтобы заголовки не налезали друг на друга. Колонка скроллится.
+        flex: "0 0 auto",
+        background: isOver ? accentTint(0.12) : undefined,
+      }}
+    >
+      {children}
     </div>
   );
 }
