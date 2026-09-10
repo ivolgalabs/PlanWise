@@ -192,6 +192,7 @@ function GroupAdd({
         e.preventDefault();
         add();
       }}
+      style={{ display: "flex", alignItems: "center", gap: 4, paddingRight: 4 }}
     >
       <input
         value={value}
@@ -199,7 +200,8 @@ function GroupAdd({
         enterKeyHint="done"
         placeholder={placeholder}
         style={{
-          width: "100%",
+          flex: 1,
+          minWidth: 0,
           border: "none",
           padding: "4px 8px",
           fontSize: 12,
@@ -208,6 +210,18 @@ function GroupAdd({
           color: COLORS.text,
         }}
       />
+      {/* Видимая кнопка добавления: на Android «Готово» у enterKeyHint="done"
+          может не отправить Enter-keypress, и форма молча не отправлялась —
+          задача не создавалась. Тап по «+» работает всегда. */}
+      <button
+        type="submit"
+        className="icon-btn"
+        aria-label="Добавить задачу"
+        disabled={!value.trim()}
+        style={{ flexShrink: 0, opacity: value.trim() ? 1 : 0.45 }}
+      >
+        +
+      </button>
     </form>
   );
 }
