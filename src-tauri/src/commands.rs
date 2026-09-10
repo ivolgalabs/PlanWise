@@ -1075,26 +1075,37 @@ pub fn cleanup_orphan_attachments(app: &tauri::AppHandle, state: &State<'_, Db>)
     let Ok(entries) = std::fs::read_dir(&dir) else {
         return; // каталога ещё нет — сирот нет
     };
-    let conn = state.lock();
-    for entry in entries.flatten() {
-        if !entry.file_type().map(|t| t.is_file()).unwrap_or(false) {
+    // Обход каталога — до взятия мьютекса: сканирование не должно блокировать
+    // запросы UI (на старте они идут сразу после показа окна).
+    let files: Vec<String> = entries
+        .flatten()
+        .filter(|e| e.file_type().map(|t| t.is_file()).unwrap_or(false))
+        .map(|e| e.file_name().to_string_lossy().to_string())
+        .collect();
+    if files.is_empty() {
+        return;
+    }
+    // Имена «живых» вложений одним запросом: COUNT на каждый файл — это N
+    // подготовок SQL и N обращений к БД под тем же мьютексом.
+    let known: std::collections::HashSet<String> = {
+        let conn = state.lock();
+        let Ok(mut stmt) = conn.prepare("SELECT stored_name FROM attachments") else {
+            return;
+        };
+        stmt.query_map([], |r| r.get::<_, String>(0))
+            .map(|rows| rows.flatten().collect())
+            .unwrap_or_default()
+    };
+    for name in files {
+        if known.contains(&name) {
             continue;
         }
-        let name = entry.file_name().to_string_lossy().to_string();
-        let exists: bool = conn
-            .query_row(
-                "SELECT COUNT(*) > 0 FROM attachments WHERE stored_name = ?1",
-                [&name],
-                |r| r.get(0),
-            )
-            .unwrap_or(false);
-        if !exists {
-            if let Err(e) = std::fs::remove_file(entry.path()) {
-                eprintln!(
-                    "[attachments] не удалось удалить сироту {}: {e}",
-                    entry.path().display()
-                );
-            }
+        let path = dir.join(&name);
+        if let Err(e) = std::fs::remove_file(&path) {
+            eprintln!(
+                "[attachments] не удалось удалить сироту {}: {e}",
+                path.display()
+            );
         }
     }
 }
