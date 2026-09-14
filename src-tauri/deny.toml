@@ -1,0 +1,58 @@
+# cargo-deny: аудит уязвимостей, лицензий и дублей зависимостей.
+# Кладётся в src-tauri/deny.toml, запуск: cargo deny check
+# Формат — cargo-deny 0.20.
+
+[advisories]
+version = 2
+# Уязвимости и отозванные (yanked) версии — блокирующие.
+yanked = "deny"
+# unmaintained/unsound — предупреждение, а не блок: они не всегда исправимы сразу.
+unmaintained = "workspace"
+unsound = "all"
+# Известные и неустранимые на нашей стороне: запись = осознанное решение с причиной.
+ignore = [
+    # glib 0.18 — часть Linux/GTK-стека Tauri (webkit2gtk). На целевых платформах
+    # (macOS/Windows/Android) не собирается; апстрим фикс не выпустил.
+    { id = "RUSTSEC-2024-0429", reason = "glib — Linux/GTK-стек Tauri, вне целевых платформ" },
+]
+
+[licenses]
+version = 2
+# Разрешены только permissive-лицензии; GPL/LGPL/AGPL — блок (закрытый код).
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "0BSD",
+    "Unicode-3.0",
+    "CC0-1.0",
+    "Unlicense",
+    "MPL-2.0",
+    "BSL-1.0",
+    "CDLA-Permissive-2.0",
+    "NCSA",
+]
+confidence-threshold = 0.9
+# Свои крейты (приложение и core_base) — с publish = false, поэтому private = ignore
+# снимает с них проверку лицензии. Сторонние зависимости проверяются строго.
+private = { ignore = true }
+
+# Проектные исключения добавляются В КОПИЮ этого файла (src-tauri/deny.toml),
+# с обязательной причиной в комментарии. Пример — Convertia: GPL-3.0 у крейта epub.
+
+[bans]
+# Дубли версий — предупреждение (Tauri-стек тянет их штатно), wildcard-версии — блок.
+# Path-зависимости (core_base) версии не имеют — это не wildcard.
+multiple-versions = "warn"
+wildcards = "warn"
+allow-wildcard-paths = true
+deny = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

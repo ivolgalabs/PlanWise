@@ -1,0 +1,113 @@
+name: CI
+
+# Общий шаблон: Rules/checks/ci.yml → <проект>/.github/workflows/ci.yml
+# Гейт: fmt → clippy → тесты → cargo audit/deny → npm test/audit.
+# Блокирует только реальные дефекты: уязвимости, GPL, ошибки сборки.
+# Unmaintained/udnound/дубли версий — предупреждения, не падение CI.
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  rust:
+    name: Rust (fmt + clippy + tests + audit)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src-tauri
+    steps:
+      - uses: actions/checkout@v4
+
+      # core_base — общая база (path-зависимость вне репозитория).
+      # Путь вычисляется из Cargo.toml, чтобы шаблон не надо было править.
+      # Источник: каталог core_base/ в репозитории, иначе переменная
+      # репозитория CORE_BASE_REPO (Settings → Secrets and variables → Actions → Variables).
+      - name: Подготовка core_base
+        working-directory: .
+        run: |
+          REL=$(python3 -c "
+          import re
+          t = open('src-tauri/Cargo.toml').read()
+          m = re.search(r'core_base\s*=\s*\{[^}]*path\s*=\s*\"([^\"]+)\"', t)
+          print(m.group(1) if m else '')
+          ")
+          if [ -z "$REL" ]; then
+            echo "core_base не найден в src-tauri/Cargo.toml — проект его не использует"
+            exit 0
+          fi
+          TARGET=$(python3 -c "import os,sys;print(os.path.normpath(os.path.join('src-tauri',sys.argv[1])))" "$REL")
+          echo "Ожидаемый путь core_base: $TARGET"
+          mkdir -p "$TARGET"
+          if [ -d core_base ]; then
+            cp -r core_base/. "$TARGET"/
+          elif [ -n "${{ vars.CORE_BASE_REPO }}" ]; then
+            git clone --depth 1 "${{ vars.CORE_BASE_REPO }}" "$TARGET"
+          else
+            echo "::error::core_base недоступен. Задайте переменную репозитория CORE_BASE_REPO (URL git-репозитория с core_base) или закоммитьте каталог core_base/ в корень."
+            exit 1
+          fi
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Формат (cargo fmt --check)
+        run: cargo fmt --all --check
+
+      - name: Clippy (0 предупреждений)
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Тесты
+        run: cargo test
+
+      # Обновление до последних патч-версий в рамках semver — так уязвимость
+      # в транзитивной зависимости видна сразу, а не после ручного апдейта.
+      - name: Аудит зависимостей (RustSec)
+        run: |
+          cargo install cargo-audit --locked --quiet
+          cargo audit
+
+      - name: Лицензии и дубли (cargo-deny)
+        run: |
+          cargo install cargo-deny --locked --quiet
+          cargo deny --config deny.toml check
+        if: ${{ hashFiles('src-tauri/deny.toml') != '' }}
+
+  frontend:
+    name: Frontend (tests + build + audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Проект без фронтенда — пропуск
+        id: guard
+        run: |
+          if [ -f package.json ]; then echo "ok=1" >> "$GITHUB_OUTPUT"; else echo "ok=0" >> "$GITHUB_OUTPUT"; fi
+
+      - uses: actions/setup-node@v4
+        if: steps.guard.outputs.ok == '1'
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Установка зависимостей
+        if: steps.guard.outputs.ok == '1'
+        run: npm ci
+
+      - name: Юнит-тесты
+        if: steps.guard.outputs.ok == '1'
+        run: npm test --if-present
+
+      - name: Сборка
+        if: steps.guard.outputs.ok == '1'
+        run: npm run build --if-present
+
+      - name: Аудит зависимостей (npm)
+        if: steps.guard.outputs.ok == '1'
+        run: npm audit --omit=dev --audit-level=high
