@@ -1,9 +1,9 @@
 name: CI
 
-# Общий шаблон: Rules/checks/ci.yml → <проект>/.github/workflows/ci.yml
-# Гейт: fmt → clippy → тесты → cargo audit/deny → npm test/audit.
-# Блокирует только реальные дефекты: уязвимости, GPL, ошибки сборки.
-# Unmaintained/udnound/дубли версий — предупреждения, не падение CI.
+# Shared template: Rules/checks/ci.yml → <project>/.github/workflows/ci.yml
+# Gate: fmt → clippy → tests → cargo audit/deny → npm test/audit.
+# Blocks only real defects: vulnerabilities, GPL, build errors.
+# Unmaintained/unknown/duplicate versions — warnings, not a CI failure.
 
 on:
   push:
@@ -20,10 +20,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # core_base — общая база (path-зависимость вне репозитория).
-      # Путь вычисляется из Cargo.toml, чтобы шаблон не надо было править.
-      # Источник: каталог core_base/ в репозитории, иначе переменная
-      # репозитория CORE_BASE_REPO (Settings → Secrets and variables → Actions → Variables).
+      # core_base — the shared base (a path dependency outside the repository).
+      # The path is computed from Cargo.toml so the template needs no edits.
+      # Source: the core_base/ directory in the repository, otherwise the
+      # repository variable CORE_BASE_REPO (Settings → Secrets and variables → Actions → Variables).
       - name: Подготовка core_base
         working-directory: .
         run: |
@@ -66,24 +66,24 @@ jobs:
       - name: Тесты
         run: cargo test
 
-      # Привязки TS генерируются из Rust (ts-rs). Шаг ловит «поменял тип в Rust,
-      # забыл перегенерировать»: если после генерации рабочее дерево изменилось,
-      # значит закоммиченные привязки разошлись с Rust. Проекты без src/bindings
-      # шаг пропускают.
+      # TS bindings are generated from Rust (ts-rs). The step catches "changed a type
+      # in Rust, forgot to regenerate": if the working tree changed after generation,
+      # the committed bindings have drifted from Rust. Projects without src/bindings
+      # skip this step.
       - name: Привязки TypeScript (ts-rs)
         working-directory: .
         if: ${{ hashFiles('src/bindings/**.ts') != '' }}
         run: |
           (cd src-tauri && cargo test export_bindings)
-          # status, а не diff: diff не видит НОВЫЕ файлы привязок (новый тип в Rust).
+          # status, not diff: diff does not see NEW binding files (a new type in Rust).
           if [ -n "$(git status --porcelain -- src/bindings)" ]; then
             echo "::error::Привязки TypeScript разошлись с Rust. Выполните: cd src-tauri && cargo test export_bindings — и закоммитьте src/bindings/ (и правки фронтенда под новый тип)."
             git status --porcelain -- src/bindings
             exit 1
           fi
 
-      # Обновление до последних патч-версий в рамках semver — так уязвимость
-      # в транзитивной зависимости видна сразу, а не после ручного апдейта.
+      # Update to the latest patch versions within semver — this way a vulnerability
+      # in a transitive dependency is visible immediately, not after a manual update.
       - name: Аудит зависимостей (RustSec)
         run: |
           cargo install cargo-audit --locked --quiet
