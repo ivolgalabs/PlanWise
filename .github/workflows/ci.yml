@@ -66,6 +66,22 @@ jobs:
       - name: Тесты
         run: cargo test
 
+      # Привязки TS генерируются из Rust (ts-rs). Шаг ловит «поменял тип в Rust,
+      # забыл перегенерировать»: если после генерации рабочее дерево изменилось,
+      # значит закоммиченные привязки разошлись с Rust. Проекты без src/bindings
+      # шаг пропускают.
+      - name: Привязки TypeScript (ts-rs)
+        working-directory: .
+        if: ${{ hashFiles('src/bindings/**.ts') != '' }}
+        run: |
+          (cd src-tauri && cargo test export_bindings)
+          # status, а не diff: diff не видит НОВЫЕ файлы привязок (новый тип в Rust).
+          if [ -n "$(git status --porcelain -- src/bindings)" ]; then
+            echo "::error::Привязки TypeScript разошлись с Rust. Выполните: cd src-tauri && cargo test export_bindings — и закоммитьте src/bindings/ (и правки фронтенда под новый тип)."
+            git status --porcelain -- src/bindings
+            exit 1
+          fi
+
       # Обновление до последних патч-версий в рамках semver — так уязвимость
       # в транзитивной зависимости видна сразу, а не после ручного апдейта.
       - name: Аудит зависимостей (RustSec)
