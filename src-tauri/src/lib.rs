@@ -40,11 +40,21 @@ pub fn run() {
                 .build(),
         )
         .setup(|app| {
+            // Отчёты о сбоях — в каталог логов приложения (кольцо журнала + backtrace).
+            if let Ok(dir) = app.path().app_log_dir() {
+                let _ = core_base::diagnostics::init("PlanWise", env!("CARGO_PKG_VERSION"), dir);
+            }
+            // Первая запись журнала: в отчёте о сбое видно, что приложение стартовало.
+            core_base::diagnostics::record(format!("старт {}", env!("CARGO_PKG_VERSION")));
             // Понятная ошибка вместо молчаливой паники: при сбое БД (read-only
             // каталог, коррупция) пишем причину в лог и закрываемся.
             let conn = match db::init(app.handle()) {
                 Ok(c) => c,
                 Err(e) => {
+                    // Сбой старта БД — случай, когда отчёт о сбое не создаётся
+                    // (паники нет), поэтому причину сохраняем в отчёт явно.
+                    core_base::diagnostics::record(format!("сбой инициализации БД: {e}"));
+                    let _ = core_base::diagnostics::export();
                     eprintln!("[daily-planner] КРИТИЧЕСКАЯ ОШИБКА БАЗЫ ДАННЫХ: {e}");
                     eprintln!("[daily-planner] Приложение будет закрыто. Проверьте доступ к каталогу данных.");
                     app.handle().exit(1);
