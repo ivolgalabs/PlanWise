@@ -1,6 +1,7 @@
 name: CI
 
-# Shared template: Rules_Zai/checks/ci.yml → <project>/.github/workflows/ci.yml
+# Shared template: `checks/ci.yml` of your own rules store (Rules_Zai/ for ZCode,
+# Rules_Antigravity/ for Antigravity) → <project>/.github/workflows/ci.yml
 # Gate: fmt → clippy → tests → cargo audit/deny → npm test/audit.
 # Blocks only real defects: vulnerabilities, GPL, build errors.
 # Unmaintained/unknown/duplicate versions — warnings, not a CI failure.
