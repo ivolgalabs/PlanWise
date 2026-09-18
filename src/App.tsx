@@ -431,7 +431,11 @@ function App() {
       setSelectedDate(d);
     } else {
       const base = monthDate ?? selectedDate;
-      const d = new Date(base.getFullYear(), base.getMonth() + dir, base.getDate());
+      const targetMonth = base.getMonth() + dir;
+      const targetYear = base.getFullYear();
+      const lastDayOfTarget = new Date(targetYear, targetMonth + 1, 0).getDate();
+      const clampedDay = Math.min(base.getDate(), lastDayOfTarget);
+      const d = new Date(targetYear, targetMonth, clampedDay);
       setMonthDate(d);
       setSelectedDate(d);
     }

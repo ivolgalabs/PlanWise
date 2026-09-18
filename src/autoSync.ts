@@ -40,6 +40,22 @@ export function scheduleAutoExport() {
   }, EXPORT_DEBOUNCE_MS);
 }
 
+/** Быстрое извлечение exportedAt из JSON без тяжелого парсинга всего документа. */
+function parseExportedAt(jsonStr: string): number {
+  // exportedAt сериализуется в начале JSON (первые строки)
+  const match = /"exportedAt"\s*:\s*(\d+)/.exec(jsonStr.slice(0, 1024));
+  if (match) {
+    const num = Number(match[1]);
+    if (!Number.isNaN(num)) return num;
+  }
+  const fullMatch = /"exportedAt"\s*:\s*(\d+)/.exec(jsonStr);
+  if (fullMatch) {
+    const num = Number(fullMatch[1]);
+    if (!Number.isNaN(num)) return num;
+  }
+  return 0;
+}
+
 async function doExport() {
   const { autoSyncPath, autoSyncLastAt, setAutoSyncLastAt } = useStore.getState();
   try {
@@ -49,8 +65,8 @@ async function doExport() {
       content: json,
     });
     // Помечаем синхронизацию: свой же файл на следующей проверке не импортируем.
-    const exportedAt = ((JSON.parse(json) as { exportedAt?: number }).exportedAt ?? 0);
-    setAutoSyncLastAt(Math.max(autoSyncLastAt, exportedAt));
+    const exportedAt = parseExportedAt(json);
+    setAutoSyncLastAt(Math.max(autoSyncLastAt, exportedAt || Date.now()));
   } catch (e) {
     // Папка недоступна/нет прав — молча ждём следующего раза (не спамим).
     console.error("Автоэкспорт не удался:", e);
@@ -75,13 +91,8 @@ export async function checkForImport(onImported: () => void): Promise<void> {
     return; // файла нет — нечего импортировать
   }
   if (!raw) return;
-  let exportedAt = 0;
-  try {
-    exportedAt = (JSON.parse(raw) as { exportedAt?: number }).exportedAt ?? 0;
-  } catch {
-    return; // битый/недописанный файл — данные не трогаем
-  }
-  if (exportedAt <= autoSyncLastAt) return;
+  const exportedAt = parseExportedAt(raw);
+  if (exportedAt <= 0 || exportedAt <= autoSyncLastAt) return;
   try {
     await invoke<number>("import_json", { json: raw });
     setAutoSyncLastAt(exportedAt);

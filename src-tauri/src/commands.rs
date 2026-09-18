@@ -103,8 +103,7 @@ pub(crate) fn date_to_epoch(d: NaiveDate) -> i64 {
 
 /// Обратное преобразование: epoch-day → дата.
 pub(crate) fn epoch_to_date(days: i64) -> Option<NaiveDate> {
-    let epoch = NaiveDate::from_ymd_opt(1970, 1, 1)?;
-    epoch.checked_add_days(chrono::Days::new(days.max(0) as u64))
+    NaiveDate::from_num_days_from_ce_opt((days + 719_163) as i32)
 }
 
 #[tauri::command]
@@ -1426,12 +1425,19 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// Прямое/обратное преобразование дата ↔ epoch-day согласовано.
+    /// Прямое/обратное преобразование дата ↔ epoch-day согласовано (включая даты до 1970).
     #[test]
     fn date_epoch_roundtrip() {
         let d = NaiveDate::from_ymd_opt(2026, 8, 16).unwrap();
         let ed = date_to_epoch(d);
         assert_eq!(epoch_to_date(ed), Some(d));
+
+        // Даты до 1970 (отрицательный epoch day)
+        let past = NaiveDate::from_ymd_opt(1965, 3, 15).unwrap();
+        let past_ed = date_to_epoch(past);
+        assert!(past_ed < 0);
+        assert_eq!(epoch_to_date(past_ed), Some(past));
+
         assert_eq!(
             today_epoch_day(),
             date_to_epoch(chrono::Local::now().date_naive())

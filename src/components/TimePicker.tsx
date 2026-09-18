@@ -282,10 +282,12 @@ export function DurationSelect({
   );
 }
 
-/** Подпись длительности: 30 мин / 1 ч / 1.5 ч / 2 ч. */
+/** Подпись длительности: 30 мин / 1 ч / 1 ч 15 мин / 2 ч. */
 function fmtDur(v: number): string {
   if (v < 60) return `${v} мин`;
-  return v % 60 === 0 ? `${v / 60} ч` : `${Math.round((v / 60) * 2) / 2} ч`;
+  const h = Math.floor(v / 60);
+  const m = v % 60;
+  return m === 0 ? `${h} ч` : `${h} ч ${m} мин`;
 }
 
 const pickerStyle: React.CSSProperties = { position: "relative", display: "inline-flex" };

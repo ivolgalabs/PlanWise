@@ -156,9 +156,14 @@ function DayTasksArea({
   addTask: () => void;
   newInputRef: React.RefObject<HTMLInputElement | null>;
 }) {
-  // НЕ useDroppable: в DayView droppable-дни обслуживает MiniCalendar (ячейки)
-  // и SideDayZone (завтра). Здесь droppable с dayId(epochDay) дублировал бы
-  // ячейку календаря того же дня → @dnd-kit перезаписывал ref, ломая drag.
+  // В DayView droppable-дни на десктопе обслуживает MiniCalendar (ячейки)
+  // и SideDayZone (завтра). Но на узких экранах (panelNarrow) календарь скрыт —
+  // поэтому здесь включаем droppable для dayId(epochDay) только при panelNarrow.
+  const epochDay = toEpochDay(day);
+  const { setNodeRef, isOver } = useDroppable({
+    id: dayId(epochDay),
+    disabled: !panelNarrow,
+  });
   const today = isToday(day);
   const dayKey = `${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`;
   // На мобильном правая панель скрыта — «Когда-нибудь» и «Архив» показываем
@@ -175,6 +180,7 @@ function DayTasksArea({
   };
   return (
     <div
+      ref={panelNarrow ? setNodeRef : undefined}
       data-day-key={dayKey}
       style={{
         flex: 1,
@@ -182,6 +188,7 @@ function DayTasksArea({
         padding: "var(--sp-6) var(--sp-8)",
         overflowY: "auto",
         minWidth: 0,
+        background: isOver ? accentTint(0.08) : undefined,
         // Тонкая акцентная полоса слева для текущего дня.
         boxShadow: today ? `inset 3px 0 0 ${COLORS.accent}` : "none",
       }}

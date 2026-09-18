@@ -90,11 +90,11 @@ export const browserApi = {
     save(K.tasks, load<Task>(K.tasks).map((t) => (t.colorSetId === id ? { ...t, colorSetId: null } : t)));
   },
   async archiveOverdue(): Promise<number> {
-    // Граница «сегодня» — локальная, как на бэкенде.
-    const todayDay = toEpochDay(new Date());
+    // Граница архивации — задачи старше вчерашнего дня (date < today - 1), как на бэкенде.
+    const threshold = toEpochDay(new Date()) - 1;
     let n = 0;
     save(K.tasks, load<Task>(K.tasks).map((t) => {
-      if (t.date < todayDay && !t.isDone && !t.someday && !t.archived) { n++; return { ...t, archived: true }; }
+      if (t.date < threshold && !t.isDone && !t.someday && !t.archived) { n++; return { ...t, archived: true }; }
       return t;
     }));
     return n;

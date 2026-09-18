@@ -63,12 +63,16 @@ export function MiniCalendar({ tasks, large, onSelect, droppable = true, fill = 
 
   // Группировка задач по дню — ОДИН проход вместо 42 фильтраций на рендер
   // (раньше каждая ячейка фильтровала весь массив задач и создавала Date).
+  // Для план-задач («Когда-нибудь» с dueEpochDay) точкой привязки служит
+  // их мягкий срок, аналогично tasksForDay.
   const tasksByDay = useMemo(() => {
     const map = new Map<number, Task[]>();
     for (const t of tasks) {
-      const list = map.get(t.date) ?? [];
+      const day = t.someday ? (t.dueEpochDay ?? null) : t.date;
+      if (day == null) continue;
+      const list = map.get(day) ?? [];
       list.push(t);
-      map.set(t.date, list);
+      map.set(day, list);
     }
     return map;
   }, [tasks]);

@@ -54,9 +54,28 @@ export function SearchResults({ tasks, query, color, period, status, sort, from,
     })
     .filter((t) => {
       const d = fromEpochDay(t.date);
-      // «Когда-нибудь» (date = 0 → 1970 год) никогда не бывает «просроченной»
-      // и не входит в диапазоны дат — только в «Все».
-      if (t.someday) return false;
+      // «Когда-нибудь»: без мягкого срока входит только в «Все»; со сроком — проверяется по dueEpochDay.
+      if (t.someday) {
+        if (period === "all") return true;
+        if (t.dueEpochDay == null) return false;
+        const dueD = fromEpochDay(t.dueEpochDay);
+        if (period === "today") return isToday(dueD);
+        if (period === "overdue") return isPast(dueD);
+        if (period === "7days") {
+          const today = new Date(); today.setHours(0, 0, 0, 0);
+          const end = new Date(today); end.setDate(end.getDate() + 6);
+          return dueD >= today && dueD <= end;
+        }
+        if (period === "month") {
+          return isSameMonth(dueD, new Date());
+        }
+        if (period === "custom") {
+          if (from != null && t.dueEpochDay < from) return false;
+          if (to != null && t.dueEpochDay > to) return false;
+          return true;
+        }
+        return false;
+      }
       if (period === "today") return isToday(d);
       if (period === "overdue") return isPast(d);
       if (period === "7days") {

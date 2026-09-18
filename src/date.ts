@@ -167,15 +167,15 @@ export const tasksForDay = <
   tasks: T[],
   d: Date,
   mode: "time" | "manual" | "priority",
-): T[] =>
-  sortTasksByMode(
+): T[] => {
+  const ed = toEpochDay(d);
+  return sortTasksByMode(
     tasks.filter((t) =>
-      t.someday
-        ? t.dueEpochDay === toEpochDay(d)
-        : isSameDay(fromEpochDay(t.date), d),
+      t.someday ? t.dueEpochDay === ed : t.date === ed,
     ),
     mode,
   );
+};
 
 /** Пересечение двух временных интервалов [start, start+duration); без
  *  длительности занимает одну минуту (две задачи «в одно время» конфликтуют,
@@ -228,6 +228,8 @@ export const travelTimeText = (t: {
   travelTime?: number | null;
 }): string | null => {
   if (t.timeMinutes == null || !t.travelTime) return null;
-  const dep = (t.timeMinutes - t.travelTime + 24 * 60) % (24 * 60);
-  return `выезд в ${formatMinutes(dep)}`;
+  const diff = t.timeMinutes - t.travelTime;
+  const dep = ((diff % 1440) + 1440) % 1440;
+  const note = diff < 0 ? " (накануне)" : "";
+  return `выезд в ${formatMinutes(dep)}${note}`;
 };

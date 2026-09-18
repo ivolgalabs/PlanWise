@@ -17,32 +17,36 @@ interface Props {
   stretch?: boolean;
 }
 
-/** Группа «Когда-нибудь»: как её разбить по горизонту плана. Без срока —
- *  «Когда-нибудь», со сроком в пределах недели — «В течение недели», дальше —
- *  «В течение месяца». Это переиспользует мягкий срок (dueEpochDay) и даёт
- *  разграничение планов, не заводя их отдельные типы задач. */
-type GroupKey = "someday" | "week" | "month";
-const GROUPS: { key: GroupKey; label: string; placeholder: string }[] = [
-  { key: "someday", label: "Когда-нибудь", placeholder: "+ когда-нибудь" },
+/** Группа «Когда-нибудь»: как её разбить по горизонту плана. Без срока
+ *  или свыше месяца — «Когда-нибудь», со сроком в пределах недели — «В течение недели»,
+ *  в пределах месяца — «В течение месяца», с истёкшим сроком — «Просроченные». */
+type GroupKey = "overdue" | "week" | "month" | "someday";
+const GROUPS: { key: GroupKey; label: string; placeholder?: string }[] = [
+  { key: "overdue", label: "Просроченные" },
   { key: "week", label: "В течение недели", placeholder: "+ на неделю" },
   { key: "month", label: "В течение месяца", placeholder: "+ на месяц" },
+  { key: "someday", label: "Когда-нибудь", placeholder: "+ когда-нибудь" },
 ];
 
 /** К какой группе относится задача по её мягкому сроку. */
 function bucket(t: Task, today: number): GroupKey {
   const d = t.dueEpochDay ?? null;
   if (d == null) return "someday";
-  return d <= today + 7 ? "week" : "month";
+  if (d < today) return "overdue";
+  if (d <= today + 7) return "week";
+  if (d <= today + 30) return "month";
+  return "someday";
 }
 
-/** Секция «Когда-нибудь» внутри правой панели: три сворачиваемые группы
- *  (Когда-нибудь / В течение недели / В течение месяца). Принимает задачи
+/** Секция «Когда-нибудь» внутри правой панели: сворачиваемые группы
+ *  (Просроченные / В течение недели / В течение месяца / Когда-нибудь). Принимает задачи
  *  drag-ом; перенос в день — обычным drag на колонку дня. */
 export function SomedayColumn({ tasks, onChange, stretch = false }: Props) {
   const { setNodeRef, isOver } = useDroppable({ id: somedayZoneId });
   const sortMode = useStore((s) => s.sortMode);
   // Свёрнутые группы: по умолчанию все развёрнуты.
   const [collapsed, setCollapsed] = useState<Record<GroupKey, boolean>>({
+    overdue: false,
     someday: false,
     week: false,
     month: false,
@@ -52,7 +56,7 @@ export function SomedayColumn({ tasks, onChange, stretch = false }: Props) {
   const groups = GROUPS.map((g) => ({
     ...g,
     items: sorted.filter((t) => bucket(t, today) === g.key),
-  }));
+  })).filter((g) => g.key !== "overdue" || g.items.length > 0);
 
   return (
     <div
@@ -90,7 +94,7 @@ export function SomedayColumn({ tasks, onChange, stretch = false }: Props) {
                 padding: "var(--sp-1) var(--sp-3)",
                 fontSize: "var(--fs-sm)",
                 fontWeight: 700,
-                color: "var(--accent-text)",
+                color: g.key === "overdue" ? "var(--danger, #e53935)" : "var(--accent-text)",
                 display: "flex",
                 alignItems: "center",
                 gap: "var(--sp-2)",
@@ -110,7 +114,7 @@ export function SomedayColumn({ tasks, onChange, stretch = false }: Props) {
                 ▾
               </span>
               {g.label}
-              <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted, fontWeight: 400 }}>
+              <span style={{ fontSize: "var(--fs-2xs)", color: g.key === "overdue" ? "var(--danger, #e53935)" : COLORS.muted, fontWeight: 400 }}>
                 {g.items.length}
               </span>
             </button>
@@ -128,12 +132,14 @@ export function SomedayColumn({ tasks, onChange, stretch = false }: Props) {
                 </div>
                 {/* Форма: «Далее/Готово» на мобильной клавиатуре добавляет
                     задачу сразу в эту группу (с соответствующим сроком). */}
-                <GroupAdd
-                  placeholder={g.placeholder}
-                  key={g.key}
-                  dueEpochDay={g.key === "week" ? today + 7 : g.key === "month" ? today + 30 : null}
-                  onChange={onChange}
-                />
+                {g.placeholder && (
+                  <GroupAdd
+                    placeholder={g.placeholder}
+                    key={g.key}
+                    dueEpochDay={g.key === "week" ? today + 7 : g.key === "month" ? today + 30 : null}
+                    onChange={onChange}
+                  />
+                )}
               </>
             )}
           </PlanGroup>
@@ -148,7 +154,11 @@ export function SomedayColumn({ tasks, onChange, stretch = false }: Props) {
  *  выигрывает у неё при наведении (pointerWithin — сначала точная зона под
  *  курсором), поэтому сброс на «неделю/месяц» задаёт срок, а не снимает его. */
 function PlanGroup({ groupKey, children }: { groupKey: GroupKey; children: ReactNode }) {
-  const { setNodeRef, isOver } = useDroppable({ id: planGroupZoneId(groupKey) });
+  const isDroppable = groupKey !== "overdue";
+  const { setNodeRef, isOver } = useDroppable({
+    id: isDroppable ? planGroupZoneId(groupKey) : `pg-disabled:${groupKey}`,
+    disabled: !isDroppable,
+  });
   return (
     <div
       ref={setNodeRef}

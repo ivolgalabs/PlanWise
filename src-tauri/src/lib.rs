@@ -154,13 +154,6 @@ pub fn run() {
                     let _ = w.hide();
                 }
             }
-            // Защита от не-оконного выхода (например, завершение системы):
-            // процесс держим, пока не разрешён явный выход.
-            tauri::RunEvent::ExitRequested { api, .. }
-                if !ALLOW_EXIT.load(std::sync::atomic::Ordering::SeqCst) =>
-            {
-                api.prevent_exit();
-            }
             // Клик по иконке в Dock — снова показать главное окно (оно скрыто,
             // а не уничтожено — пересоздание не нужно).
             #[cfg(target_os = "macos")]

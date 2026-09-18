@@ -254,11 +254,12 @@ export function TaskFormFields({
           setNewSub("");
           useStore.getState().bumpSubtasks();
         }
-        await api.upsertTask({ ...initial, ...payload });
         // Авто-выполнение при смене времени (настройка): прошлое → выполнена,
         // будущее → выполнение снимается. Только если время изменилось и у
         // задачи ЕСТЬ дата — «Когда-нибудь» (date=0 → 1970) не «прошлая»:
         // иначе установка времени помечала бы её выполненной.
+        // Рассчитываем итоговый статус выполнения ДО сохранения, избегая дублирующего IPC-вызова.
+        let finalDone = initial.isDone;
         const timeChanged = initial.timeMinutes !== time;
         if (
           autoDonePastTime &&
@@ -273,9 +274,10 @@ export function TaskFormFields({
           const past = toEpochDay(day) < today || (toEpochDay(day) === today && time <= nowMin);
           const future = toEpochDay(day) > today || (toEpochDay(day) === today && time > nowMin);
           if (past || future) {
-            await api.upsertTask({ ...initial, ...payload, isDone: past });
+            finalDone = past;
           }
         }
+        await api.upsertTask({ ...initial, ...payload, isDone: finalDone });
         onChange?.();
       } else {
         // Новая задача + подзадачи + файлы. Сначала создаём задачу (id нужен

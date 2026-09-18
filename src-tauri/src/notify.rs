@@ -427,13 +427,15 @@ fn reminder_events(app: &tauri::AppHandle, prefs: &NotifyPrefs) -> Vec<ReminderE
                 // (выезд = start - tt), т.е. раньше, чем само «пора выезжать».
                 if let Some(tn) = travel_notify {
                     if tn > 0 {
-                        let dep = (minutes - tt).max(0);
+                        let total_diff = minutes - tt;
+                        let dep = ((total_diff % 1440) + 1440) % 1440;
+                        let extra = if total_diff < 0 { " (накануне)" } else { "" };
                         out.push(ReminderEvent {
                             kind: "travel_prepare",
                             task_id: id.clone(),
                             due: due_at(start, tt + tn),
                             title: "Пора собираться",
-                            body: format!("«{title}» — выезд в {:02}:{:02}", dep / 60, dep % 60),
+                            body: format!("«{title}» — выезд в {:02}:{:02}{extra}", dep / 60, dep % 60),
                         });
                     }
                 }
@@ -598,23 +600,25 @@ fn sync_scheduled(app: &tauri::AppHandle, prefs: &NotifyPrefs) {
     let mut expected: HashSet<i32> = HashSet::new();
     let now = Local::now().naive_local();
 
-    // 1. Утренний дайджест: одноразовое At на сегодняшний час (пока не
-    // наступил). InboxStyle-список всех задач дня с временем. Тело считается
-    // в момент планирования — задачи на день актуальны. Пустой день не
-    // планируем вовсе (не спамим).
+    // 1. Утренний дайджест: одноразовое At на сегодняшний час (если не наступил)
+    // ИЛИ на завтра (если сегодня уже прошло). Завтрашний дайджест планируется
+    // заранее, чтобы AlarmManager сработал утром даже если устройство спало всю ночь.
     if prefs.day_summary {
-        if let Some(ts) = Local::now()
-            .date_naive()
-            .and_hms_opt(prefs.day_summary_hour as u32, 0, 0)
-        {
-            if ts > now {
+        let now_date = Local::now().date_naive();
+        let today_ts = now_date.and_hms_opt(prefs.day_summary_hour as u32, 0, 0);
+        let target = if today_ts.is_some_and(|ts| ts > now) {
+            today_ts.map(|ts| (ts, crate::commands::today_epoch_day()))
+        } else {
+            now_date
+                .checked_add_days(chrono::Days::new(1))
+                .and_then(|d| d.and_hms_opt(prefs.day_summary_hour as u32, 0, 0))
+                .map(|ts| (ts, crate::commands::date_to_epoch(ts.date())))
+        };
+        if let Some((ts, target_epoch)) = target {
+            let tasks = day_task_rows(app, target_epoch);
+            if !tasks.is_empty() {
                 expected.insert(DIGEST_NOTIFICATION_ID);
-                if !pending_ids.contains(&DIGEST_NOTIFICATION_ID) {
-                    let tasks = today_task_rows(app);
-                    if !tasks.is_empty() {
-                        schedule_digest(app, ts, &tasks);
-                    }
-                }
+                schedule_digest(app, ts, &tasks);
             }
         }
     }
@@ -658,20 +662,15 @@ fn today_titles(app: &tauri::AppHandle) -> Vec<String> {
     today_task_rows(app).into_iter().map(|(t, _)| t).collect()
 }
 
-/// Строки невыполненных задач на сегодня: заголовок + время. Порядок — как
-/// в виджете: сначала задачи с временем (по времени), затем без.
-fn today_task_rows(app: &tauri::AppHandle) -> Vec<(String, Option<i64>)> {
-    let today_epoch = crate::commands::today_epoch_day();
+/// Строки невыполненных задач на указанную дату (epoch-day): заголовок + время.
+fn day_task_rows(app: &tauri::AppHandle, date_epoch: i64) -> Vec<(String, Option<i64>)> {
     let db = app.state::<Db>();
-    // db.lock() — poison-safe (возвращает данные даже при отравленном мьютексе,
-    // см. Db::lock); db.0.lock().unwrap() падал бы на каждом тике после паники
-    // в другом потоке, хоть tick() и ловит её через catch_unwind.
     let conn = db.lock();
     conn.prepare(
       "SELECT title, time_minutes FROM tasks WHERE date = ?1 AND is_done = 0 AND archived = 0 AND someday = 0 ORDER BY (time_minutes IS NULL) ASC, time_minutes ASC, sort_order ASC, created_at ASC",
     )
     .and_then(|mut stmt| {
-        stmt.query_map([today_epoch], |r| {
+        stmt.query_map([date_epoch], |r| {
             Ok((r.get::<_, String>(0)?, r.get::<_, Option<i64>>(1)?))
         })
         .and_then(|it| it.collect::<Result<Vec<_>, _>>())
@@ -679,11 +678,19 @@ fn today_task_rows(app: &tauri::AppHandle) -> Vec<(String, Option<i64>)> {
     .unwrap_or_default()
 }
 
-/// Утренний дайджест (десктоп): в назначенный час (окно 2 минуты) — задачи
-/// на сегодня. На Android вместо этого используется OS-планирование.
+/// Строки невыполненных задач на сегодня: заголовок + время. Порядок — как
+/// в виджете: сначала задачи с временем (по времени), затем без.
+fn today_task_rows(app: &tauri::AppHandle) -> Vec<(String, Option<i64>)> {
+    day_task_rows(app, crate::commands::today_epoch_day())
+}
+
+/// Утренний дайджест (десктоп): в назначенный час (или в течение первой половины дня,
+/// если Mac проснулся позже назначенного часа) — задачи на сегодня.
 #[cfg(not(target_os = "android"))]
 fn check_digest(app: &tauri::AppHandle, prefs: &NotifyPrefs, now: NaiveDateTime) {
-    if now.hour() != prefs.day_summary_hour as u32 || now.minute() > 2 {
+    let target_hour = prefs.day_summary_hour as u32;
+    // Срабатывает в назначенный час или после него до 14:00 (если ноутбук спал в час дайджеста)
+    if now.hour() < target_hour || now.hour() >= 14 {
         return;
     }
     let key = format!("digest|{}", now.date());
@@ -806,8 +813,8 @@ fn check_reminders(app: &tauri::AppHandle, prefs: &NotifyPrefs, now: NaiveDateTi
     // уведомление вместо всех глобальных). Если задано travel_time — дополнительно
     // «Пора выезжать» за это время до начала.
     for ev in reminder_events(app, prefs) {
-        // Окно отправки: 2 минуты после наступления момента.
-        if now < ev.due || now > ev.due + chrono::Duration::minutes(2) {
+        // Окно отправки: до 15 минут после наступления момента (на случай выхода Mac из сна).
+        if now < ev.due || now > ev.due + chrono::Duration::minutes(15) {
             continue;
         }
         // Ключ дедупликации: id + момент due достаточны — разные интервалы
