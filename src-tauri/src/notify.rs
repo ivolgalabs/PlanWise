@@ -700,6 +700,7 @@ fn day_task_rows(app: &tauri::AppHandle, date_epoch: i64) -> Vec<(String, Option
 
 /// Строки невыполненных задач на сегодня: заголовок + время. Порядок — как
 /// в виджете: сначала задачи с временем (по времени), затем без.
+#[cfg(not(target_os = "android"))]
 fn today_task_rows(app: &tauri::AppHandle) -> Vec<(String, Option<i64>)> {
     day_task_rows(app, crate::commands::today_epoch_day())
 }
