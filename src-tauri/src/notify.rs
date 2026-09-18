@@ -318,15 +318,18 @@ fn tick(app: &tauri::AppHandle) {
     // изменении задач (write_widget_data), а здесь достаточно поймать смену
     // даты (иначе утром виджет показывал бы вчерашний список).
     let today = crate::commands::today_epoch_day();
-    let mut last = widget_day().lock().unwrap();
+    let last = widget_day().lock().unwrap();
     if *last != today {
-        *last = today;
         drop(last);
         let state = app.state::<Db>();
         // Тему берём из предыдущей записи виджета: планировщик не знает
         // настройки темы фронтенда (она в localStorage WebView).
         let dark = crate::commands::read_widget_dark(app);
-        let _ = crate::commands::refresh_widget(app, &state, dark);
+        // Штамп дня — только после успешной записи: при сбое виджет покажет
+        // вчерашний список, но попытка повторится на следующем тике.
+        if crate::commands::refresh_widget(app, &state, dark).is_ok() {
+            *widget_day().lock().unwrap() = today;
+        }
     }
     let prefs = load_prefs(app);
     if !prefs.day_summary && !prefs.reminders {
@@ -429,13 +432,21 @@ fn reminder_events(app: &tauri::AppHandle, prefs: &NotifyPrefs) -> Vec<ReminderE
                     if tn > 0 {
                         let total_diff = minutes - tt;
                         let dep = ((total_diff % 1440) + 1440) % 1440;
-                        let extra = if total_diff < 0 { " (накануне)" } else { "" };
+                        let extra = if total_diff < 0 {
+                            " (накануне)"
+                        } else {
+                            ""
+                        };
                         out.push(ReminderEvent {
                             kind: "travel_prepare",
                             task_id: id.clone(),
                             due: due_at(start, tt + tn),
                             title: "Пора собираться",
-                            body: format!("«{title}» — выезд в {:02}:{:02}{extra}", dep / 60, dep % 60),
+                            body: format!(
+                                "«{title}» — выезд в {:02}:{:02}{extra}",
+                                dep / 60,
+                                dep % 60
+                            ),
                         });
                     }
                 }
@@ -615,10 +626,19 @@ fn sync_scheduled(app: &tauri::AppHandle, prefs: &NotifyPrefs) {
                 .map(|ts| (ts, crate::commands::date_to_epoch(ts.date())))
         };
         if let Some((ts, target_epoch)) = target {
-            let tasks = day_task_rows(app, target_epoch);
-            if !tasks.is_empty() {
+            // Guard по pending_ids (как у напоминаний ниже): дайджест
+            // перепланируется только когда его аларма ещё не стоит, а не
+            // на каждом 60-секундном тике (JNI-вызов + перезапись хранилища
+            // плагина). Контент фиксируется на момент планирования — так же,
+            // как у напоминаний.
+            if !pending_ids.contains(&DIGEST_NOTIFICATION_ID) {
+                let tasks = day_task_rows(app, target_epoch);
+                if !tasks.is_empty() {
+                    expected.insert(DIGEST_NOTIFICATION_ID);
+                    schedule_digest(app, ts, &tasks);
+                }
+            } else {
                 expected.insert(DIGEST_NOTIFICATION_ID);
-                schedule_digest(app, ts, &tasks);
             }
         }
     }
@@ -689,8 +709,11 @@ fn today_task_rows(app: &tauri::AppHandle) -> Vec<(String, Option<i64>)> {
 #[cfg(not(target_os = "android"))]
 fn check_digest(app: &tauri::AppHandle, prefs: &NotifyPrefs, now: NaiveDateTime) {
     let target_hour = prefs.day_summary_hour as u32;
-    // Срабатывает в назначенный час или после него до 14:00 (если ноутбук спал в час дайджеста)
-    if now.hour() < target_hour || now.hour() >= 14 {
+    // Срабатывает в назначенный час или в течение 6 часов после (если ноутбук
+    // спал в час дайджеста). Окно считается от настроенного часа: при часе ≥ 14
+    // у захардкоженной границы «до 14:00» дайджест молча не приходил никогда.
+    let window_end = (target_hour + 6).min(24);
+    if now.hour() < target_hour || now.hour() >= window_end {
         return;
     }
     let key = format!("digest|{}", now.date());

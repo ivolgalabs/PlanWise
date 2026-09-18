@@ -8,6 +8,7 @@ import { TaskCard } from "./TaskCard";
 import { somedayZoneId, planGroupZoneId } from "../drag";
 import { useStore } from "../store";
 import { sortSomedayTasks, toEpochDay } from "../date";
+import { showToast } from "../toast";
 
 interface Props {
   tasks: Task[];
@@ -192,8 +193,12 @@ function GroupAdd({
   const add = async () => {
     const t = value.trim();
     if (!t) return;
-    await api.upsertTask({ title: t, date: 0, someday: true, dueEpochDay });
-    setValue("");
+    try {
+      await api.upsertTask({ title: t, date: 0, someday: true, dueEpochDay });
+      setValue("");
+    } catch (e) {
+      showToast(`Не удалось сохранить задачу: ${e}`);
+    }
     onChange();
   };
   return (

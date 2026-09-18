@@ -2,6 +2,7 @@ import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react"
 import { api, isTauri } from "./api";
 import type { Task } from "./api";
 import { useStore } from "./store";
+import { useShallow } from "zustand/react/shallow";
 import { resolveActiveTheme } from "./store";
 import type { ViewKind } from "./store";
 import { COLORS, applyTheme, watchSystemTheme, accentTint, applyCustomSlot } from "./theme";
@@ -78,6 +79,8 @@ const scheduleWidgetWrite = (dark: boolean) => {
 };
 
 function App() {
+  // useShallow: подписка только на перечисленные поля (а не на весь стор) —
+  // иначе любой bump (subtaskRev, autoSyncLastAt) перерисовывал бы всё дерево.
   const {
     selectedDate,
     weekDate,
@@ -108,7 +111,39 @@ function App() {
     setPreventOverlaps,
     focusTaskId,
     setFocusTask,
-  } = useStore();
+  } = useStore(
+    useShallow((s) => ({
+      selectedDate: s.selectedDate,
+      weekDate: s.weekDate,
+      monthDate: s.monthDate,
+      view: s.view,
+      tasks: s.tasks,
+      archivedTasks: s.archivedTasks,
+      mondayFirst: s.mondayFirst,
+      themeMode: s.themeMode,
+      preferredLightTheme: s.preferredLightTheme,
+      preferredDarkTheme: s.preferredDarkTheme,
+      useOledForDarkMode: s.useOledForDarkMode,
+      customLight: s.customLight,
+      customDark: s.customDark,
+      uiScale: s.uiScale,
+      fontScale: s.fontScale,
+      archiveEnabled: s.archiveEnabled,
+      visibility: s.visibility,
+      weekVertical: s.weekVertical,
+      setWeekVertical: s.setWeekVertical,
+      setSelectedDate: s.setSelectedDate,
+      setWeekDate: s.setWeekDate,
+      setMonthDate: s.setMonthDate,
+      setView: s.setView,
+      setTasks: s.setTasks,
+      setArchivedTasks: s.setArchivedTasks,
+      setColorSets: s.setColorSets,
+      setPreventOverlaps: s.setPreventOverlaps,
+      focusTaskId: s.focusTaskId,
+      setFocusTask: s.setFocusTask,
+    })),
+  );
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [datePickerOpen, setDatePickerOpen] = useState(false);
@@ -269,12 +304,15 @@ function App() {
   // uiScale уже учтён выше — этот эффект убран в пользу единой формулы.)
 
   // Настройки уведомлений → Rust-планировщик (при старте и при изменении).
-  const {
-    notifyDaySummary,
-    notifyDayHour,
-    notifyReminders,
-    notifyRemindMinutes,
-  } = useStore();
+  const { notifyDaySummary, notifyDayHour, notifyReminders, notifyRemindMinutes } =
+    useStore(
+      useShallow((s) => ({
+        notifyDaySummary: s.notifyDaySummary,
+        notifyDayHour: s.notifyDayHour,
+        notifyReminders: s.notifyReminders,
+        notifyRemindMinutes: s.notifyRemindMinutes,
+      })),
+    );
   useEffect(() => {
     import("@tauri-apps/api/core")
       .then(({ invoke }) =>
@@ -337,6 +375,7 @@ function App() {
   // seq-счётчик защищает от гонки: быстрые изменения задач запускают несколько
   // reload'ов, и устаревший ответ не должен перетирать свежие данные.
   const reloadSeq = useRef(0);
+  const milestoneSent = useRef(false);
   const reload = useCallback(async () => {
     const seq = ++reloadSeq.current;
     // Обычные задачи (широкий диапазон для календаря) + «Когда-нибудь» +
@@ -350,6 +389,17 @@ function App() {
       if (seq !== reloadSeq.current) return; // ответ устарел — пропускаем
       setTasks([...regular, ...someday]);
       setArchivedTasks(archived);
+      // Метка холодного старта: данные отрисованы (в журнал диагностики
+      // пишется один раз за процесс — «не запустилось с первого раза»
+      // различает «процесс не стартовал» и «стартовал, но завис до данных»).
+      if (!milestoneSent.current && isTauri()) {
+        milestoneSent.current = true;
+        import("@tauri-apps/api/core")
+          .then(({ invoke }) =>
+            invoke("startup_milestone", { name: "tasks-loaded" }).catch(() => {}),
+          )
+          .catch(() => {});
+      }
     } catch (e) {
       // Сбой БД/загрузки — не оставляем пользователя с «пустым» приложением
       // без объяснения: показываем заглушку-предупреждение.
@@ -657,6 +707,10 @@ function App() {
                   onJumpToDay={(d) => {
                     setSelectedDate(d);
                     setView("day");
+                    // Сброс фильтров + закрытие поиска: иначе searchActive
+                    // остался бы true и SearchResults заменил бы собой день.
+                    resetSearch();
+                    setSearchOpen(false);
                   }}
                   onChange={reload}
                   onResetFilters={() => {

@@ -13,6 +13,7 @@ import { COLORS, accentTint } from "../theme";
 import { useStore, type TaskPattern } from "../store";
 import { createTaskFromPattern } from "../api";
 import { dayId } from "../drag";
+import { showToast } from "../toast";
 
 interface Props {
   tasks: Task[];
@@ -50,8 +51,12 @@ export function WeekViewVertical({ tasks, archivedTasks, mobileSections, anchor,
   const addTask = async (d: Date) => {
     const title = (titlesByDay[dayKey(d)] ?? "").trim();
     if (!title) return;
-    await api.upsertTask({ title, date: toEpochDay(d) });
-    setTitlesByDay((m) => ({ ...m, [dayKey(d)]: "" }));
+    try {
+      await api.upsertTask({ title, date: toEpochDay(d) });
+      setTitlesByDay((m) => ({ ...m, [dayKey(d)]: "" }));
+    } catch (e) {
+      showToast(`Не удалось сохранить задачу: ${e}`);
+    }
     onChange();
   };
 
@@ -59,7 +64,12 @@ export function WeekViewVertical({ tasks, archivedTasks, mobileSections, anchor,
     const dayTasks = tasksForDay(tasks, day, sortMode);
     const after = dayTasks.find((t) => t.id === afterId);
     const sort = after ? after.sortOrder + 1 : Date.now();
-    await api.upsertTask({ title: "", date: toEpochDay(day), sortOrder: sort });
+    try {
+      await api.upsertTask({ title: "", date: toEpochDay(day), sortOrder: sort });
+    } catch (e) {
+      showToast(`Не удалось создать задачу: ${e}`);
+      return;
+    }
     onChange();
     requestAnimationFrame(() => {
       // Ищем пустую строку ТОЛЬКО в контейнере своего дня — чтобы фокус

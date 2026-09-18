@@ -155,7 +155,9 @@ export function SearchResults({ tasks, query, color, period, status, sort, from,
       </div>
       {filtered.map((t) => {
         const d = fromEpochDay(t.date);
-        const past = isPast(d);
+        // «Когда-нибудь» (date=0 → 1970) просроченной не бывает: «прошлое»
+        // берём у мягкого срока, а без него задача всегда актуальна.
+        const past = t.someday ? (t.dueEpochDay != null && isPast(fromEpochDay(t.dueEpochDay))) : isPast(d);
         return (
           <div
             key={t.id}

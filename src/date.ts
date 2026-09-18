@@ -209,6 +209,66 @@ export const hasTimeConflict = (
   );
 };
 
+/** Карта конфликтов: id задачи → id первой пересекающейся с ней. Строится
+ *  один раз на конкретный массив задач (WeakMap) — иначе каждая карточка
+ *  сканировала весь массив задач при каждом изменении стора
+ *  (O(карточек × задач) на любое изменение). */
+const conflictCache = new WeakMap<
+  Array<{
+    id: string;
+    date: number;
+    timeMinutes?: number | null;
+    durationMinutes?: number | null;
+    isDone?: boolean;
+    archived?: boolean;
+    someday?: boolean;
+  }>,
+  Map<string, string>
+>();
+
+export function conflictIdFor(
+  tasks: Array<{
+    id: string;
+    date: number;
+    timeMinutes?: number | null;
+    durationMinutes?: number | null;
+    isDone?: boolean;
+    archived?: boolean;
+    someday?: boolean;
+  }>,
+  task: { id: string; timeMinutes?: number | null; isDone?: boolean },
+): string | null {
+  if (task.timeMinutes == null || task.isDone) return null;
+  let map = conflictCache.get(tasks);
+  if (!map) {
+    map = new Map();
+    const active = tasks.filter(
+      (t) => !t.isDone && !t.archived && !t.someday && t.timeMinutes != null,
+    );
+    for (let i = 0; i < active.length; i++) {
+      const a = active[i]!;
+      for (let j = i + 1; j < active.length; j++) {
+        const b = active[j]!;
+        if (a.date !== b.date) continue;
+        if (
+          !intervalsOverlap(
+            a.timeMinutes!,
+            a.durationMinutes ?? 0,
+            b.timeMinutes!,
+            b.durationMinutes ?? 0,
+          )
+        ) {
+          continue;
+        }
+        if (!map.has(a.id)) map.set(a.id, b.id);
+        if (!map.has(b.id)) map.set(b.id, a.id);
+      }
+    }
+    conflictCache.set(tasks, map);
+  }
+  return map.get(task.id) ?? null;
+}
+
 /** Время задачи для бейджа: «09:00» или «09:00–10:30» (+N дн. при переходе
  *  через полночь); null — время не задано. */
 export const taskTimeRange = (t: {

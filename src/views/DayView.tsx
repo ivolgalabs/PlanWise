@@ -12,6 +12,7 @@ import { dayId } from "../drag";
 import { isToday, formatMinutes, toEpochDay, tasksForDay } from "../date";
 import { useMediaQuery } from "../useMediaQuery";
 import { useStore, type TaskPattern } from "../store";
+import { showToast } from "../toast";
 import { createTaskFromPattern } from "../api";
 
 interface Props {
@@ -48,8 +49,13 @@ export function DayView({ day, tasks, archivedTasks, onChange }: Props) {
   const addTask = async () => {
     const t = newTitle.trim();
     if (!t) return;
-    await api.upsertTask({ title: t, date: epochDay });
-    setNewTitle("");
+    try {
+      await api.upsertTask({ title: t, date: epochDay });
+      setNewTitle("");
+    } catch (e) {
+      // Текст не стираем — после сбоя можно повторить сохранение.
+      showToast(`Не удалось сохранить задачу: ${e}`);
+    }
     onChange();
     requestAnimationFrame(() => newInputRef.current?.focus());
   };
@@ -57,7 +63,12 @@ export function DayView({ day, tasks, archivedTasks, onChange }: Props) {
   const createNext = async (afterId: string) => {
     const after = dayTasks.find((t) => t.id === afterId);
     const sort = after ? after.sortOrder + 1 : Date.now();
-    await api.upsertTask({ title: "", date: epochDay, sortOrder: sort });
+    try {
+      await api.upsertTask({ title: "", date: epochDay, sortOrder: sort });
+    } catch (e) {
+      showToast(`Не удалось создать задачу: ${e}`);
+      return;
+    }
     onChange();
     requestAnimationFrame(() => {
       // Ищем пустую строку ТОЛЬКО в контейнере своего дня (data-day-key) —

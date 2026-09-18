@@ -42,7 +42,9 @@ export const browserApi = {
   },
   async upsertTask(task: Task): Promise<Task> {
     const id = task.id || crypto.randomUUID();
-    const rec: Task = { ...task, id, notes: task.notes ?? "", someday: task.someday ?? false, archived: task.archived ?? false };
+    // updatedAt ставим при каждом сохранении — как Rust-бэкенд (иначе
+    // сортировка архива по updated_at разъезжается между режимами).
+    const rec: Task = { ...task, id, notes: task.notes ?? "", someday: task.someday ?? false, archived: task.archived ?? false, updatedAt: Date.now() };
     const all = load<Task>(K.tasks).filter((t) => t.id !== id);
     all.push(rec);
     save(K.tasks, all);

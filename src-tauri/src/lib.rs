@@ -85,6 +85,7 @@ pub fn run() {
             // напоминания за N минут до задач со временем. Пересчитывает
             // расписание при старте и при изменении настроек/задач.
             notify::start_scheduler(app.handle().clone());
+            core_base::diagnostics::record("start: setup done");
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -104,6 +105,7 @@ pub fn run() {
             commands::upsert_subtask,
             commands::delete_subtask,
             commands::exit_app,
+            commands::startup_milestone,
             // Экспорт/импорт через JSON-строку: файловый ввод-вывод делает
             // tauri-plugin-fs (на Android умеет content:// из системных
             // диалогов, где std::fs не работает).
@@ -143,7 +145,7 @@ pub fn run() {
             // Закрытие последнего окна НЕ завершает процесс: окно скрывается,
             // приложение остаётся в фоне (Dock), чтобы работали напоминания
             // и утренний дайджест. Явный выход — Cmd+Q или кнопка «Выйти»
-            // в настройках (exit_app ставит флаг ALLOW_EXIT).
+            // в настройках (exit_app).
             tauri::RunEvent::WindowEvent {
                 label,
                 event: tauri::WindowEvent::CloseRequested { api, .. },
@@ -165,12 +167,4 @@ pub fn run() {
             }
             _ => {}
         });
-}
-
-/// Флаг «разрешено выйти»: ставится перед явным выходом (exit_app), чтобы
-/// RunEvent::ExitRequested не был отклонён prevent_exit.
-pub static ALLOW_EXIT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-
-pub fn request_exit() {
-    ALLOW_EXIT.store(true, std::sync::atomic::Ordering::SeqCst);
 }

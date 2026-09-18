@@ -30,6 +30,7 @@ import type { Task, Subtask } from "./api";
 import { api } from "./api";
 import { fromEpochDay, toEpochDay } from "./date";
 import { COLORS, setHex as setHexOf } from "./theme";
+import { showToast } from "./toast";
 import { useStore } from "./store";
 
 /** id droppable-зоны дня по epoch-day (основные зоны: колонки/строки/ячейки). */
@@ -266,13 +267,20 @@ export function TaskDndContext({ children, onChange }: TaskDndContextProps) {
     const { subtask, date } = pending;
     setPending(null);
     // Создаём самостоятельную задачу из подзадачи, затем удаляем подзадачу.
-    await api.upsertTask({
-      title: subtask.title,
-      date,
-      isDone: subtask.isDone,
-      sortOrder: Date.now(),
-    });
-    await api.deleteSubtask(subtask.id);
+    // Не атомарно: при сбое между шагами подзадача останется на месте —
+    // дубликата данных не будет, пользователь повторит действие.
+    try {
+      await api.upsertTask({
+        title: subtask.title,
+        date,
+        isDone: subtask.isDone,
+        sortOrder: Date.now(),
+      });
+      await api.deleteSubtask(subtask.id);
+    } catch (e) {
+      showToast(`Не удалось создать задачу из подзадачи: ${e}`);
+      return;
+    }
     // Перечитаем списки подзадач: у старого родителя промоутнутая подзадача
     // не должна оставаться висеть до перезагрузки приложения.
     useStore.getState().bumpSubtasks();

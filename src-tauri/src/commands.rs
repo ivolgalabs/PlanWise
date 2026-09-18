@@ -123,38 +123,37 @@ pub fn get_tasks(state: State<'_, Db>, start_day: i64, end_day: i64) -> Result<V
 
 #[tauri::command]
 pub fn upsert_task(state: State<'_, Db>, mut task: Task) -> Result<Task, String> {
-    {
-        let conn = state.lock();
-        // Правка текста/заметки существующей задачи — время не меняется:
-        // такое пересохранение не проверяем (иначе старые конфликты не дали
-        // бы редактировать текст, а свои же конфликтные задачи не исправить).
-        let same_as_db: bool = conn
-            .query_row(
-                "SELECT time_minutes, duration_minutes, date FROM tasks WHERE id = ?1",
-                [&task.id],
-                |r| {
-                    Ok((
-                        r.get::<_, Option<i64>>(0)?,
-                        r.get::<_, Option<i64>>(1)?,
-                        r.get::<_, i64>(2)?,
-                    ))
-                },
-            )
-            .map(|(tm, dur, date)| {
-                tm == task.time_minutes.map(|v| v as i64)
-                    && dur == task.duration_minutes.map(|v| v as i64)
-                    && date == task.date
-            })
-            .unwrap_or(false); // id нет в БД — это новая задача, проверяем
-        if !same_as_db {
-            // Запрет наложений: если настройка включена, не даём сохранить
-            // задачу на время, пересекающееся с другой задачей того же дня.
-            // Проверка на сервере — все пути сохранения (ввод, шаблоны,
-            // импорт) проходят сюда.
-            check_time_overlap(&conn, &task)?;
-        }
-    }
+    // Одна блокировка на проверку и вставку: иначе два параллельных
+    // сохранения могли бы оба пройти проверку наложений и вставить конфликт.
     let conn = state.lock();
+    // Правка текста/заметки существующей задачи — время не меняется:
+    // такое пересохранение не проверяем (иначе старые конфликты не дали
+    // бы редактировать текст, а свои же конфликтные задачи не исправить).
+    let same_as_db: bool = conn
+        .query_row(
+            "SELECT time_minutes, duration_minutes, date FROM tasks WHERE id = ?1",
+            [&task.id],
+            |r| {
+                Ok((
+                    r.get::<_, Option<i64>>(0)?,
+                    r.get::<_, Option<i64>>(1)?,
+                    r.get::<_, i64>(2)?,
+                ))
+            },
+        )
+        .map(|(tm, dur, date)| {
+            tm == task.time_minutes.map(|v| v as i64)
+                && dur == task.duration_minutes.map(|v| v as i64)
+                && date == task.date
+        })
+        .unwrap_or(false); // id нет в БД — это новая задача, проверяем
+    if !same_as_db {
+        // Запрет наложений: если настройка включена, не даём сохранить
+        // задачу на время, пересекающееся с другой задачей того же дня.
+        // Проверка на сервере — все пути сохранения (ввод, шаблоны,
+        // импорт) проходят сюда.
+        check_time_overlap(&conn, &task)?;
+    }
     if task.id.is_empty() {
         task.id = Uuid::new_v4().to_string();
     }
@@ -818,18 +817,43 @@ fn import_from_string(
 }
 
 /// Закрывает приложение (системная кнопка «назад» на Android, кнопка «Выйти»
-/// в настройках на десктопе). Сначала разрешаем выход: run-цикл в lib.rs
-/// отклоняет ExitRequested, пока процесс держат уведомления.
+/// в настройках на десктопе).
 #[tauri::command]
 pub fn exit_app(app: tauri::AppHandle) {
-    crate::request_exit();
     app.exit(0);
+}
+
+/// Метка этапа холодного старта — в кольцевой журнал диагностики. Фронтенд
+/// отмечает «tasks-loaded»; по журналу после жалобы «не запустилось с первого
+/// раза» видно, докуда дошёл старт (нет записи «старт» — процесс не
+/// поднимался, записи обрываются — завис на конкретном этапе).
+#[tauri::command]
+pub fn startup_milestone(name: String) {
+    core_base::diagnostics::record(format!("start: {name}"));
+}
+
+/// Имя файла автосинхронизации. Путь всегда фиксирует это имя (фронтенд
+/// дописывает его к папке, выбранной пользователем в диалоге), поэтому
+/// команды принимают только его: произвольное чтение/запись файлов из
+/// webview невозможны даже при компрометации рендерера.
+const SYNC_FILE_NAME: &str = "daily-planner-sync.json";
+
+/// Проверка пути из фронтенда: разрешено только <папка>/<SYNC_FILE_NAME>.
+fn ensure_sync_path(path: &str) -> Result<(), String> {
+    match std::path::Path::new(path)
+        .file_name()
+        .and_then(|n| n.to_str())
+    {
+        Some(SYNC_FILE_NAME) => Ok(()),
+        _ => Err("Недопустимый путь файла синхронизации".to_string()),
+    }
 }
 
 /// Прочитать файл автосинхронизации (полный путь — как выбрал пользователь).
 /// None, если файла нет или он не читается — фронт тихо пропускает проверку.
 #[tauri::command]
 pub fn read_sync_file(path: String) -> Option<String> {
+    ensure_sync_path(&path).ok()?;
     std::fs::read_to_string(&path).ok()
 }
 
@@ -837,6 +861,7 @@ pub fn read_sync_file(path: String) -> Option<String> {
 /// content:// из системных диалогов std::fs не понимает (там — ручной экспорт).
 #[tauri::command]
 pub fn write_sync_file(path: String, content: String) -> Result<(), String> {
+    ensure_sync_path(&path)?;
     // Создаём каталог, если пользователь выбрал ещё не существующую папку.
     if let Some(dir) = std::path::Path::new(&path).parent() {
         let _ = std::fs::create_dir_all(dir);
@@ -993,27 +1018,9 @@ pub fn refresh_widget(
                 })
                 .unwrap_or_default()
         };
-    // Сегодня — до 8 задач (Android-виджет и день на macOS).
-    // Лимит 4 в неделе: остальное — в приложении.
-    let tasks = query_by_day(&conn, today, 8);
-    // Неделя: 7 дней с сегодня, до 4 задач на день (самые значимые: сначала
-    // с временем, затем по приоритету) — для виджета «Неделя».
-    let week: Vec<serde_json::Value> = (0..7)
-        .map(|off| {
-            let day = today + off;
-            let day_tasks = query_by_day(&conn, day, 4);
-            serde_json::json!({ "date": day, "tasks": day_tasks })
-        })
-        .collect();
-    // «Когда-нибудь» — задачи без даты, до 8 (без параметров).
-    let someday: Vec<serde_json::Value> = conn
-        .prepare("SELECT id, title, time_minutes, is_done FROM tasks WHERE someday = 1 AND archived = 0 ORDER BY (time_minutes IS NULL) ASC, time_minutes ASC, difficulty DESC, sort_order ASC, created_at ASC LIMIT 8")
-        .and_then(|mut stmt| stmt.query_map([], task_row).and_then(|it| it.collect::<Result<Vec<_>, _>>()))
-        .unwrap_or_default();
-    // Окно дней для интерактивного виджета «День»: вчера..+13, до 8 задач на
-    // день. Стрелки ‹ › в виджете переключают показанный день без захода
-    // в приложение; данные уже все в файле, запрос не нужен. +13 — чтобы
-    // задачи, добавленные через «Другая дата», были видны в виджете.
+    // Окно дней для интерактивного виджета «День»: вчера..+13 (задачи,
+    // добавленные через «Другая дата», тоже видны), до 8 задач на день.
+    // Стрелки ‹ › в виджете переключают день без захода в приложение.
     let day_window: Vec<serde_json::Value> = (-1..=13)
         .map(|off| {
             let day = today + off;
@@ -1021,6 +1028,24 @@ pub fn refresh_widget(
             serde_json::json!({ "date": day, "tasks": day_tasks })
         })
         .collect();
+    let tasks = day_window[1]["tasks"].clone();
+    // Сегодня и неделя — срезы того же окна: ORDER BY одинаков, поэтому
+    // первые K строк выборки LIMIT 8 = выборка LIMIT K. Экономит 8 запросов.
+    let week: Vec<serde_json::Value> = day_window[1..8]
+        .iter()
+        .map(|d| {
+            let mut w = d.clone();
+            if let Some(arr) = w.get_mut("tasks").and_then(|t| t.as_array_mut()) {
+                arr.truncate(4);
+            }
+            w
+        })
+        .collect();
+    // «Когда-нибудь» — задачи без даты, до 8 (без параметров).
+    let someday: Vec<serde_json::Value> = conn
+        .prepare("SELECT id, title, time_minutes, is_done FROM tasks WHERE someday = 1 AND archived = 0 ORDER BY (time_minutes IS NULL) ASC, time_minutes ASC, difficulty DESC, sort_order ASC, created_at ASC LIMIT 8")
+        .and_then(|mut stmt| stmt.query_map([], task_row).and_then(|it| it.collect::<Result<Vec<_>, _>>()))
+        .unwrap_or_default();
     let payload = serde_json::json!({
         "date": today,
         "tasks": tasks,
@@ -1201,17 +1226,20 @@ pub fn add_attachment(
     let stored = format!("{}.{}", Uuid::new_v4().simple(), safe_ext(&file_name));
     let dir = attachments_dir(&app);
     // Проверяем, что задача существует, ДО записи файла: иначе при сбое
-    // INSERT (FK) файл остался бы сиротой на диске.
-    let conn = state.lock();
-    let exists: bool = conn
-        .query_row(
-            "SELECT COUNT(*) > 0 FROM tasks WHERE id = ?1",
-            [&task_id],
-            |r| r.get(0),
-        )
-        .map_err(|e| e.to_string())?;
-    if !exists {
-        return Err("Задача не найдена".to_string());
+    // INSERT (FK) файл остался бы сиротой на диске. Блокировку держим только
+    // на проверку: запись 25 МБ на диск не должна останавливать запросы UI.
+    {
+        let conn = state.lock();
+        let exists: bool = conn
+            .query_row(
+                "SELECT COUNT(*) > 0 FROM tasks WHERE id = ?1",
+                [&task_id],
+                |r| r.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+        if !exists {
+            return Err("Задача не найдена".to_string());
+        }
     }
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     std::fs::write(dir.join(&stored), &data).map_err(|e| e.to_string())?;
@@ -1224,6 +1252,7 @@ pub fn add_attachment(
         size: data.len() as i64,
         created_at: now_ms(),
     };
+    let conn = state.lock();
     let res = conn.execute(
         "INSERT INTO attachments (id, task_id, file_name, mime, size, stored_name, created_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",

@@ -6,6 +6,7 @@ import { COLORS } from "../theme";
 import { Icon } from "./Icon";
 import { subtaskDragId } from "../drag";
 import { useSubtasks } from "../useSubtasks";
+import { showToast } from "../toast";
 
 interface Props {
   taskId: string;
@@ -28,13 +29,21 @@ export function SubtaskList({ taskId }: Props) {
   const add = async () => {
     const t = newTitle.trim();
     if (!t) return;
-    await api.upsertSubtask({ taskId, title: t });
-    setNewTitle("");
+    try {
+      await api.upsertSubtask({ taskId, title: t });
+      setNewTitle("");
+    } catch (e) {
+      showToast(`Не удалось добавить подзадачу: ${e}`);
+    }
     reload();
   };
 
   const toggle = async (s: Subtask) => {
-    await api.upsertSubtask({ ...s, isDone: !s.isDone });
+    try {
+      await api.upsertSubtask({ ...s, isDone: !s.isDone });
+    } catch (e) {
+      showToast(`Не удалось отметить подзадачу: ${e}`);
+    }
     reload();
   };
 
@@ -63,7 +72,11 @@ export function SubtaskList({ taskId }: Props) {
           subtask={s}
           onToggle={() => toggle(s)}
           onRename={async (sub, title) => {
-            await api.upsertSubtask({ ...sub, title });
+            try {
+              await api.upsertSubtask({ ...sub, title });
+            } catch (e) {
+              showToast(`Не удалось переименовать подзадачу: ${e}`);
+            }
             reload();
           }}
         />

@@ -5,7 +5,7 @@ import { api } from "../api";
 import { COLORS, accentTint, argbToHex } from "../theme";
 import { useStore } from "../store";
 import { showToast } from "../toast";
-import { fromEpochDay, intervalsOverlap, taskTimeRange, travelTimeText, dueEpochLabel } from "../date";
+import { fromEpochDay, conflictIdFor, taskTimeRange, travelTimeText, dueEpochLabel } from "../date";
 import { useMediaQuery } from "../useMediaQuery";
 import { SubtaskList } from "./SubtaskList";
 import { AddTaskModal } from "./AddTaskModal";
@@ -143,23 +143,10 @@ export const TaskCard = memo(function TaskCard({
   // одну минуту (мгновение). Одинаковое время двух задач = наложение.
   // Селектор возвращает ПРИМИТИВ (id конфликтующей задачи или null):
   // подписка перерисовывает карточку только когда сам факт конфликта
-  // изменился. Подписка на весь массив s.tasks (как было) рендерила ВСЕ
-  // карточки на любое изменение любой задачи — мемоизация была бессильна.
-  const conflictId = useStore((s) => {
-    if (task.timeMinutes == null || task.isDone) return null;
-    const d1 = task.durationMinutes ?? 0;
-    const other = s.tasks.find(
-      (t) =>
-        t.id !== task.id &&
-        !t.isDone &&
-        !t.archived &&
-        !t.someday &&
-        t.date === task.date &&
-        t.timeMinutes != null &&
-        intervalsOverlap(task.timeMinutes!, d1, t.timeMinutes, t.durationMinutes ?? 0),
-    );
-    return other?.id ?? null;
-  });
+  // изменился. Сканирование массива задач — в conflictIdFor, один раз на
+  // reload (WeakMap); раньше селектор сканировал все задачи в КАЖДОЙ
+  // карточке при ЛЮБОМ изменении стора — O(карточек × задач).
+  const conflictId = useStore((s) => conflictIdFor(s.tasks, task));
   // На тач-устройствах время и мета собираются под текстом (компактно),
   // на десктопе — в ряд с текстом. Один общий listener на запрос — см.
   // useMediaQuery (раньше каждая задача вешала свой matchMedia-listener).

@@ -28,6 +28,9 @@ function usable(path: string): boolean {
 }
 
 let exportTimer: ReturnType<typeof setTimeout> | null = null;
+/** Идёт экспорт: минутная проверка импорта ждёт, иначе прочитала бы свой же
+ *  только что записанный файл в окне между write и setAutoSyncLastAt. */
+let exporting = false;
 
 /** Отложенный экспорт: вызывается из App после каждого изменения данных. */
 export function scheduleAutoExport() {
@@ -40,24 +43,18 @@ export function scheduleAutoExport() {
   }, EXPORT_DEBOUNCE_MS);
 }
 
-/** Быстрое извлечение exportedAt из JSON без тяжелого парсинга всего документа. */
-function parseExportedAt(jsonStr: string): number {
-  // exportedAt сериализуется в начале JSON (первые строки)
-  const match = /"exportedAt"\s*:\s*(\d+)/.exec(jsonStr.slice(0, 1024));
-  if (match) {
-    const num = Number(match[1]);
-    if (!Number.isNaN(num)) return num;
+/** exportedAt из JSON бэкапа; 0 — битый/без метки (такой не импортируем). */
+function exportedAtOf(json: string): number {
+  try {
+    return (JSON.parse(json) as { exportedAt?: number }).exportedAt ?? 0;
+  } catch {
+    return 0;
   }
-  const fullMatch = /"exportedAt"\s*:\s*(\d+)/.exec(jsonStr);
-  if (fullMatch) {
-    const num = Number(fullMatch[1]);
-    if (!Number.isNaN(num)) return num;
-  }
-  return 0;
 }
 
 async function doExport() {
   const { autoSyncPath, autoSyncLastAt, setAutoSyncLastAt } = useStore.getState();
+  exporting = true;
   try {
     const json = await invoke<string>("export_json");
     await invoke("write_sync_file", {
@@ -65,11 +62,12 @@ async function doExport() {
       content: json,
     });
     // Помечаем синхронизацию: свой же файл на следующей проверке не импортируем.
-    const exportedAt = parseExportedAt(json);
-    setAutoSyncLastAt(Math.max(autoSyncLastAt, exportedAt || Date.now()));
+    setAutoSyncLastAt(Math.max(autoSyncLastAt, exportedAtOf(json) || Date.now()));
   } catch (e) {
     // Папка недоступна/нет прав — молча ждём следующего раза (не спамим).
     console.error("Автоэкспорт не удался:", e);
+  } finally {
+    exporting = false;
   }
 }
 
@@ -82,6 +80,7 @@ export async function checkForImport(onImported: () => void): Promise<void> {
   const { autoSyncEnabled, autoSyncPath, autoSyncLastAt, setAutoSyncLastAt } =
     useStore.getState();
   if (!autoSyncEnabled || !usable(autoSyncPath)) return;
+  if (exporting) return; // свой экспорт в полёте — не импортируем свой же файл
   let raw: string;
   try {
     raw = await invoke<string>("read_sync_file", {
@@ -91,7 +90,7 @@ export async function checkForImport(onImported: () => void): Promise<void> {
     return; // файла нет — нечего импортировать
   }
   if (!raw) return;
-  const exportedAt = parseExportedAt(raw);
+  const exportedAt = exportedAtOf(raw);
   if (exportedAt <= 0 || exportedAt <= autoSyncLastAt) return;
   try {
     await invoke<number>("import_json", { json: raw });
