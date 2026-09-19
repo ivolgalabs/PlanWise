@@ -1,10 +1,12 @@
 [package]
 name = "daily-planner"
 version = "0.1.14"
-description = "Ежедневник — минималистичный планировщик задач (tweek.so-style)"
-authors = ["zkproject"]
+description = "PlanWise — Minimalist high-performance offline task planner on Tauri v2, Rust and SQLite"
+authors = ["Ivolga Labs <support@ivolgalabs.com>"]
+license = "Apache-2.0"
+repository = "https://github.com/ivolgalabs/PlanWise"
+homepage = "https://ivolgalabs.com"
 edition = "2021"
-# Приложение не публикуется (нужно для cargo-deny: private = ignore).
 publish = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

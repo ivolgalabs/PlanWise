@@ -1,0 +1,990 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="light-slate">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Universal UI — превью «Текущий статус оформления»</title>
+<!-- Превью-модуль для проверки: открывается прямо из Finder (file://) или через сервер. -->
+<link rel="stylesheet" href="../tokens.css" />
+<link rel="stylesheet" href="../themes.css" />
+<link rel="stylesheet" href="../typography.css" />
+<link rel="stylesheet" href="../components.css" />
+<link rel="stylesheet" href="../badges.css" />
+<link rel="stylesheet" href="../buttons.css" />
+<link rel="stylesheet" href="../theme-status.css" />
+<link rel="stylesheet" href="../ui-scale.css" />
+<style>
+  body {
+    font-family: var(--font-ui);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    margin: 0;
+    padding: 28px;
+  }
+  .pv-wrap { max-width: 880px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+  .pv-hero { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .pv-hero h1 { font-size: var(--fs-xl); font-weight: 800; letter-spacing: -0.03em; margin: 0; }
+  .pv-hero p { margin: 0; font-size: var(--fs-sm); color: var(--text-muted); }
+  .pv-note { font-size: var(--fs-xs); color: var(--text-muted); line-height: 1.5; margin: 0; }
+  .pv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 720px) { .pv-grid { grid-template-columns: 1fr; } }
+  .pv-card { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-xl); padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .pv-card h3 { margin: 0; font-size: var(--fs-base); }
+  .pv-foot { font-size: 11px; color: var(--text-muted); text-align: center; padding: 8px 0 20px; }
+  .theme-family { margin-bottom: 14px; }
+  .theme-family:last-child { margin-bottom: 0; }
+  .pv-hint { font-size: 11px; color: var(--text-secondary); }
+  .preset-actions-hint { font-size: 10px; color: var(--text-muted); }
+  .save-preset-form + .save-preset-form { margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="pv-wrap">
+
+  <div class="pv-hero">
+    <div>
+      <h1>🎨 Блок оформления — превью</h1>
+      <p>Общий элемент Universal UI: статус темы + 2 вкладки выбора (стандартный / свой).</p>
+    </div>
+    <span class="badge keep">живое демо</span>
+  </div>
+
+  <!-- ═══════════ A. ТЕКУЩИЙ СТАТУС ОФОРМЛЕНИЯ (всегда виден) ═══════════ -->
+  <div class="theme-status">
+    <div class="theme-status-head">
+      <div>
+        <h3 class="theme-status-title">🎨 Текущий статус оформления</h3>
+        <p class="theme-status-subtitle">
+          Активная тема в данный момент: <strong id="active-theme-name">light-slate</strong>
+          <span id="custom-hint" style="display:none"></span>
+        </p>
+      </div>
+      <div class="theme-status-modes" id="mode-btns">
+        <button class="theme-status-mode-btn" data-mode="light">☀️ Светлая</button>
+        <button class="theme-status-mode-btn" data-mode="dark">🌙 Тёмная</button>
+        <button class="theme-status-mode-btn" data-mode="system">🖥️ Системная</button>
+      </div>
+    </div>
+    <div class="theme-status-grid">
+      <div class="theme-status-pref">
+        <div>
+          <span class="theme-status-pref-label">Светлая:</span>
+          <span class="theme-status-pref-value" id="pref-light-value">light-slate</span>
+        </div>
+        <span class="theme-status-tag active" id="pref-light-tag">✓ Активна</span>
+      </div>
+      <div class="theme-status-pref">
+        <div>
+          <span class="theme-status-pref-label">Тёмная:</span>
+          <span class="theme-status-pref-value" id="pref-dark-value">dark-slate <span id="pref-dark-oled">(OLED)</span></span>
+        </div>
+        <span class="theme-status-tag saved" id="pref-dark-tag">Сохранена</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════ ВКЛАДКИ: Стандартные / Свой выбор ═══════════ -->
+  <div class="theme-tabs" id="theme-tabs">
+    <button class="theme-tab-btn active" data-tab="standard">🎨 Стандартные</button>
+    <button class="theme-tab-btn" data-tab="custom">✏️ Свой выбор</button>
+  </div>
+
+  <!-- ── Вкладка 1: Стандартные (светлые/тёмные; OLED — галочкой) ── -->
+  <div class="theme-tab-panel" id="panel-standard">
+    <div class="theme-status-oled">
+      <div>
+        <h4 class="theme-status-oled-title">🖤 Использовать OLED (True Black) для тёмного режима</h4>
+        <p class="theme-status-oled-desc">Кнопка «Тёмная» и тёмные темы будут включать чистый чёрный OLED-режим (работает только с базовыми темами)</p>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="oled-toggle" />
+        <span class="switch-track"></span>
+      </label>
+    </div>
+    <p class="pv-note">
+      Клик по свотчу: активирует тему, запоминает предпочитаемую, переключает режим и сбрасывает свой стиль этого режима.
+    </p>
+    <div class="pv-card" id="family-list"></div>
+  </div>
+
+  <!-- ── Вкладка 2: Свой выбор (как TensorMedia) ── -->
+  <div class="theme-tab-panel" id="panel-custom" hidden>
+    <p class="pv-note">
+      Всё выбирается самостоятельно: акцент, фон. Настройте → <b>«☀️/🌙 Сохранить как … стиль»</b> — и при
+      переключении режима стиль применится автоматически. «💾 Сохранить» — в библиотеку стилей
+      (код TMT-… можно перенести на другое устройство).
+    </p>
+
+    <div class="pv-grid">
+      <div class="pv-card">
+        <h3>Свой цвет акцента</h3>
+        <div class="designer-colors-grid" id="accent-palette"></div>
+        <div class="slider-header-row">
+          <span style="font-size: var(--fs-xs); color: var(--text-secondary)">Оттенок (rainbow)</span>
+          <span class="hue-value-indicator" id="hue-indicator">—</span>
+        </div>
+        <div class="rainbow-slider-container">
+          <input type="range" min="0" max="360" value="0" class="rainbow-hue-slider" id="hue-slider" />
+        </div>
+        <div class="designer-actions-row">
+          <button class="reset-accent-btn" id="accent-reset">Сбросить акцент</button>
+          <span class="pv-hint" id="accent-hint">Акцент из темы</span>
+        </div>
+      </div>
+
+      <div class="pv-card">
+        <h3>Фон приложения</h3>
+        <div class="pv-bg-row" id="bg-btns">
+          <button class="pv-bg-btn active" data-bg="theme">Как в теме</button>
+          <button class="pv-bg-btn" data-bg="light">Светлый</button>
+          <button class="pv-bg-btn" data-bg="dark">Тёмный</button>
+          <button class="pv-bg-btn" data-bg="oled">OLED</button>
+        </div>
+        <div style="font-size: var(--fs-xs); color: var(--text-muted)" id="shades-label">Оттенок фона:</div>
+        <div class="bg-preset-shades" id="bg-shades"></div>
+        <p class="pv-note" id="shades-note">Клик по оттенку сам включает режим фона (светлый/тёмный). Текст адаптируется к яркости.</p>
+      </div>
+    </div>
+
+    <div class="pv-card">
+      <h3>Мои стили</h3>
+      <p class="preset-actions-hint">Слоты ☀️/🌙 заполняются при «Применить» стиля с принадлежностью (селект «Куда») и применяются автоматически при переключении режима · «✕» — очистить слот</p>
+      <div id="slot-rows"></div>
+      <p class="preset-actions-hint">Библиотека: клик по строке или «Применить» — применить · «📋 Код» — скопировать · «✕» — удалить</p>
+      <div class="presets-list" id="presets-list">
+        <p class="no-presets-text" id="no-presets">Пока нет сохранённых стилей — настройте акцент/фон и нажмите «💾 Сохранить»</p>
+      </div>
+      <div class="save-preset-form">
+        <input type="text" class="preset-name-input" id="preset-name" placeholder="Имя стиля (пусто = Стиль #N)" />
+        <select id="preset-slot" style="flex:0 0 auto;cursor:pointer" title="Куда относится стиль">
+          <option value="auto">Куда: авто (по стилю)</option>
+          <option value="light">☀️ Светлый стиль</option>
+          <option value="dark">🌙 Тёмный стиль</option>
+        </select>
+        <button class="save-preset-btn" id="preset-save">💾 Сохранить</button>
+      </div>
+      <div class="import-preset-form">
+        <div class="import-input-wrap">
+          <input type="text" class="preset-import-input" id="preset-import-code" placeholder="Вставьте код стиля (TMT-...) и нажмите «Импорт»" />
+          <button class="import-preset-btn" id="preset-import">Импорт</button>
+        </div>
+        <span class="import-error-msg" id="import-error"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════ D. МАСШТАБ ИНТЕРФЕЙСА И РАЗМЕР ШРИФТА (как в multispend) ═══════════ -->
+  <div class="pv-section">
+    <h2>D. Масштаб интерфейса и размер шрифта</h2>
+    <div class="pv-grid">
+      <div class="scale-section">
+        <div class="scale-header">
+          <div>
+            <h3 class="scale-title">🔍 Масштаб интерфейса</h3>
+            <p class="scale-desc">Масштаб всего интерфейса: элементы растут, ничего не обрезается (70%–150%)</p>
+          </div>
+          <span class="scale-value" id="ui-scale-value">100%</span>
+        </div>
+        <div class="scale-slider-wrap">
+          <input type="range" min="0.7" max="1.5" step="0.05" value="1" id="ui-scale-slider" />
+          <div class="scale-labels"><span class="min">70%</span><span class="mid">100%</span><span class="max">150%</span></div>
+        </div>
+        <div class="scale-presets" id="ui-scale-presets"></div>
+      </div>
+      <div class="scale-section">
+        <div class="scale-header">
+          <div>
+            <h3 class="scale-title">🔤 Размер шрифта</h3>
+            <p class="scale-desc">Отдельно от масштаба: увеличивает только текст (70%–150%)</p>
+          </div>
+          <span class="scale-value" id="font-scale-value">100%</span>
+        </div>
+        <div class="scale-slider-wrap">
+          <input type="range" min="0.7" max="1.5" step="0.05" value="1" id="font-scale-slider" />
+          <div class="scale-labels"><span class="min">70%</span><span class="mid">100%</span><span class="max">150%</span></div>
+        </div>
+        <div class="scale-presets" id="font-scale-presets"></div>
+      </div>
+    </div>
+  </div>
+
+  <p class="pv-foot">Состояние, слоты, стили и масштаб сохраняются в localStorage (ключи tm_pv_*) — обновите страницу, чтобы проверить персистентность.</p>
+</div>
+
+<script>
+/* ── Данные тем (те же 24, что в themes.css) ── */
+const FAMILIES = [
+  { family: "slate",   label: "Slate",     accent: "#4c5699", light: ["#f4f5f7", "#1f2329"], dark: ["#0f1013", "#f2f3f5"] },
+  { family: "nord",    label: "Nord",      accent: "#5e81ac", light: ["#eceff4", "#2e3440"], dark: ["#2e3440", "#eceff4"] },
+  { family: "midnight",label: "Midnight",  accent: "#3060e8", light: ["#f0f4fe", "#1a1b26"], dark: ["#1a1b26", "#c0caf5"] },
+  { family: "dracula", label: "Dracula",   accent: "#9444d6", light: ["#f6f3fc", "#282a36"], dark: ["#282a36", "#f8f8f2"] },
+  { family: "sepia",   label: "Sepia",     accent: "#a0522d", light: ["#fcfaf2", "#433422"], dark: ["#1e1b18", "#efebe4"] },
+  { family: "evergreen",label: "Evergreen",accent: "#2d6a4f", light: ["#f1f7f4", "#1c2e24"], dark: ["#0f1a14", "#e2e8e6"] },
+  { family: "amber",   label: "Amber",     accent: "#d35400", light: ["#fffdf5", "#3d321d"], dark: ["#1a130f", "#fdf5f0"] },
+  { family: "sakura",  label: "Sakura",    accent: "#d87093", light: ["#fff0f5", "#5c2c3a"], dark: ["#1f1619", "#ffd1dc"] },
+];
+const ID = (fam, mode) => `${mode}-${fam}`;
+const toOled = (id) => id.replace(/^(dark|light)-/, "oled-");
+const isLightTheme = (id) => id.startsWith("light-");
+
+/* ── Состояние ── */
+const startMode = (() => {
+  const m = new URLSearchParams(location.search).get("mode");
+  return m === "dark" || m === "system" ? m : "light";
+})();
+const ls = (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch { return d; } };
+const store = {
+  mode: ls("tm_pv_mode", startMode),
+  prefLight: ls("tm_pv_pref_light", "light-slate"),
+  prefDark: ls("tm_pv_pref_dark", "dark-slate"),
+  useOled: ls("tm_pv_oled", "0") === "1",
+  // черновик (применяется live) + слоты своих стилей по режимам
+  draft: null, // { accent, bgMode, bgColor }
+  customLight: null, // { name, accent, bgMode, bgColor }
+  customDark: null,
+  presets: (() => { try { return JSON.parse(ls("tm_pv_presets", "[]")); } catch { return []; } })(),
+};
+const loadSlots = () => {
+  const parse = k => { try { const v = JSON.parse(ls(k, "null")); return v && v.name ? v : null; } catch { return null; } };
+  store.customLight = parse("tm_pv_custom_light");
+  store.customDark = parse("tm_pv_custom_dark");
+  // при старте применяем слот текущего режима (или чистая тема)
+  const s = slotFor(store.mode);
+  store.draft = s ? { accent: s.accent, bgMode: s.bgMode, bgColor: s.bgColor } : null;
+};
+const slotFor = (mode) => {
+  const dark = mode === "dark" || (mode === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  return dark ? store.customDark : store.customLight;
+};
+const save = () => {
+  localStorage.setItem("tm_pv_mode", store.mode);
+  localStorage.setItem("tm_pv_pref_light", store.prefLight);
+  localStorage.setItem("tm_pv_pref_dark", store.prefDark);
+  localStorage.setItem("tm_pv_oled", store.useOled ? "1" : "0");
+  localStorage.setItem("tm_pv_presets", JSON.stringify(store.presets));
+  localStorage.setItem("tm_pv_custom_light", JSON.stringify(store.customLight));
+  localStorage.setItem("tm_pv_custom_dark", JSON.stringify(store.customDark));
+};
+const isCustom = () => !!store.draft;
+
+/* Категория стиля по содержимому: яркость оттенка фона → режим фона → тема */
+function autoSlotFor(p) {
+  if (p.bgColor) return luminance(p.bgColor) >= 0.5 ? "light" : "dark";
+  if (p.bgMode === "light") return "light";
+  if (p.bgMode === "dark" || p.bgMode === "oled") return "dark";
+  return isLightTheme(p.theme) ? "light" : "dark";
+}
+
+/* Активная тема: режим → предпочитаемая (+OLED-замена для тёмного) */
+function resolveTheme() {
+  if (store.mode === "light") return store.prefLight;
+  if (store.mode === "dark") return store.useOled ? toOled(store.prefDark) : store.prefDark;
+  const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  if (dark) return store.useOled ? toOled(store.prefDark) : store.prefDark;
+  return store.prefLight;
+}
+
+/* ── Применение на <html> ── */
+function mixHex(hex, target, amt) {
+  const c = hex.replace("#", "");
+  const [r, g, b] = [0, 2, 4].map(i => parseInt(c.slice(i, i + 2), 16));
+  const [tr, tg, tb] = [(target >> 16) & 255, (target >> 8) & 255, target & 255];
+  const m = (a, z) => Math.round(a * (1 - amt) + z * amt);
+  return `#${[m(r, tr), m(g, tg), m(b, tb)].map(x => x.toString(16).padStart(2, "0")).join("")}`;
+}
+const darken = (hex, amt) => mixHex(hex, 0x000000, amt);
+const lighten = (hex, amt) => mixHex(hex, 0xffffff, amt);
+
+const BG_VARS = ["--bg-primary", "--bg-secondary", "--bg-tertiary", "--bg-hover",
+  "--border-color", "--bg-translucent", "--bg-glass", "--glass-border"];
+const ACC_VARS = ["--accent", "--accent-hover", "--accent-glow", "--row-selected"];
+const TEXT_VARS = ["--text-primary", "--text-secondary", "--text-muted"];
+
+function luminance(hex) {
+  const c = hex.replace("#", "");
+  const [r, g, b] = [0, 2, 4].map(i => parseInt(c.slice(i, i + 2), 16) / 255);
+  return 0.299 * r + 0.587 * g + 0.114 * b;
+}
+function setTextForBg(bgHex) {
+  if (luminance(bgHex) < 0.5) {
+    document.documentElement.style.setProperty("--text-primary", "#f2f3f5");
+    document.documentElement.style.setProperty("--text-secondary", "#949ba4");
+    document.documentElement.style.setProperty("--text-muted", "#6a6f77");
+  } else {
+    document.documentElement.style.setProperty("--text-primary", "#1f2329");
+    document.documentElement.style.setProperty("--text-secondary", "#5c626a");
+    document.documentElement.style.setProperty("--text-muted", "#949ba4");
+  }
+}
+
+function apply() {
+  const active = resolveTheme();
+  document.documentElement.setAttribute("data-theme", active);
+  const d = store.draft;
+  if (d && d.accent) {
+    document.documentElement.style.setProperty("--accent", d.accent);
+    document.documentElement.style.setProperty("--accent-hover", darken(d.accent, 0.12));
+    document.documentElement.style.setProperty("--accent-glow", `color-mix(in srgb, ${d.accent} 20%, transparent)`);
+    document.documentElement.style.setProperty("--row-selected", `color-mix(in srgb, ${d.accent} 20%, transparent)`);
+  } else {
+    ACC_VARS.forEach(v => document.documentElement.style.removeProperty(v));
+  }
+  if (!d || d.bgMode === "theme") {
+    document.documentElement.removeAttribute("data-theme-color-type");
+    BG_VARS.forEach(v => document.documentElement.style.removeProperty(v));
+    TEXT_VARS.forEach(v => document.documentElement.style.removeProperty(v));
+  } else {
+    const bg = d.bgColor || (d.bgMode === "light" ? "#f4f0ec" : d.bgMode === "oled" ? "#000000" : "#0f0f15");
+    document.documentElement.setAttribute("data-theme-color-type", d.bgMode === "light" ? "light" : "dark");
+    setTextForBg(bg);
+    document.documentElement.style.setProperty("--bg-primary", bg);
+    if (d.bgMode === "oled") {
+      document.documentElement.style.setProperty("--bg-secondary", "#0a0a0a");
+      document.documentElement.style.setProperty("--bg-tertiary", "#121212");
+      document.documentElement.style.setProperty("--bg-hover", "#1c1c1c");
+      document.documentElement.style.setProperty("--border-color", "#2e2e2e");
+    } else if (d.bgMode === "light") {
+      document.documentElement.style.setProperty("--bg-secondary", darken(bg, 0.06));
+      document.documentElement.style.setProperty("--bg-tertiary", darken(bg, 0.12));
+      document.documentElement.style.setProperty("--bg-hover", darken(bg, 0.16));
+      document.documentElement.style.setProperty("--border-color", darken(bg, 0.3));
+    } else {
+      document.documentElement.style.setProperty("--bg-secondary", lighten(bg, 0.06));
+      document.documentElement.style.setProperty("--bg-tertiary", lighten(bg, 0.12));
+      document.documentElement.style.setProperty("--bg-hover", lighten(bg, 0.16));
+      document.documentElement.style.setProperty("--border-color", lighten(bg, 0.3));
+    }
+    document.documentElement.style.setProperty("--bg-translucent", d.bgMode === "light" ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.15)");
+    document.documentElement.style.setProperty("--bg-glass", d.bgMode === "light" ? "rgba(255, 255, 255, 0.4)" : "rgba(15, 15, 25, 0.5)");
+    document.documentElement.style.setProperty("--glass-border", "rgba(255, 255, 255, 0.04)");
+  }
+
+  // ── Блок статуса ──
+  document.getElementById("active-theme-name").textContent = active;
+  const hint = document.getElementById("custom-hint");
+  if (isCustom()) {
+    const slot = slotFor(store.mode);
+    const label = slot && slot.name ? `свой стиль «${slot.name}»` : "свой стиль";
+    hint.textContent = " · " + label;
+    hint.style.color = "var(--accent)";
+    hint.style.fontWeight = "700";
+    hint.style.display = "";
+  } else {
+    hint.style.display = "none";
+  }
+  // Карточки показывают ВЫБРАННЫЙ стиль режима: пользовательский (если есть) или базовую тему
+  const lightShown = store.customLight ? store.customLight.name : store.prefLight;
+  const darkShown = store.customDark ? store.customDark.name : (store.useOled ? toOled(store.prefDark) : store.prefDark);
+  document.getElementById("pref-light-value").textContent = lightShown;
+  document.getElementById("pref-dark-value").childNodes[0].textContent = darkShown + " ";
+  document.getElementById("pref-dark-oled").style.display = (!store.customDark && store.useOled) ? "" : "none";
+
+  // «✓ Активна» — у карточки режима, который применён сейчас (свой стиль или базовый)
+  const curDark = store.mode === "dark" || (store.mode === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  const lightTag = document.getElementById("pref-light-tag");
+  const darkTag = document.getElementById("pref-dark-tag");
+  lightTag.textContent = curDark ? "Сохранена" : "✓ Активна";
+  lightTag.className = "theme-status-tag " + (curDark ? "saved" : "active");
+  darkTag.textContent = curDark ? "✓ Активна" : "Сохранена";
+  darkTag.className = "theme-status-tag " + (curDark ? "active" : "saved");
+
+  // ── Слоты своих стилей (управление — в «Моих стилях», статус показывает только активное) ──
+  renderSlots();
+
+  document.querySelectorAll("#mode-btns .theme-status-mode-btn").forEach(b =>
+    b.classList.toggle("active", b.dataset.mode === store.mode));
+  document.querySelectorAll(".theme-swatch").forEach(s =>
+    s.classList.toggle("active", s.dataset.theme === active));
+  document.getElementById("oled-toggle").checked = store.useOled;
+
+  document.querySelectorAll(".color-dot-btn").forEach(dd =>
+    dd.classList.toggle("active", dd.dataset.color === ((d && d.accent) || "")));
+  document.getElementById("hue-indicator").textContent = (d && d.accent) || "—";
+  document.getElementById("accent-hint").textContent = d && d.accent ? `Свой акцент: ${d.accent}` : "Акцент из темы";
+  document.querySelectorAll(".pv-bg-btn").forEach(b =>
+    b.classList.toggle("active", b.dataset.bg === (d ? d.bgMode : "theme")));
+  renderShades();
+  renderPresets();
+}
+
+function renderSlots() {
+  const box = document.getElementById("slot-rows");
+  box.innerHTML = "";
+  const curDark = store.mode === "dark" || (store.mode === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  [
+    { kind: "light", slot: store.customLight, isCur: !curDark },
+    { kind: "dark", slot: store.customDark, isCur: curDark },
+  ].forEach(({ kind, slot, isCur }) => {
+    const row = document.createElement("div");
+    row.className = "preset-item-row";
+    const info = document.createElement("div");
+    info.className = "preset-item-info";
+    const dot = document.createElement("span");
+    dot.className = "preset-preview-circle";
+    dot.style.background = (slot && slot.bgColor) || (kind === "light" ? "#f4f0ec" : "#0f0f15");
+    const pdot = document.createElement("span");
+    pdot.className = "preset-preview-dot";
+    pdot.style.background = (slot && slot.accent) || "#4c5699";
+    dot.appendChild(pdot);
+    const name = document.createElement("span");
+    name.className = "preset-item-name";
+    name.textContent = `${kind === "light" ? "☀️ Свой светлый" : "🌙 Свой тёмный"}: ${slot ? slot.name : "—"}`;
+    info.append(dot, name);
+    const actions = document.createElement("div");
+    actions.className = "preset-item-actions";
+    if (slot) {
+      const active = isCur && store.draft &&
+        (store.draft.accent || null) === (slot.accent || null) &&
+        (store.draft.bgMode || "theme") === (slot.bgMode || "theme") &&
+        (store.draft.bgColor || null) === (slot.bgColor || null);
+      const tag = document.createElement("span");
+      tag.className = "theme-status-tag " + (active ? "active" : "saved");
+      tag.textContent = active ? "✓ Применён" : "Сохранён";
+      const clear = document.createElement("button");
+      clear.className = "preset-action-btn delete";
+      clear.textContent = "✕";
+      clear.title = "Очистить " + (kind === "light" ? "светлый" : "тёмный") + " стиль";
+      clear.addEventListener("click", () => {
+        if (kind === "light") store.customLight = null; else store.customDark = null;
+        if (isCur) store.draft = null;
+        save(); apply();
+      });
+      actions.append(tag, clear);
+    }
+    row.append(info, actions);
+    box.appendChild(row);
+  });
+}
+
+/* ── Переключение режима: применяется слот своего стиля режима ── */
+function setMode(mode) {
+  store.mode = mode;
+  const s = slotFor(mode);
+  store.draft = s ? { accent: s.accent, bgMode: s.bgMode, bgColor: s.bgColor } : null;
+  save(); apply();
+}
+
+/* ── Сборка семейств: ТОЛЬКО светлые/тёмные (OLED — галочкой) ── */
+const familyList = document.getElementById("family-list");
+FAMILIES.forEach(f => {
+  const group = document.createElement("div");
+  group.className = "theme-family";
+  const label = document.createElement("h4");
+  label.className = "theme-family-label";
+  const dot = document.createElement("span");
+  dot.className = "theme-family-dot";
+  dot.style.background = f.accent;
+  label.append(dot, f.label);
+  group.appendChild(label);
+
+  const grid = document.createElement("div");
+  grid.className = "theme-swatches";
+  [
+    { mode: "light", name: "Светлая", colors: [f.light[0], f.accent, f.light[1]] },
+    { mode: "dark",  name: "Тёмная",  colors: [f.dark[0], f.accent, f.dark[1]] },
+  ].forEach(m => {
+    const btn = document.createElement("button");
+    btn.className = "theme-swatch";
+    btn.dataset.theme = ID(f.family, m.mode);
+    btn.style.background = m.colors[0];
+    btn.style.color = m.colors[2];
+    btn.innerHTML = `
+      <span class="theme-swatch-colors">
+        <span style="background:${m.colors[0]}"></span>
+        <span style="background:${m.colors[1]}"></span>
+        <span style="background:${m.colors[2]}"></span>
+      </span>
+      <span class="theme-swatch-name">${m.name}</span>
+      <span class="theme-swatch-check">✓</span>`;
+    btn.addEventListener("click", () => {
+      let id = ID(f.family, m.mode);
+      if (m.mode === "dark" && store.useOled) id = toOled(id);
+      if (m.mode === "light") { store.prefLight = id; store.mode = "light"; store.customLight = null; }
+      else { store.prefDark = id; store.mode = "dark"; store.customDark = null; }
+      store.draft = null; // базовый выбор сбрасывает свой стиль этого режима
+      save(); apply();
+    });
+    grid.appendChild(btn);
+  });
+  group.appendChild(grid);
+  familyList.appendChild(group);
+});
+
+/* ── Вкладки ── */
+document.querySelectorAll("#theme-tabs .theme-tab-btn").forEach(b => {
+  b.addEventListener("click", () => {
+    document.querySelectorAll("#theme-tabs .theme-tab-btn").forEach(x => x.classList.toggle("active", x === b));
+    document.getElementById("panel-standard").hidden = b.dataset.tab !== "standard";
+    document.getElementById("panel-custom").hidden = b.dataset.tab !== "custom";
+  });
+});
+
+/* ── Кнопки режима ── */
+document.querySelectorAll("#mode-btns .theme-status-mode-btn").forEach(b => {
+  b.addEventListener("click", () => setMode(b.dataset.mode));
+});
+
+/* ── OLED-переключатель ── */
+document.getElementById("oled-toggle").addEventListener("change", e => {
+  store.useOled = e.target.checked; save(); apply();
+});
+
+/* ── Палитра акцентов ── */
+const ACCENTS = ["#e11d48","#f43f5e","#ff6b6b","#f97316","#f59e0b","#eab308","#22c55e","#10b981","#14b8a6","#3b82f6","#2563eb","#8b5cf6"];
+const palette = document.getElementById("accent-palette");
+ACCENTS.forEach(c => {
+  const b = document.createElement("button");
+  b.className = "color-dot-btn";
+  b.dataset.color = c;
+  b.style.background = c;
+  b.title = c;
+  b.addEventListener("click", () => { store.draft = { ...(store.draft || {}), accent: c, bgMode: store.draft ? store.draft.bgMode : "theme", bgColor: store.draft ? store.draft.bgColor : null }; save(); apply(); });
+  palette.appendChild(b);
+});
+
+/* ── Rainbow-слайдер ── */
+function hslToHex(h, s, l) {
+  s /= 100; l /= 100;
+  const k = n => (n + h / 30) % 12;
+  const a = s * Math.min(l, 1 - l);
+  const f = n => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  const to = x => Math.round(255 * x).toString(16).padStart(2, "0");
+  return `#${to(f(0))}${to(f(8))}${to(f(4))}`;
+}
+document.getElementById("hue-slider").addEventListener("input", e => {
+  store.draft = { ...(store.draft || { bgMode: "theme", bgColor: null }), accent: hslToHex(parseInt(e.target.value), 85, 55) };
+  save(); apply();
+});
+document.getElementById("accent-reset").addEventListener("click", () => {
+  if (store.draft) { store.draft.accent = null; if (!store.draft.bgMode || store.draft.bgMode === "theme") store.draft = null; }
+  save(); apply();
+});
+
+/* ── Фон: режим + оттенки ── */
+const LIGHT_SHADES = ["#fcfaf2", "#faf4ed", "#fdf6e3", "#f4f0ec", "#f5f5f5", "#ffffff"];
+const DARK_SHADES  = ["#1a130f", "#1e1b18", "#1a1b26", "#0f1013", "#17181c", "#000000"];
+const shadesBox = document.getElementById("bg-shades");
+function renderShades() {
+  // OLED — чистый чёрный: палитра оттенков не нужна (и bgColor игнорируется)
+  const d = store.draft;
+  const isOled = d && d.bgMode === "oled";
+  shadesBox.innerHTML = "";
+  shadesBox.style.display = isOled ? "none" : "";
+  document.getElementById("shades-label").style.display = isOled ? "none" : "";
+  document.getElementById("shades-note").textContent = isOled
+    ? "OLED — чистый чёрный фон, оттенки не нужны."
+    : "Клик по оттенку сам включает режим фона (светлый/тёмный). Текст адаптируется к яркости.";
+  const list = d && d.bgMode === "light" ? LIGHT_SHADES : DARK_SHADES;
+  list.forEach(c => {
+    const b = document.createElement("button");
+    b.className = "bg-shade-btn";
+    b.style.background = c;
+    b.dataset.color = c;
+    b.title = c;
+    if (d && d.bgColor === c) b.classList.add("active");
+    b.addEventListener("click", () => {
+      store.draft = { ...(store.draft || {}), bgColor: c };
+      if (LIGHT_SHADES.includes(c)) store.draft.bgMode = "light";
+      else if (c === "#000000") store.draft.bgMode = "oled";
+      else store.draft.bgMode = "dark";
+      save(); apply();
+    });
+    shadesBox.appendChild(b);
+  });
+}
+document.querySelectorAll(".pv-bg-btn").forEach(b => {
+  b.addEventListener("click", () => {
+    store.draft = { ...(store.draft || {}), bgMode: b.dataset.bg, bgColor: b.dataset.bg === "theme" ? null : (store.draft ? store.draft.bgColor : null) };
+    if (b.dataset.bg === "theme" && !store.draft.accent) store.draft = null;
+    save(); apply();
+  });
+});
+
+/* ── Пресеты: сохранить / применить / код / удалить / импорт ── */
+function encodePreset(p) {
+  const bgType = p.bgMode === "light" ? "L" : p.bgMode === "oled" ? "O" : p.bgMode === "dark" ? "D" : "T";
+  const accent = (p.accent || "none").replace("#", "");
+  const bgHex = (p.bgColor || "none").replace("#", "");
+  const theme = p.theme.replace(/-/g, "_");
+  const slot = p.slot === "light" ? "L" : p.slot === "dark" ? "D" : "N";
+  return `TMT-${theme}-${accent}-${bgType}-${bgHex}-${slot}`;
+}
+function decodePreset(code) {
+  const parts = code.replace(/^TMT-/, "").split("-");
+  if (parts.length < 4) return null;
+  const [themeEnc, accent, bgType, bgHex, slotChar] = parts;
+  const theme = themeEnc.replace(/_/g, "-");
+  if (!theme || !/^(light|dark|oled)-/.test(theme)) return null;
+  const slot = slotChar === "L" ? "light" : slotChar === "D" ? "dark" : null;
+  return {
+    theme,
+    accent: accent && accent !== "none" ? `#${accent}` : null,
+    bgMode: bgType === "L" ? "light" : bgType === "O" ? "oled" : bgType === "D" ? "dark" : "theme",
+    bgColor: bgHex && bgHex !== "none" ? `#${bgHex}` : null,
+    slot,
+  };
+}
+function presetApplied(p) {
+  const d = store.draft;
+  return p.theme === resolveTheme() &&
+    (p.accent || null) === (d ? d.accent : null) &&
+    (p.bgMode || "theme") === (d ? d.bgMode : "theme") &&
+    (p.bgColor || null) === (d ? d.bgColor : null);
+}
+function renderPresets() {
+  const list = document.getElementById("presets-list");
+  const noPresets = document.getElementById("no-presets");
+  noPresets.style.display = store.presets.length ? "none" : "";
+  list.querySelectorAll(".preset-item-row").forEach(el => el.remove());
+  store.presets.forEach((p, i) => {
+    const row = document.createElement("div");
+    row.className = "preset-item-row";
+    const applied = presetApplied(p);
+    const info = document.createElement("div");
+    info.className = "preset-item-info";
+    info.title = "Применить стиль";
+    info.innerHTML = `
+      <span class="preset-preview-circle" style="background:${p.bgColor || "#f4f0ec"}">
+        <span class="preset-preview-dot" style="background:${p.accent || "#4c5699"}"></span>
+      </span>
+      <span class="preset-item-name">${p.name}</span>`;
+    info.addEventListener("click", () => applyPreset(i));
+    const actions = document.createElement("div");
+    actions.className = "preset-item-actions";
+    const applyBtn = document.createElement("button");
+    applyBtn.className = "preset-action-btn apply" + (applied ? " active" : "");
+    applyBtn.textContent = applied ? "✓ Применён" : "Применить";
+    applyBtn.addEventListener("click", () => applyPreset(i));
+    const codeBtn = document.createElement("button");
+    codeBtn.className = "preset-action-btn";
+    codeBtn.textContent = "📋 Код";
+    codeBtn.addEventListener("click", () => copyPresetCode(i));
+    const delBtn = document.createElement("button");
+    delBtn.className = "preset-action-btn delete";
+    delBtn.textContent = "✕";
+    delBtn.addEventListener("click", () => { store.presets.splice(i, 1); save(); apply(); });
+    actions.append(applyBtn, codeBtn, delBtn);
+    row.append(info, actions);
+    list.appendChild(row);
+  });
+}
+function applyPreset(i) {
+  const p = store.presets[i];
+  if (isLightTheme(p.theme)) { store.prefLight = p.theme; store.mode = "light"; }
+  else { store.prefDark = p.theme; store.mode = "dark"; }
+  store.draft = { accent: p.accent, bgMode: p.bgMode || "theme", bgColor: p.bgColor };
+  // «Применить» ВСЕГДА заносит стиль в слот своей категории (☀️/🌙) —
+  // заданная принадлежность или авто по содержимому. Статус сразу показывает его,
+  // и при переключении режима стиль применяется автоматически.
+  const slot = p.slot || autoSlotFor(p);
+  const slotData = { name: p.name, accent: p.accent, bgMode: p.bgMode || "theme", bgColor: p.bgColor };
+  if (slot === "light") store.customLight = slotData;
+  else store.customDark = slotData;
+  save(); apply();
+  const who = slot === "light" ? "☀️ светлый" : "🌙 тёмный";
+  msg(`Применён стиль «${p.name}» — добавлен как ${who} и применяется автоматически при переключении режима`);
+}
+function copyPresetCode(i) {
+  const code = encodePreset(store.presets[i]);
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(code).catch(() => {});
+  document.getElementById("preset-import-code").value = code;
+  msg(`Код стиля «${store.presets[i].name}» скопирован: ${code}`);
+}
+function msg(text) {
+  const err = document.getElementById("import-error");
+  err.textContent = text;
+  err.style.color = "var(--success)";
+  setTimeout(() => { err.textContent = ""; }, 4000);
+}
+function currentDraftSnapshot(name) {
+  const d = store.draft || {};
+  return { name, theme: resolveTheme(), accent: d.accent || null, bgMode: d.bgMode || "theme", bgColor: d.bgColor || null };
+}
+document.getElementById("preset-save").addEventListener("click", () => {
+  const nameInput = document.getElementById("preset-name");
+  // авто-имя: берём первый СВОБОДНЫЙ номер (после удалений номера не повторяются)
+  let name = nameInput.value.trim();
+  if (!name) {
+    let n = 1;
+    while (store.presets.some(p => p.name === `Стиль #${n}`)) n++;
+    name = `Стиль #${n}`;
+  }
+  // запрет дублей имён (регистронезависимо)
+  if (store.presets.some(p => p.name.toLowerCase() === name.toLowerCase())) {
+    const err = document.getElementById("import-error");
+    err.textContent = `Стиль «${name}» уже существует — выберите другое имя`;
+    err.style.color = "var(--danger)";
+    setTimeout(() => { err.textContent = ""; }, 3500);
+    return;
+  }
+  // принадлежность стиля: явный выбор или авто по содержимому
+  let slot = document.getElementById("preset-slot").value;
+  if (slot === "auto") {
+    const d = store.draft || {};
+    slot = autoSlotFor({ bgColor: d.bgColor, bgMode: d.bgMode, theme: resolveTheme() });
+  }
+  store.presets.push({ id: Math.random().toString(36).slice(2, 9), ...currentDraftSnapshot(name), slot });
+  nameInput.value = "";
+  save(); apply();
+  const who = slot === "light" ? "☀️ светлый" : "🌙 тёмный";
+  msg(`Стиль «${name}» сохранён как ${who} — «Применить» применит его и занесёт в статус`);
+});
+document.getElementById("preset-import").addEventListener("click", () => {
+  const code = document.getElementById("preset-import-code").value.trim();
+  const err = document.getElementById("import-error");
+  const p = decodePreset(code);
+  if (!p) { err.textContent = "Неверный формат кода"; err.style.color = "var(--danger)"; return; }
+  err.textContent = "";
+  store.presets.push({ id: Math.random().toString(36).slice(2, 9), name: `Импорт ${p.theme}`, ...p });
+  document.getElementById("preset-import-code").value = "";
+  save(); apply();
+});
+
+/* ── Системный режим ── */
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+  if (store.mode === "system") setMode("system");
+  else apply();
+});
+
+loadSlots();
+apply();
+
+/* ── Масштаб интерфейса и размер шрифта (эталон — multispend-tracker) ── */
+const SCALE_PRESETS = [0.7, 0.85, 1.0, 1.25, 1.5];
+let uiScale = parseFloat(ls("tm_pv_ui_scale", "1")) || 1;
+let fontScale = parseFloat(ls("tm_pv_font_scale", "1")) || 1;
+function applyScale() {
+  document.documentElement.style.fontSize = `${16 * uiScale}px`;   // rem-база
+  document.documentElement.style.setProperty("--ui-scale", String(uiScale));   // px-токены
+  document.documentElement.style.setProperty("--font-scale", String(fontScale)); // --fs-*
+  document.getElementById("ui-scale-value").textContent = Math.round(uiScale * 100) + "%";
+  document.getElementById("font-scale-value").textContent = Math.round(fontScale * 100) + "%";
+  document.getElementById("ui-scale-slider").value = uiScale;
+  document.getElementById("font-scale-slider").value = fontScale;
+  document.querySelectorAll("#ui-scale-presets .scale-preset-btn").forEach(b =>
+    b.classList.toggle("active", Math.abs(parseFloat(b.dataset.v) - uiScale) < 0.01));
+  document.querySelectorAll("#font-scale-presets .scale-preset-btn").forEach(b =>
+    b.classList.toggle("active", Math.abs(parseFloat(b.dataset.v) - fontScale) < 0.01));
+  localStorage.setItem("tm_pv_ui_scale", String(uiScale));
+  localStorage.setItem("tm_pv_font_scale", String(fontScale));
+}
+[["ui-scale-presets", v => uiScale = v], ["font-scale-presets", v => fontScale = v]].forEach(([id, setter]) => {
+  const box = document.getElementById(id);
+  SCALE_PRESETS.forEach(v => {
+    const b = document.createElement("button");
+    b.className = "scale-preset-btn";
+    b.dataset.v = String(v);
+    b.textContent = Math.round(v * 100) + "%";
+    b.addEventListener("click", () => { setter(v); applyScale(); });
+    box.appendChild(b);
+  });
+});
+document.getElementById("ui-scale-slider").addEventListener("input", e => { uiScale = parseFloat(e.target.value); applyScale(); });
+document.getElementById("font-scale-slider").addEventListener("input", e => { fontScale = parseFloat(e.target.value); applyScale(); });
+applyScale();
+
+/* ── Self-tests ── */
+const ST = new URLSearchParams(location.search).get("selftest");
+
+/* selftest=1: базовая логика пресетов/слотов */
+if (ST === "1") {
+  const out = [];
+  document.body.style.transition = "none";
+  store.mode = "light"; store.prefLight = "light-slate"; store.prefDark = "dark-slate";
+  store.customLight = null; store.customDark = null; store.draft = null; store.presets = []; save();
+  // авто-принадлежность по содержимому: тёмный фон → тёмный стиль
+  store.draft = { accent: "#22c55e", bgMode: "dark", bgColor: "#0f1013" };
+  document.getElementById("preset-slot").value = "auto";
+  document.getElementById("preset-name").value = "Тёмный фон";
+  document.getElementById("preset-save").click();
+  const autoP = store.presets[store.presets.length - 1];
+  out.push("autoSlotByContent=" + (autoP.slot === "dark"));
+  // светлый слот: «Применить» пресета с slot=light → слот заполнен + применён
+  store.draft = { accent: "#22c55e", bgMode: "theme", bgColor: null };
+  document.getElementById("preset-name").value = "Мой светлый";
+  document.getElementById("preset-slot").value = "light";
+  document.getElementById("preset-save").click();
+  const lightP = store.presets[store.presets.length - 1];
+  save(); applyPreset(store.presets.length - 1);
+  out.push("lightSlot=" + (store.customLight && store.customLight.name === "Мой светлый") +
+    "|card=" + document.getElementById("pref-light-value").textContent +
+    "|tag=" + document.getElementById("pref-light-tag").textContent);
+  // дубли имён запрещены
+  const before = store.presets.length;
+  document.getElementById("preset-name").value = "Мой светлый";
+  document.getElementById("preset-save").click();
+  out.push("dupRejected=" + (store.presets.length === before && store.presets[store.presets.length - 1].name === "Мой светлый"));
+  // авто-имя пропускает занятые номера
+  document.getElementById("preset-name").value = "";
+  document.getElementById("preset-save").click();
+  const autoName = store.presets[store.presets.length - 1].name;
+  const uniqNames = new Set(store.presets.map(p => p.name)).size === store.presets.length;
+  out.push("autoName=" + autoName + "|uniq=" + uniqNames);
+  // переключение на тёмный: тёмный слот пуст → чистая тёмная
+  setMode("dark");
+  out.push("switchToDark: custom=" + isCustom() + "|bg=" + getComputedStyle(document.body).backgroundColor);
+  // «Применить» пресета с slot=dark → тёмный слот заполняется автоматически
+  store.presets.push({ id: "t1", name: "Тёмный стиль", theme: "dark-dracula", accent: "#8b5cf6", bgMode: "theme", bgColor: null, slot: "dark" });
+  save(); applyPreset(store.presets.length - 1);
+  out.push("darkSlotFilled=" + (store.customDark && store.customDark.name === "Тёмный стиль") +
+    "|card=" + document.getElementById("pref-dark-value").textContent.trim() +
+    "|tag=" + document.getElementById("pref-dark-tag").textContent);
+  // пресет БЕЗ принадлежности → категория определяется автоматически (light-тема → ☀️)
+  store.presets.push({ id: "t2", name: "Без слота", theme: "light-amber", accent: null, bgMode: "theme", bgColor: null, slot: null });
+  save(); applyPreset(store.presets.length - 1);
+  out.push("noSlotAuto=" + (store.customLight && store.customLight.name === "Без слота" &&
+    store.customDark && store.customDark.name === "Тёмный стиль") +
+    "|card=" + document.getElementById("pref-light-value").textContent);
+  // обратно на светлый: автоприменение светлого слота
+  setMode("light");
+  out.push("backToLight: custom=" + isCustom() + "|accent=" + (store.draft && store.draft.accent));
+  // OLED-фон: палитра оттенков скрыта
+  store.draft = { accent: null, bgMode: "oled", bgColor: null }; save(); apply();
+  out.push("oledShadesHidden=" + (document.getElementById("bg-shades").style.display === "none" &&
+    document.getElementById("shades-note").textContent.includes("чистый чёрный")));
+  // код с принадлежностью + старые коды
+  const code = encodePreset({ theme: "dark-slate", accent: "#22c55e", bgMode: "dark", bgColor: "#0f1013", slot: "dark" });
+  const dec = decodePreset(code);
+  const decOld = decodePreset("TMT-light_amber-8b5cf6-T-none");
+  out.push("code=" + code + "|decoded=" + (dec && dec.slot === "dark") + "|oldCodeSlot=" + (decOld && decOld.slot === null));
+  document.body.dataset.selftest = out.join(" · ");
+}
+
+/* selftest=2: темы против эталона + свотчи */
+if (ST === "2") {
+  const out = [];
+  document.body.style.transition = "none";
+  const hex2rgb = h => { const c = h.replace("#", ""); return `rgb(${[0, 2, 4].map(i => parseInt(c.slice(i, i + 2), 16)).join(", ")})`; };
+  const EXPECT = {
+    "light-slate": ["#f4f5f7", "#4c5699"], "dark-slate": ["#0f1013", "#4c5699"], "oled-slate": ["#000000", "#4c5699"],
+    "light-nord": ["#eceff4", "#5e81ac"], "dark-nord": ["#2e3440", "#5e81ac"], "oled-nord": ["#000000", "#5e81ac"],
+    "light-midnight": ["#f0f4fe", "#3060e8"], "dark-midnight": ["#1a1b26", "#3060e8"], "oled-midnight": ["#000000", "#3060e8"],
+    "light-dracula": ["#f6f3fc", "#9444d6"], "dark-dracula": ["#282a36", "#9444d6"], "oled-dracula": ["#000000", "#9444d6"],
+    "light-sepia": ["#fcfaf2", "#a0522d"], "dark-sepia": ["#1e1b18", "#a0522d"], "oled-sepia": ["#000000", "#a0522d"],
+    "light-evergreen": ["#f1f7f4", "#2d6a4f"], "dark-evergreen": ["#0f1a14", "#2d6a4f"], "oled-evergreen": ["#000000", "#2d6a4f"],
+    "light-amber": ["#fffdf5", "#d35400"], "dark-amber": ["#1a130f", "#d35400"], "oled-amber": ["#000000", "#d35400"],
+    "light-sakura": ["#fff0f5", "#d87093"], "dark-sakura": ["#1f1619", "#d87093"], "oled-sakura": ["#000000", "#d87093"],
+  };
+  let bgFails = 0, accFails = 0;
+  for (const [t, [bg, acc]] of Object.entries(EXPECT)) {
+    document.documentElement.setAttribute("data-theme", t);
+    if (getComputedStyle(document.body).backgroundColor !== hex2rgb(bg)) bgFails++;
+    if (getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() !== acc) accFails++;
+  }
+  out.push("themes24: bgFails=" + bgFails + " accFails=" + accFails);
+  out.push("swatches=" + document.querySelectorAll(".theme-swatch").length + "|oledSwatches=" + document.querySelectorAll('.theme-swatch[data-theme^="oled-"]').length);
+  // галочка: у активного свотча видна, у неактивного скрыта
+  setMode("dark"); // активна dark-slate (prefDark)
+  const activeSw = document.querySelector('.theme-swatch[data-theme="dark-slate"]');
+  const inactiveSw = document.querySelector('.theme-swatch[data-theme="light-slate"]');
+  const activeCheck = activeSw && getComputedStyle(activeSw.querySelector(".theme-swatch-check")).display;
+  const inactiveCheck = inactiveSw && getComputedStyle(inactiveSw.querySelector(".theme-swatch-check")).display;
+  out.push("checkActive=" + activeCheck + "|checkInactive=" + inactiveCheck);
+  document.body.dataset.selftest2 = out.join(" · ");
+}
+
+/* selftest=3: контраст */
+if (ST === "3") {
+  const out = [];
+  document.body.style.transition = "none";
+  const contrast = (c1, c2) => {
+    const L = h => {
+      const c = h.replace("#", "");
+      const [r, g, b] = [0, 2, 4].map(i => parseInt(c.slice(i, i + 2), 16) / 255);
+      const f = x => x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4);
+      return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+    };
+    const [a, b] = [L(c1), L(c2)].sort((x, y) => y - x);
+    return (a + 0.05) / (b + 0.05);
+  };
+  const EXPECT = {
+    "light-slate": ["#f4f5f7", "#1f2329"], "dark-slate": ["#0f1013", "#f2f3f5"], "oled-slate": ["#000000", "#f2f3f5"],
+    "light-nord": ["#eceff4", "#2e3440"], "dark-nord": ["#2e3440", "#eceff4"], "oled-nord": ["#000000", "#eceff4"],
+    "light-midnight": ["#f0f4fe", "#1a1b26"], "dark-midnight": ["#1a1b26", "#c0caf5"], "oled-midnight": ["#000000", "#c0caf5"],
+    "light-dracula": ["#f6f3fc", "#282a36"], "dark-dracula": ["#282a36", "#f8f8f2"], "oled-dracula": ["#000000", "#f8f8f2"],
+    "light-sepia": ["#fcfaf2", "#433422"], "dark-sepia": ["#1e1b18", "#efebe4"], "oled-sepia": ["#000000", "#efebe4"],
+    "light-evergreen": ["#f1f7f4", "#1c2e24"], "dark-evergreen": ["#0f1a14", "#e2e8e6"], "oled-evergreen": ["#000000", "#e2e8e6"],
+    "light-amber": ["#fffdf5", "#3d321d"], "dark-amber": ["#1a130f", "#fdf5f0"], "oled-amber": ["#000000", "#fdf5f0"],
+    "light-sakura": ["#fff0f5", "#5c2c3a"], "dark-sakura": ["#1f1619", "#ffd1dc"], "oled-sakura": ["#000000", "#ffd1dc"],
+  };
+  const bodyText = getComputedStyle(document.body).color;
+  let bodyFails = 0;
+  for (const t of Object.keys(EXPECT)) {
+    document.documentElement.setAttribute("data-theme", t);
+    const rgb = getComputedStyle(document.body).backgroundColor.match(/\d+/g).slice(0, 3).map(Number);
+    const hex = "#" + rgb.map(x => x.toString(16).padStart(2, "0")).join("");
+    if (contrast(hex, bodyText) < 4.5) bodyFails++;
+  }
+  out.push("themes24 contrast<4.5: " + bodyFails + "/24");
+  document.documentElement.setAttribute("data-theme", "dark-slate");
+  let swatchFails = 0;
+  document.querySelectorAll(".theme-swatch").forEach(s => {
+    if (contrast(s.style.background, s.style.color) < 2.5) swatchFails++;
+  });
+  out.push("swatches contrast<2.5: " + swatchFails);
+  document.body.dataset.selftest3 = out.join(" · ");
+}
+
+/* selftest=5: системный режим (🖥️) — тема следует за цветами ОС */
+if (ST === "5") {
+  const out = [];
+  document.body.style.transition = "none";
+  // эмуляция prefers-color-scheme (в headless нет системного переключателя)
+  const emulate = dark => {
+    window.matchMedia = () => ({ matches: dark, media: "", onchange: null,
+      addEventListener: () => {}, removeEventListener: () => {},
+      addListener: () => {}, removeListener: () => {}, dispatchEvent: () => false });
+  };
+  store.mode = "system"; store.prefLight = "light-slate"; store.prefDark = "dark-dracula";
+  store.customLight = null; store.customDark = null; store.useOled = false; save();
+  // светлая система → светлая предпочитаемая
+  emulate(false); setMode("system");
+  out.push("sysLight: theme=" + document.documentElement.getAttribute("data-theme"));
+  // тёмная система → тёмная предпочитаемая
+  emulate(true); setMode("system");
+  out.push("sysDark: theme=" + document.documentElement.getAttribute("data-theme"));
+  // тёмная система + OLED-галочка → oled-версия
+  store.useOled = true; emulate(true); setMode("system");
+  out.push("sysDarkOled: theme=" + document.documentElement.getAttribute("data-theme"));
+  store.useOled = false;
+  // тёмная система + тёмный слот → применяется свой тёмный стиль
+  store.customDark = { name: "Сис-тёмный", accent: "#8b5cf6", bgMode: "theme", bgColor: null };
+  emulate(true); setMode("system");
+  out.push("sysDarkSlot: custom=" + isCustom() + "|accent=" + (store.draft && store.draft.accent));
+  // светлая система → снова светлый слот/базовая
+  emulate(false); setMode("system");
+  out.push("sysLightAgain: theme=" + document.documentElement.getAttribute("data-theme") +
+    "|custom=" + isCustom() + "|card=" + document.getElementById("pref-light-value").textContent);
+  document.body.dataset.selftest5 = out.join(" · ");
+}
+
+/* selftest=6: масштаб интерфейса и размер шрифта */
+if (ST === "6") {
+  const out = [];
+  document.body.style.transition = "none";
+  uiScale = 1.25; fontScale = 1.25; applyScale();
+  out.push("htmlFontSize=" + getComputedStyle(document.documentElement).fontSize); // 16*1.25 = 20px
+  out.push("scaleVars=" + getComputedStyle(document.documentElement).getPropertyValue("--ui-scale").trim() +
+    "/" + getComputedStyle(document.documentElement).getPropertyValue("--font-scale").trim());
+  // px-токен реально масштабируется: padding var(--sp-4) при 1.25 = 10px
+  const probe = document.createElement("div");
+  probe.style.padding = "var(--sp-4)";
+  document.body.appendChild(probe);
+  out.push("sp4=" + getComputedStyle(probe).paddingLeft);
+  probe.remove();
+  // шрифт: --fs-base при font-scale 1.25 (rem-база 20px) = 0.85rem*1.25*20 = 21.25px
+  const fsProbe = document.createElement("div");
+  fsProbe.style.fontSize = "var(--fs-base)";
+  document.body.appendChild(fsProbe);
+  out.push("fsBase=" + getComputedStyle(fsProbe).fontSize);
+  fsProbe.remove();
+  // сброс
+  uiScale = 1; fontScale = 1; applyScale();
+  out.push("reset=" + getComputedStyle(document.documentElement).fontSize);
+  document.body.dataset.selftest6 = out.join(" · ");
+}
+
+
+</script>
+</body>
+</html>

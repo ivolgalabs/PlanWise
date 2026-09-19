@@ -1,0 +1,58 @@
+/* --- TOASTS / УВЕДОМЛЕНИЯ ---
+ * Стек в правом верхнем углу: непрозрачный фон (видно на любом фоне),
+ * цветная полоса состояния слева + иконка состояния.
+ * Использование: <div class="toast-stack" id="stack"></div>, тосты создаются
+ * скриптом: div.toast.success + span.icon.icon--check.t-icon + текст.
+ * Состояния: success (--success) / error (--danger) / info (--ref-color). */
+
+.toast-stack {
+  position: fixed;
+  top: 80px;
+  right: 16px;
+  z-index: var(--z-toast, 9999);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+  max-width: 380px;
+  width: 100%;
+  padding: 0 16px;
+  box-sizing: border-box;
+}
+
+.toast {
+  pointer-events: auto;
+  padding: 10px 14px 10px 16px;
+  border-radius: var(--radius-lg);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  line-height: 1.4;
+  background: var(--bg-secondary);            /* непрозрачный — видно на любом фоне */
+  border: 1px solid var(--border-color);
+  border-left: 3px solid var(--border-color); /* цветная полоса состояния */
+  box-shadow: var(--shadow-lg);
+  color: var(--text-primary);
+  animation: toast-in 0.3s var(--ease-out);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.toast .t-icon { flex-shrink: 0; }
+
+.toast.success { border-left-color: var(--success); }
+.toast.success .t-icon { color: var(--success); }
+.toast.error   { border-left-color: var(--danger); }
+.toast.error .t-icon { color: var(--danger); }
+.toast.info    { border-left-color: var(--ref-color); }
+.toast.info .t-icon { color: var(--ref-color); }
+
+/* Перед удалением добавьте класс .leaving, затем удалите узел через 250ms */
+.toast.leaving { animation: toast-out 0.25s ease forwards; }
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(-10px) scale(0.97); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes toast-out {
+  to { opacity: 0; transform: translateY(-6px); }
+}

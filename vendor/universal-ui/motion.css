@@ -1,0 +1,24 @@
+/* --- MOTION: спокойные одноразовые анимации ---
+ * Только fade / slide-up / pulse — без вращений и «прыжков».
+ * Использование: одноразово по триггерам (модалки, тосты, появление панели):
+ *   <div class="anim-slide-up">…</div>
+ * Для демо/циклической подсветки добавьте класс .anim-infinite. */
+
+.anim-fade     { animation: u-fade     0.25s ease both; }
+.anim-slide-up { animation: u-slide-up 0.3s var(--ease-out) both; }
+.anim-pulse    { animation: u-pulse    0.6s ease-in-out both; }
+
+.anim-infinite { animation-iteration-count: infinite; }
+
+@keyframes u-fade {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.35; }
+}
+@keyframes u-slide-up {
+  0%, 100% { transform: translateY(0); opacity: 1; }
+  50%      { transform: translateY(8px); opacity: 0.4; }
+}
+@keyframes u-pulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.1); }
+}

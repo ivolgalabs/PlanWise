@@ -1,0 +1,80 @@
+/* --- SEMANTIC BUTTONS ---
+ * Базовый <button> (bg-secondary, рамка, hover по accent) — в components.css.
+ * Здесь — семантические модификаторы. Высота 38px (--row-h) приходит из
+ * 38px-грида components.css. Текст на accent/danger — var(--text-on-accent). */
+.btn-primary {
+  background-color: var(--accent);
+  border-color: var(--accent);
+  color: var(--text-on-accent);
+}
+.btn-primary:hover:not(:disabled) {
+  background-color: var(--accent-hover);
+  border-color: var(--accent-hover);
+  box-shadow: 0 4px 12px var(--accent-glow);
+}
+
+.btn-danger {
+  background-color: var(--danger);
+  border-color: var(--danger);
+  color: var(--text-on-accent);
+}
+.btn-danger:hover:not(:disabled) {
+  background-color: var(--danger-hover);
+  border-color: var(--danger-hover);
+}
+
+/* Контурная danger: фон-подложка + цветной текст (для вторичных деструктивных) */
+.btn-danger-outline {
+  background-color: var(--danger-bg);
+  border-color: var(--danger-border);
+  color: var(--danger);
+}
+.btn-danger-outline:hover:not(:disabled) {
+  background-color: var(--danger);
+  border-color: var(--danger);
+  color: var(--text-on-accent);
+}
+
+/* Ghost: без фона и рамки, hover — подложка */
+.btn-ghost {
+  background-color: transparent;
+  border-color: transparent;
+  color: var(--text-secondary);
+}
+.btn-ghost:hover:not(:disabled) {
+  background-color: var(--bg-hover);
+  border-color: transparent;
+  color: var(--text-primary);
+  box-shadow: none;
+}
+
+/* Иконочная кнопка фикс. 32x32 (выпадает из 38px-грида намеренно) */
+.btn-icon {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: var(--radius-lg);
+}
+
+/* Вкладки-кнопки: активная — подложка акцента (третий паттерн вкладок
+ * после .segmented-control и .theme-tab-btn, все на одной базе) */
+.tab-item {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: all 0.15s;
+  box-sizing: border-box;
+}
+.tab-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+.tab-item.active {
+  background: var(--accent-glow);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 700;
+}

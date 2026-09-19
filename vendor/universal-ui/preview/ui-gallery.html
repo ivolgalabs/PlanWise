@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="light-slate">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Universal UI — галерея общих элементов</title>
+<!-- Микро-сайт: живое демо слоёв UUI. Все стили — из слоёв дизайн-системы
+     (никакого инлайна кандидатов): тосты, motion, статус-бар, справка,
+     карточки, вкладки, confirm, радиусы, иконки ×169. -->
+<link rel="stylesheet" href="../tokens.css" />
+<link rel="stylesheet" href="../themes.css" />
+<link rel="stylesheet" href="../typography.css" />
+<link rel="stylesheet" href="../components.css" />
+<link rel="stylesheet" href="../badges.css" />
+<link rel="stylesheet" href="../buttons.css" />
+<link rel="stylesheet" href="../context-menu.css" />
+<link rel="stylesheet" href="../toolbar.css" />
+<link rel="stylesheet" href="../empty-state.css" />
+<link rel="stylesheet" href="../icons.css" />
+<link rel="stylesheet" href="../theme-status.css" />
+<link rel="stylesheet" href="../ui-scale.css" />
+<link rel="stylesheet" href="../toast.css" />
+<link rel="stylesheet" href="../motion.css" />
+<link rel="stylesheet" href="../status-bar.css" />
+<link rel="stylesheet" href="../help.css" />
+<link rel="stylesheet" href="../app-card.css" />
+<style>
+  body {
+    font-family: var(--font-ui);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    margin: 0;
+    padding: 28px;
+  }
+  .g-wrap { max-width: 940px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+  .g-hero { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .g-hero h1 { font-size: var(--fs-xl); font-weight: 800; letter-spacing: -0.03em; margin: 0; }
+  .g-hero p { margin: 0; font-size: var(--fs-sm); color: var(--text-muted); max-width: 560px; }
+  .g-section { display: flex; flex-direction: column; gap: 10px; }
+  .g-section > h2 {
+    font-size: var(--fs-sm); font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--text-secondary); margin: 0; padding-bottom: 6px; border-bottom: 1px solid var(--border-color);
+  }
+  .g-why { font-size: var(--fs-xs); color: var(--text-muted); line-height: 1.55; margin: 0; }
+  .g-why b { color: var(--text-secondary); }
+  .g-demo {
+    background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-xl);
+    padding: 16px; display: flex; flex-direction: column; gap: 12px;
+  }
+  .g-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .g-foot { font-size: 11px; color: var(--text-muted); text-align: center; padding: 8px 0 24px; }
+
+  /* Демо-специфичное (не слой): размеры боксов анимаций */
+  .m-box {
+    width: 44px; height: 44px; border-radius: var(--radius-lg);
+    background: var(--accent-glow); border: 1px solid var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; color: var(--accent);
+  }
+
+  /* Демо-механика модалок (показ/скрытие — не стиль): */
+  .modal-overlay-demo { display: none; }
+  .modal-overlay-demo.open { display: flex; }
+
+  /* ── Радиусы (секция 12): живая шкала токенов ── */
+  .radius-row { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+  .radius-cell { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+  .radius-sq {
+    width: 72px; height: 46px; background: var(--accent-glow);
+    border: 1px solid var(--accent); box-sizing: border-box;
+  }
+  .radius-cell b { font-size: 10px; color: var(--text-secondary); font-weight: 700; font-family: var(--font-mono); }
+  .radius-cell span { font-size: 10px; color: var(--text-muted); font-family: var(--font-mono); }
+</style>
+</head>
+<body>
+<div class="g-wrap">
+
+  <div class="g-hero">
+    <div>
+      <h1>🧩 Universal UI — галерея общих элементов</h1>
+      <p>Живое демо слоёв дизайн-системы: всё ниже работает на токенах и слоях UUI (а не инлайн-кандидатами). Иконки ×169 покрывают все проекты; тосты, motion, статус-бар, справка, карточки, вкладки, confirm — готовые слои.</p>
+    </div>
+    <div class="g-row">
+      <span class="badge keep">слои UUI</span>
+      <select id="theme-select" class="type-filter" style="height:32px">
+        <option value="light-slate">Светлая</option>
+        <option value="dark-slate">Тёмная</option>
+        <option value="oled-slate">OLED</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- ═══ 1. ИКОНКИ (icons.css) ═══ -->
+  <div class="g-section">
+    <h2>1. Иконки — icons.css</h2>
+    <p class="g-why"><b>Слой:</b> icons.css — 169 иконок feather/lucide-стиля (stroke 2px, 24×24, currentColor) масками. <b>Покрытие:</b> 100% всех проектов: TensorMedia (база), multispend (финансы), todo (palette/note/drag/dots), share-drop (wifi/bluetooth/qr/send), «Синхронизация» (terminal/shield/hard-drive), сайт-портфолио (crown/badge/gift).</p>
+    <div class="g-demo">
+      <div class="g-row" id="icon-grid" style="gap:14px"></div>
+      <p class="g-why" style="font-size:10px">169 иконок: stroke 2px, viewBox 24×24, цвет — currentColor; размеры .icon (16) / .icon-sm (14) / .icon-lg (18) / .icon-xl (20) / .icon-hero (64). Маппинг lucide→UUI: Image→photo, X→close, Settings→gear, Trash2→trash, Loader2→loader, Share2→share, LogIn→login, Volume2→volume, DollarSign→dollar</p>
+    </div>
+  </div>
+
+  <!-- ═══ 2. ТОСТЫ (toast.css) ═══ -->
+  <div class="g-section">
+    <h2>2. Тосты / уведомления — toast.css</h2>
+    <p class="g-why"><b>Слой:</b> toast.css — стек .toast-stack + .toast с состояниями success/error/info (непрозрачный фон, цветная полоса слева, иконка) + анимации toast-in/toast-out. <b>Из:</b> multispend (стек справа сверху) и TensorMedia (сообщения «Применён стиль…»).</p>
+    <div class="g-demo">
+      <div class="g-row">
+        <button class="sub-btn" onclick="showToast('success','✓ Стиль «123123» сохранён и занесён в статус')">Success-тост</button>
+        <button class="sub-btn" onclick="showToast('error','✕ Не удалось прочитать файл: формат не поддерживается')">Error-тост</button>
+        <button class="sub-btn" onclick="showToast('info','ℹ️ Сканирование завершено: 1284 файла, 96 групп')">Info-тост</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ 3. MOTION (motion.css) ═══ -->
+  <div class="g-section">
+    <h2>3. Motion-анимации — motion.css</h2>
+    <p class="g-why"><b>Слой:</b> motion.css — .anim-fade / .anim-slide-up / .anim-pulse (+.anim-infinite для демо). Только спокойные переходы на токенах (--duration-*, --ease-out); в приложениях — одноразово по триггерам. <b>Из:</b> разрозненные @keyframes в проектах (fadeIn, bounce-in).</p>
+    <div class="g-demo">
+      <div class="g-row">
+        <div class="m-box anim-fade anim-infinite">☁️</div>
+        <div class="m-box anim-slide-up anim-infinite">⬆️</div>
+        <div class="m-box anim-pulse anim-infinite">💓</div>
+      </div>
+      <p class="g-why" style="font-size:10px">fade · slide-up · pulse — без вращений и прыжков (bounce/spin удалены по фидбеку)</p>
+    </div>
+  </div>
+
+  <!-- ═══ 4. ПРОГРЕСС-БАРЫ (components.css) ═══ -->
+  <div class="g-section">
+    <h2>4. Прогресс-бары — components.css</h2>
+    <p class="g-why"><b>Слой:</b> components.css — .progress-bar/.progress-fill + варианты .sm (4px для таблиц) и .with-border. Один API вместо двух несовместимых (был ещё .progress-bar-track в TensorMedia).</p>
+    <div class="g-demo">
+      <div class="progress-bar with-border"><div class="progress-fill" id="pbar-fill" style="width:35%"></div></div>
+      <div class="progress-bar sm"><div class="progress-fill" style="width:70%"></div></div>
+      <div class="g-row">
+        <button class="sub-btn" id="pbar-run">▶ Анимировать</button>
+        <span style="font-size:var(--fs-xs);color:var(--text-muted)">тонкий 4px (таблицы) · обычный 6px (скан)</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ 5. СТАТУС-БАР (status-bar.css) ═══ -->
+  <div class="g-section">
+    <h2>5. Статус-бар — status-bar.css</h2>
+    <p class="g-why"><b>Слой:</b> status-bar.css — компактная нижняя строка: слева статус/прогресс, справа метрики. <b>Из:</b> TensorMedia (статус сканирования внизу окна).</p>
+    <div class="status-bar">
+      <span class="s-text s-busy">Сканирование…</span>
+      <span class="s-progress">42%</span>
+      <span class="s-spacer"></span>
+      <span class="s-metrics">файлов <b>1 284</b> · дубликатов <b>96</b> · скорость <b>312/с</b></span>
+    </div>
+  </div>
+
+  <!-- ═══ 6. СПРАВКА (help.css) ═══ -->
+  <div class="g-section">
+    <h2>6. Горячие клавиши и справка — help.css</h2>
+    <p class="g-why"><b>Слой:</b> help.css — капсулы <kbd>⌘</kbd>+<kbd>A</kbd> и строки .help-row для модалки F1-справки. <b>Из:</b> TensorMedia (help-list kbd).</p>
+    <div class="g-demo">
+      <div class="g-row">
+        <span>Пробел — <kbd>Space</kbd></span>
+        <span>Выбрать всё — <kbd>⌘</kbd>+<kbd>A</kbd></span>
+        <span>Удалить — <kbd>⌫</kbd></span>
+        <button class="sub-btn" onclick="openHelp()">Открыть справку (F1)</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ 7. КАРТОЧКИ (app-card.css) ═══ -->
+  <div class="g-section">
+    <h2>7. Карточки — app-card.css</h2>
+    <p class="g-why"><b>Слой:</b> app-card.css — пара .app-card (секция на --bg-secondary) / .app-card-inner (вложенный блок на --bg-tertiary). <b>Из:</b> multispend-tracker.</p>
+    <div class="g-row">
+      <div class="app-card" style="flex:1">
+        <h3>Секция настроек</h3>
+        <p>app-card: фон --bg-secondary, радиус --radius-xl, рамка --border-color</p>
+        <div class="app-card-inner">
+          <span style="font-size:var(--fs-xs)">app-card-inner: фон --bg-tertiary — вложенные группы</span>
+        </div>
+      </div>
+      <div class="app-card" style="flex:1">
+        <h3>Карточка-метрика</h3>
+        <div class="g-row" style="gap:14px">
+          <span class="metric">доход <b>₽ 128 400</b></span>
+          <span class="metric">расход <b>₽ 96 200</b></span>
+        </div>
+        <span class="badge keep">+12% за месяц</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ 8. ВКЛАДКИ-КНОПКИ (buttons.css) ═══ -->
+  <div class="g-section">
+    <h2>8. Вкладки-кнопки — buttons.css</h2>
+    <p class="g-why"><b>Слой:</b> buttons.css — .tab-item (активная — подложка акцента), третий паттерн вкладок после .segmented-control и .theme-tab-btn — все на одной базе. <b>Из:</b> multispend.</p>
+    <div class="g-demo">
+      <div class="g-row" id="tab-demo">
+        <button class="tab-item active">📊 Аналитика</button>
+        <button class="tab-item">📅 Операции</button>
+        <button class="tab-item">⚙️ Настройки</button>
+        <button class="tab-item">🧾 Отчёты</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ 9. СЛАЙДЕР СО ЗНАЧЕНИЕМ (components.css) ═══ -->
+  <div class="g-section">
+    <h2>9. Слайдер со значением — components.css</h2>
+    <p class="g-why"><b>Слой:</b> components.css — .slider-row/.slider-value: ползунок + число accent справа. <b>Из:</b> TensorMedia (порог сходства, громкость).</p>
+    <div class="g-demo">
+      <div class="slider-row">
+        <span style="font-size:var(--fs-xs);color:var(--text-secondary);min-width:110px">Порог сходства</span>
+        <input type="range" min="0" max="100" value="85" id="demo-slider" />
+        <span class="slider-value" id="demo-slider-value">85%</span>
+      </div>
+      <div class="slider-row">
+        <span style="font-size:var(--fs-xs);color:var(--text-secondary);min-width:110px">Громкость</span>
+        <input type="range" min="0" max="100" value="40" id="demo-vol" />
+        <span class="slider-value" id="demo-vol-value">40%</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ 10. CONFIRM (components.css) ═══ -->
+  <div class="g-section">
+    <h2>10. Модалка подтверждения — components.css</h2>
+    <p class="g-why"><b>Слой:</b> components.css — .modal-overlay + .confirm-modal (уже были в UUI, демо переведено на них). <b>Из:</b> TensorMedia (удаление файлов: «В корзину / Безвозвратно»).</p>
+    <div class="g-demo">
+      <div class="g-row">
+        <button class="btn-danger" onclick="openConfirm()">🗑 Удалить выбранное</button>
+        <span style="font-size:var(--fs-xs);color:var(--text-muted)">откроет confirm-модалку с «Отмена» / «Удалить»</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ 11. ОПЦИОНАЛЬНОЕ ═══ -->
+  <div class="g-section">
+    <h2>11. Опциональное (специфичное, но переиспользуемое)</h2>
+    <div class="g-row">
+      <div style="flex:1">
+        <p class="g-why"><b>Слой:</b> components.css — .drop-zone (drag&drop оверлей из universal-share-drop). Наведите мышь:</p>
+        <div class="drop-zone" id="drop-zone" ondragover="this.classList.add('over')" ondragleave="this.classList.remove('over')" ondragend="this.classList.remove('over')">
+          Перетащите файлы сюда (имитация)
+        </div>
+      </div>
+      <div style="flex:1">
+        <p class="g-why"><b>Слой:</b> components.css + badges.css — .tri-check, .metric, .badge-count (TensorMedia):</p>
+        <div class="g-demo" style="gap:8px">
+          <label class="tri-check"><input type="checkbox" /> Группа «Скриншоты» <span class="badge-count">12</span></label>
+          <label class="tri-check"><input type="checkbox" /> Группа «Видео» <span class="badge-count">3</span></label>
+          <div class="g-row" style="gap:14px">
+            <span class="metric">на удаление <b>8</b></span>
+            <span class="metric">освободится <b>2.4 ГБ</b></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ 12. РАДИУСЫ ═══ -->
+  <div class="g-section">
+    <h2>12. Радиусы (скругление) — единая шкала, а не «отдельно для каждого проекта»</h2>
+    <p class="g-why"><b>Слой:</b> tokens.css — шкала --radius-none…full. Характер проекта = выбор значения из шкалы: todo — мягкое md (6px), TensorMedia — крупные карточки lg/xl (8–12px), плавающий остров — 3xl (24px). Один токен переопределяется в App.css проекта — и весь проект меняет характер без перевёрстывания.</p>
+    <div class="g-demo">
+      <div class="radius-row" id="radius-grid"></div>
+      <p class="g-why" style="font-size:10px">xs 2px (kbd, подсветка) · sm 4px (чипы, thumb скроллбара) · md 6px (строки, бейджи — «стиль todo») · lg 8px (кнопки, инпуты — «стиль TensorMedia») · xl 12px (карточки, модалки) · 2xl 16px (стекло-панели) · 3xl 24px (плавающий остров) · full 9999px (пилюли, аватары)</p>
+    </div>
+  </div>
+
+  <p class="g-foot">Уже в UUI: токены, темы ×24, типографика, компоненты, бейджи, кнопки, контекст-меню, тулбар, empty-state, иконки ×169, блок оформления (статус/вкладки/пресеты), масштаб+шрифт, i18n ×8, тосты, motion, статус-бар, справка, карточки.</p>
+</div>
+
+<!-- Стек тостов -->
+<div class="toast-stack" id="toast-stack"></div>
+
+<!-- Модалка справки -->
+<div class="modal-overlay-demo" id="help-modal">
+  <div class="confirm-modal">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <h3 style="margin:0;font-size:var(--fs-base)">⌨️ Горячие клавиши</h3>
+      <button class="preset-action-btn" onclick="closeModal('help-modal')">✕</button>
+    </div>
+    <div class="help-row"><kbd>Space</kbd> Воспроизведение / пауза</div>
+    <div class="help-row"><kbd>⌘</kbd>+<kbd>A</kbd> Выбрать все</div>
+    <div class="help-row"><kbd>⌘</kbd>+<kbd>P</kbd> Сравнить выбранные</div>
+    <div class="help-row"><kbd>⌫</kbd> Удалить выбранное</div>
+    <div class="help-row"><kbd>F1</kbd> Эта справка</div>
+  </div>
+</div>
+
+<!-- Модалка confirm -->
+<div class="modal-overlay-demo" id="confirm-modal">
+  <div class="confirm-modal">
+    <p class="c-msg">Удалить <b>8 файлов</b>? Это действие переместит их в корзину.</p>
+    <div class="c-actions">
+      <button class="sub-btn" onclick="closeModal('confirm-modal')">Отмена</button>
+      <button class="btn-danger" onclick="closeModal('confirm-modal'); showToast('success','✓ 8 файлов перемещены в корзину')">Удалить</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* Темы */
+document.getElementById("theme-select").addEventListener("change", e => {
+  document.documentElement.setAttribute("data-theme", e.target.value);
+});
+
+/* 1. Сетка иконок */
+const ICON_NAMES = ["folder","trash","photo","video","doc","audio","others","muted","volume","flame","pin","pin-solid","globe","contrast","gear","chart","play","pause","prev","next","file","database","search","close","chevron-right","check","plus","minus","arrow-left","arrow-right","calendar","eye","eye-off","download","upload","copy","wallet","bell","refresh","home","user","external","check-circle","alert-circle","info","help-circle","arrow-up","arrow-down","arrow-up-right","arrow-down-right","chevron-left","chevron-up","chevron-down","edit","delete","loader","paperclip","save","filter","sliders","more","star","share","link","clock","tag","layers","zap","sun","moon","monitor","keyboard","list","grid","sort","mail","palette","note","calendar-hide","drag","trending-up","trending-down","shopping-bag","shopping-cart","briefcase","pie-chart","file-text","file-json","file-spreadsheet","file-plus","calendar-check","layout-dashboard","x-circle","circle","sparkles","receipt","map","table","package-check","credit-card","dollar","percent","piggy-bank","landmark","coins","lock","arrow-left-right","bluetooth","cable","camera","clipboard","door-open","folder-down","folder-open","heart","heart-pulse","history","qr-code","send","server","shield-check","smartphone","tv","unlock","users","wifi","wifi-off","activity","book-open","file-code","hard-drive","key","login","scale","terminal","alert-triangle","arrow-up-down","badge","badges","cloud","code","codes","cpu","gift","message-square","shield","shield-alert","menu","plus-circle","minus-circle","rotate-ccw","check-square","edit-3","film","folder-input","folder-plus","folder-sync","hard-drive-upload","mic","music","radio","square","braces","crown","github","infinity","scissors","sliders-horizontal","dots"];
+(() => {
+  const grid = document.getElementById("icon-grid");
+  ICON_NAMES.forEach(n => {
+    const cell = document.createElement("div");
+    cell.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:4px;width:52px";
+    cell.innerHTML = `<span class="icon icon--${n}" title="${n}"></span><span style="font-size:9px;color:var(--text-muted);font-family:var(--font-mono)">${n}</span>`;
+    grid.appendChild(cell);
+  });
+})();
+
+/* 2. Тосты (слой toast.css) */
+function showToast(type, text) {
+  const stack = document.getElementById("toast-stack");
+  const t = document.createElement("div");
+  t.className = "toast " + type;
+  const icon = { success: "check", error: "close", info: "bell" }[type] || "bell";
+  const ic = document.createElement("span");
+  ic.className = "icon icon--" + icon + " t-icon";
+  t.appendChild(ic);
+  const tx = document.createElement("span");
+  tx.textContent = text;
+  t.appendChild(tx);
+  stack.appendChild(t);
+  setTimeout(() => {
+    t.classList.add("leaving");
+    setTimeout(() => t.remove(), 260);
+  }, 3200);
+}
+
+/* 4. Прогресс-бар */
+document.getElementById("pbar-run").addEventListener("click", () => {
+  const fill = document.getElementById("pbar-fill");
+  let w = 0;
+  const iv = setInterval(() => {
+    w += 2;
+    fill.style.width = w + "%";
+    if (w >= 100) clearInterval(iv);
+  }, 30);
+});
+
+/* 8. Вкладки */
+document.getElementById("tab-demo").addEventListener("click", e => {
+  if (!e.target.classList.contains("tab-item")) return;
+  document.querySelectorAll("#tab-demo .tab-item").forEach(b => b.classList.remove("active"));
+  e.target.classList.add("active");
+});
+
+/* 9. Слайдеры */
+[["demo-slider", "demo-slider-value"], ["demo-vol", "demo-vol-value"]].forEach(([id, vid]) => {
+  document.getElementById(id).addEventListener("input", e => {
+    document.getElementById(vid).textContent = e.target.value + "%";
+  });
+});
+
+/* 6, 10. Модалки */
+function openHelp() { document.getElementById("help-modal").classList.add("open"); }
+function openConfirm() { document.getElementById("confirm-modal").classList.add("open"); }
+function closeModal(id) { document.getElementById(id).classList.remove("open"); }
+document.querySelectorAll(".modal-overlay-demo").forEach(m => {
+  m.addEventListener("click", e => { if (e.target === m) m.classList.remove("open"); });
+});
+
+/* 12. Радиусы — живая шкала */
+(() => {
+  const grid = document.getElementById("radius-grid");
+  if (!grid) return;
+  [["none","0"],["xs","2px"],["sm","4px"],["md","6px"],["lg","8px"],["xl","12px"],["2xl","16px"],["3xl","24px"],["full","9999px"]].forEach(([name, val]) => {
+    const cell = document.createElement("div");
+    cell.className = "radius-cell";
+    const sq = document.createElement("div");
+    sq.className = "radius-sq";
+    sq.style.borderRadius = `var(--radius-${name})`;
+    const label = document.createElement("b");
+    label.textContent = name;
+    const sub = document.createElement("span");
+    sub.textContent = val;
+    cell.append(sq, label, sub);
+    grid.appendChild(cell);
+  });
+})();
+
+/* Self-test галереи: ?selftest=1 */
+if (new URLSearchParams(location.search).get("selftest") === "1") {
+  const out = [];
+  document.body.style.transition = "none";
+  // иконки
+  out.push("icons=" + document.querySelectorAll("#icon-grid .icon").length);
+  // радиусы: все 9 токенов шкалы определены
+  const RADII = ["none","xs","sm","md","lg","xl","2xl","3xl","full"];
+  out.push("radii=" + RADII.filter(r => getComputedStyle(document.documentElement).getPropertyValue("--radius-" + r).trim() !== "").length + "/9" + " cells=" + document.querySelectorAll("#radius-grid .radius-cell").length);
+  // тост: стили из слоя toast.css (анимация toast-in), иконка, непрозрачный фон
+  showToast("success", "Тест тоста");
+  const t = document.querySelector(".toast");
+  out.push("toast: anim=" + getComputedStyle(t).animationName + " icon=" + (t.querySelector(".t-icon") !== null) + " bg=" + getComputedStyle(t).backgroundColor);
+  // прогресс: анимация меняет ширину, высота из слоя (6px)
+  let intervalProbe = 0;
+  const probe = setInterval(() => { intervalProbe += 2; }, 30);
+  document.getElementById("pbar-run").click();
+  const w0 = document.getElementById("pbar-fill").style.width;
+  setTimeout(() => {
+    const w1 = document.getElementById("pbar-fill").style.width;
+    clearInterval(probe);
+    out.push("pbar: w0=" + w0 + " w1=" + w1 + " moved=" + (w0 !== w1) + " intervalProbe=" + intervalProbe);
+    out.push("pbarH=" + getComputedStyle(document.querySelector(".progress-bar")).height);
+    // слои применились: статус-бар, help, карточка, вкладка, кнопка
+    const layers = {
+      "statusBar": getComputedStyle(document.querySelector(".status-bar")).height,
+      "kbd": getComputedStyle(document.querySelector("kbd")).borderRadius,
+      "appCard": getComputedStyle(document.querySelector(".app-card")).borderRadius,
+      "tabItem": getComputedStyle(document.querySelector(".tab-item")).borderRadius,
+      "badgeCount": getComputedStyle(document.querySelector(".badge-count")).backgroundColor,
+      "dropZone": getComputedStyle(document.querySelector(".drop-zone")).borderStyle,
+      "metric": getComputedStyle(document.querySelector(".metric")).fontSize,
+    };
+    out.push("layers: " + Object.entries(layers).map(([k, v]) => k + "=" + v).join(" "));
+    document.body.dataset.selftest = out.join(" · ");
+  }, 400);
+}
+
+</script>
+</body>
+</html>

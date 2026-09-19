@@ -1,0 +1,95 @@
+/* --- TOOLBAR + SEARCH (паттерн «тулбар с поиском» над таблицей/списком) --- */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-control, 8px);
+  padding: var(--pad-control-y, 8px) var(--pad-control-x, 12px);
+  border-bottom: 1px solid var(--border-color);
+  background-color: var(--bg-secondary);
+  flex-shrink: 0;
+}
+.toolbar .spacer { flex: 1; }
+
+/* Поле поиска с кнопкой-крестиком внутри */
+.filter-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.filter-search {
+  width: 100%;
+  padding: 8px 28px 8px 10px;
+  border-radius: var(--radius-lg, 8px);
+  border: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: var(--fs-base);
+}
+.filter-search:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.filter-search-clear {
+  position: absolute;
+  right: 6px;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+  font-size: var(--fs-2xs);
+  cursor: pointer;
+}
+.filter-search-clear:hover {
+  background: var(--danger);
+  color: var(--text-on-accent);
+}
+
+/* Счётчик результатов справа */
+.results-count {
+  margin-left: auto;
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Обёртка поиска с иконкой слева */
+.search-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  max-width: 360px;
+  height: 34px;
+  padding: 0 11px;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  transition: border-color 0.15s;
+}
+.search-input-wrapper:focus-within {
+  border-color: var(--accent);
+}
+.search-input-wrapper .icon {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.search-input-wrapper input {
+  flex: 1;
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: var(--fs-sm);
+  font-family: inherit;
+}
+.search-input-wrapper input::placeholder {
+  color: var(--text-muted);
+}

@@ -1,0 +1,244 @@
+/* ── Блок оформления: дополнительные стили (Universal UI / theme-block) ────
+ * Модуль ThemeSettings.tsx использует классы из трёх источников:
+ *   1. theme-status.css  — карточки статуса, свотчи, вкладки, пресеты;
+ *   2. ui-scale.css      — секции «Масштаб интерфейса» и «Размер шрифта»
+ *      (подключать целиком не обязательно: контролы .scale-* продублированы
+ *      ниже БЕЗ токен-переопределений :root — чтобы не ломать zoom-схему
+ *      приложения; токены-переопределения ui-scale.css подключаются только
+ *      если приложение не использует свой zoom);
+ *   3. этот файл — обёртка модалки, карточки-контейнеры и элементы, которые
+ *      в превью были inline-стилями.
+ *
+ * Подключение: theme-status.css + theme-block.css (и ui-scale.css при желании).
+ */
+
+/* ── Обёртка модалки (та же, что у help-модалок приложения) ── */
+.help-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.12s ease-out;
+}
+
+.theme-settings-modal {
+  width: 580px;
+  max-width: 95vw;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  animation: modalSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.help-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+/* Кнопка закрытия/назад в модалках */
+.modal-back-btn {
+  border: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+.modal-back-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+/* Крестик закрытия — крупная удобная цель */
+.help-head .modal-back-btn {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--fs-lg);
+  line-height: 1;
+  border-radius: 16px;
+  flex-shrink: 0;
+}
+.help-head .modal-back-btn:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
+
+/* ── Карточки-контейнеры (из inline-стилей theme-preview.html) ── */
+.pv-note { font-size: var(--fs-xs); color: var(--text-muted); line-height: 1.5; margin: 0; }
+.pv-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+.pv-grid > * { min-width: 0; }
+@media (max-width: 720px) { .pv-grid { grid-template-columns: 1fr; } }
+.pv-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-xl);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.pv-card h3 { margin: 0; font-size: var(--fs-base); }
+.pv-hint { font-size: 11px; color: var(--text-secondary); }
+.preset-actions-hint { font-size: 10px; color: var(--text-muted); }
+.save-preset-form + .save-preset-form { margin-top: 8px; }
+
+/* ── Элементы, у которых стили жили только в превью ── */
+.ts-scroll {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.slot-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pv-bg-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.preset-slot-select {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  font-size: var(--fs-xs);
+  font-family: inherit;
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  max-width: 100%;
+}
+
+/* Сброс акцента */
+.reset-accent-btn {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.reset-accent-btn:hover {
+  background: var(--danger-bg);
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+/* ── Контролы масштаба (копия контролов из ui-scale.css БЕЗ переопределения
+ *    токенов :root — см. комментарий в шапке файла) ── */
+.scale-section {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-xl, 12px);
+  padding: var(--sp-6, 12px) var(--sp-6, 12px) var(--sp-5, 10px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5, 10px);
+  box-sizing: border-box;
+}
+.scale-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-6, 12px);
+  flex-wrap: wrap;
+}
+.scale-title {
+  margin: 0;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.scale-desc {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.scale-value {
+  font-family: var(--font-mono);
+  font-weight: 800;
+  font-size: var(--fs-base);
+  color: var(--accent);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg, 8px);
+  padding: 2px 10px;
+  white-space: nowrap;
+}
+.scale-slider-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.scale-labels {
+  position: relative;
+  height: 16px;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+.scale-labels .min { position: absolute; left: 0; }
+.scale-labels .mid { position: absolute; left: 50%; transform: translateX(-50%); }
+.scale-labels .max { position: absolute; right: 0; }
+.scale-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3, 6px);
+}
+.scale-preset-btn {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  font-family: inherit;
+  padding: 6px 12px;
+  border-radius: var(--radius-lg, 8px);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.scale-preset-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.scale-preset-btn.active {
+  background: var(--accent-glow);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+/* ── Мобильная адаптация (базовая: модалка на всю ширину, сетки в 1 колонку).
+ *    Полноценный мобильный редизайн — см. README.md «Адаптация». ── */
+@media (max-width: 640px) {
+  .theme-settings-modal {
+    width: 100vw;
+    max-width: 100vw;
+    max-height: 100dvh;
+    border-radius: 0;
+    padding: 16px;
+  }
+  .pv-grid { grid-template-columns: 1fr; }
+  .theme-swatches { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+}

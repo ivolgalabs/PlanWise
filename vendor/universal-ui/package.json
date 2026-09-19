@@ -1,0 +1,42 @@
+{
+  "name": "universal-ui",
+  "version": "1.3.0",
+  "description": "Unified design system: tokens, themes, typography, components, icons, badges, i18n for all ZK apps",
+  "private": true,
+  "files": [
+    "tokens.css",
+    "themes.css",
+    "typography.css",
+    "components.css",
+    "badges.css",
+    "buttons.css",
+    "context-menu.css",
+    "toolbar.css",
+    "empty-state.css",
+    "icons.css",
+    "i18n",
+    "theme-status.css",
+    "ui-scale.css",
+    "mobile.css",
+    "theme-block"
+  ],
+  "exports": {
+    "./tokens.css": "./tokens.css",
+    "./themes.css": "./themes.css",
+    "./typography.css": "./typography.css",
+    "./components.css": "./components.css",
+    "./badges.css": "./badges.css",
+    "./buttons.css": "./buttons.css",
+    "./context-menu.css": "./context-menu.css",
+    "./toolbar.css": "./toolbar.css",
+    "./empty-state.css": "./empty-state.css",
+    "./icons.css": "./icons.css",
+    "./all.css": "./all.css",
+    "./i18n/*.json": "./i18n/*.json",
+    "./theme-status.css": "./theme-status.css",
+    "./ui-scale.css": "./ui-scale.css",
+    "./mobile.css": "./mobile.css",
+    "./theme-block": "./theme-block/index.ts",
+    "./theme-block/themeModel": "./theme-block/themeModel.ts"
+  }
+}

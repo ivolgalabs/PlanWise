@@ -2,6 +2,14 @@
   "name": "planwise",
   "private": true,
   "version": "0.1.14",
+  "description": "Minimalist high-performance offline task planner on Tauri v2, Rust and SQLite",
+  "author": "Ivolga Labs <support@ivolgalabs.com>",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ivolgalabs/PlanWise.git"
+  },
+  "homepage": "https://ivolgalabs.com",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -20,7 +28,7 @@
     "@tauri-apps/plugin-opener": "^2.5.4",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "universal-ui": "file:../../Universal UI",
+    "universal-ui": "file:./vendor/universal-ui",
     "zustand": "^5.0.14"
   },
   "devDependencies": {

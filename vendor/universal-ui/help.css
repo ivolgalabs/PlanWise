@@ -1,0 +1,27 @@
+/* --- HELP: горячие клавиши (kbd) и строки справки ---
+ * kbd — капсула клавиши (можно комбинировать: <kbd>⌘</kbd>+<kbd>A</kbd>);
+ * .help-row — строка «клавиша → описание» в модалке справки. */
+
+kbd {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  border-bottom-width: 2px;
+  background: var(--bg-tertiary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--text-primary);
+}
+
+.help-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-color);
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+}
+.help-row:last-child { border-bottom: none; }
+.help-row kbd { min-width: 96px; text-align: center; flex-shrink: 0; }

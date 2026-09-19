@@ -1,0 +1,626 @@
+/* --- THEME STATUS & SELECTION (общий блок «Текущий статус оформления») ---
+ * Унифицирует три вещи, которые раньше каждый делал по-своему:
+ *   1. Блок статуса: активная тема, режим (светлая/тёмная/системная),
+ *      предпочитаемые светлая и тёмная/OLED темы с бейджами «✓ Активна/Сохранена».
+ *   2. Стандартный выбор темы: семейства (slate/nord/…)× светлая/тёмная/OLED
+ *      свотчами; клик = активировать + запомнить предпочитаемую + режим.
+ *   3. Переключатель OLED (True Black) для тёмного режима.
+ * Логика (JS) — на стороне приложения (см. preview/theme-preview.html как
+ * эталон), здесь только стили. Цвета/токены — из themes/tokens. */
+
+/* ── Блок статуса ─────────────────────────────────────────────────────── */
+.theme-status {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-xl, 12px);
+  padding: var(--sp-6, 12px) var(--sp-6, 12px) var(--sp-5, 10px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5, 10px);
+  box-sizing: border-box;
+}
+
+.theme-status-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-6, 12px);
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: var(--sp-5, 10px);
+}
+
+.theme-status-title {
+  margin: 0;
+  font-size: var(--fs-xs);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-primary);
+}
+
+.theme-status-subtitle {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.theme-status-subtitle strong {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent);
+}
+
+/* Кнопки режима: ☀️ Светлая / 🌙 Тёмная / 🖥️ Системная */
+.theme-status-modes {
+  display: flex;
+  gap: var(--sp-1, 2px);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg, 8px);
+  padding: 2px;
+}
+.theme-status-mode-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.theme-status-mode-btn:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+.theme-status-mode-btn.active {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  font-weight: 700;
+}
+
+/* Карточки предпочитаемых тем */
+.theme-status-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-4, 8px);
+}
+@media (max-width: 480px) {
+  .theme-status-grid { grid-template-columns: 1fr; }
+}
+.theme-status-pref {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg, 8px);
+  padding: var(--sp-4, 8px) var(--sp-5, 10px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4, 8px);
+  box-sizing: border-box;
+}
+.theme-status-pref-label {
+  display: block;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+.theme-status-pref-value {
+  font-size: var(--fs-xs);
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--text-primary);
+  word-break: break-all;
+}
+
+/* Бейджи состояния: ✓ Активна / Сохранена */
+.theme-status-tag {
+  flex-shrink: 0;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  padding: 2px 10px;
+  border-radius: var(--radius-full, 9999px);
+  white-space: nowrap;
+}
+.theme-status-tag.active {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+}
+.theme-status-tag.saved {
+  background: color-mix(in srgb, var(--success) 12%, transparent);
+  color: var(--success);
+}
+
+/* ── OLED-переключатель ───────────────────────────────────────────────── */
+.theme-status-oled {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-6, 12px);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-xl, 12px);
+  padding: var(--sp-5, 10px) var(--sp-6, 12px);
+}
+.theme-status-oled-title {
+  margin: 0;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.theme-status-oled-desc {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* Переключатель (switch) */
+.switch {
+  position: relative;
+  display: inline-flex;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+}
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+.switch-track {
+  position: absolute;
+  inset: 0;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-full, 9999px);
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+.switch-track::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 1px 3px var(--shadow);
+  transform: translateY(-50%); /* идеальное вертикальное центрирование кружка */
+  transition: left 0.2s ease;
+}
+.switch input:checked + .switch-track {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.switch input:checked + .switch-track::after {
+  left: calc(100% - 20px); /* симметрично: 2px слева и справа от краёв */
+  background: #fff;
+  border-color: #fff;
+}
+
+/* ── Стандартный выбор темы (семейства × режимы) ─────────────────────── */
+.theme-family {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4, 8px);
+}
+.theme-family-label {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3, 6px);
+  margin: 0;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.theme-family-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: var(--radius-full, 9999px);
+  flex-shrink: 0;
+}
+.theme-swatches {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr); /* светлая/тёмная; OLED — галочкой */
+  gap: var(--sp-4, 8px);
+}
+
+/* Свотч темы: 3 цветных чипса (фон/акцент/текст) + название + галочка */
+.theme-swatch {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: var(--sp-4, 8px);
+  border-radius: var(--radius-lg, 8px);
+  border: 2px solid var(--border-color);
+  background: var(--bg-secondary);
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+}
+.theme-swatch:hover {
+  border-color: var(--text-muted);
+}
+.theme-swatch:active {
+  transform: scale(0.98);
+}
+.theme-swatch.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.theme-swatch-colors {
+  display: flex;
+  gap: 3px;
+}
+.theme-swatch-colors span {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+}
+.theme-swatch-name {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+.theme-swatch-check {
+  position: absolute;
+}
+
+/* ── СВОЙ ВЫБОР (кастомный конструктор, как в TensorMedia) ────────────────
+ * Полностью самостоятельный стиль: акцент (палитра + rainbow-слайдер),
+ * фон (пресеты оттенков), сохранение в пресеты с применением/удалением,
+ * экспорт/импорт кода. Сохранённый стиль перекрывает стандартную тему. */
+
+/* Палитра акцентов: 12 точек */
+.designer-colors-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: var(--sp-4, 8px);
+}
+.color-dot-btn {
+  aspect-ratio: 1;
+  width: 100%;
+  border-radius: 8px;
+  border: 2px solid var(--bg-secondary);
+  box-shadow: 0 0 0 1px var(--border-color);
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.color-dot-btn:hover {
+  transform: scale(1.15);
+  box-shadow: 0 0 0 2px var(--text-primary);
+}
+.color-dot-btn.active {
+  transform: scale(1.2);
+  box-shadow: 0 0 0 2px var(--accent);
+  border-color: var(--bg-primary);
+}
+
+/* Ввод цвета кодом (hex / нативный пикер) — акцент и фон */
+.code-color-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3, 6px);
+  margin-top: var(--sp-4, 8px);
+}
+.code-color-picker {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.code-color-input {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 7px 10px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  outline: none;
+}
+.code-color-input:focus { border-color: var(--accent); }
+
+/* Rainbow-слайдер оттенка */
+.slider-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.hue-value-indicator {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  background: var(--bg-tertiary);
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+}
+.rainbow-slider-container {
+  width: 100%;
+  padding: 4px 0;
+}
+.rainbow-hue-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 12px;
+  border-radius: 6px;
+  outline: none;
+  background: linear-gradient(to right, #ff0000 0%, #ffff00 17%, #00ff00 33%, #00ffff 50%, #0000ff 67%, #ff00ff 83%, #ff0000 100%);
+  cursor: pointer;
+  border: 1px solid var(--border-color);
+}
+.rainbow-hue-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid #000000;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+}
+
+/* Фон: пресеты оттенков */
+.bg-preset-shades {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: var(--sp-4, 8px);
+}
+.bg-shade-btn {
+  aspect-ratio: 1;
+  border-radius: 8px;
+  border: 2px solid var(--bg-secondary);
+  box-shadow: 0 0 0 1px var(--border-color);
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.bg-shade-btn:hover { transform: scale(1.1); }
+.bg-shade-btn.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+/* Сохранённые пресеты */
+.presets-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6, 12px);
+}
+.presets-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4, 8px);
+  max-height: 160px;
+  overflow-y: auto;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg, 8px);
+  padding: var(--sp-4, 8px);
+}
+.no-presets-text {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  font-style: italic;
+  margin: 0;
+}
+.preset-item-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--sp-3, 6px);
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  transition: border-color 0.15s ease;
+}
+.preset-item-row:hover { border-color: var(--accent); }
+.preset-item-info {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-5, 10px);
+  cursor: pointer;
+  flex: 1;
+  min-width: 0;
+}
+.preset-preview-circle {
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-md, 6px);
+  position: relative;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  flex-shrink: 0;
+}
+.preset-preview-dot {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 6px;
+  height: 6px;
+  border-radius: 2px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+.preset-item-name {
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.preset-item-actions { display: flex; gap: var(--sp-3, 6px); flex-shrink: 0; }
+.preset-action-btn {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 11px;
+  font-family: inherit;
+  color: var(--text-secondary);
+  transition: all 0.15s ease;
+}
+.preset-action-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+.preset-action-btn.apply.active {
+  background: var(--accent-glow);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 700;
+}
+.preset-action-btn.delete:hover { border-color: var(--danger); background: var(--danger-bg); color: var(--danger); }
+
+/* Форма сохранения пресета */
+.save-preset-form {
+  display: flex;
+  gap: var(--sp-5, 10px);
+}
+.preset-name-input {
+  flex: 1;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 8px 12px;
+  color: var(--text-primary);
+  font-size: var(--fs-xs);
+  font-family: inherit;
+  outline: none;
+}
+.preset-name-input:focus { border-color: var(--accent); }
+.save-preset-btn {
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+.save-preset-btn:hover { opacity: 0.9; }
+
+/* Импорт пресета (код TMT-...) */
+.import-preset-form {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.import-input-wrap { display: flex; gap: var(--sp-5, 10px); }
+.preset-import-input {
+  flex: 1;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 8px 12px;
+  color: var(--text-primary);
+  font-size: var(--fs-xs);
+  font-family: var(--font-mono);
+  outline: none;
+}
+.preset-import-input:focus { border-color: var(--accent); }
+.import-preset-btn {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.import-preset-btn:hover { background: var(--bg-hover); border-color: var(--accent); }
+.import-error-msg {
+  font-size: 11px;
+  color: var(--danger);
+  margin-left: 2px;
+}
+.designer-actions-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--sp-6, 12px);
+  flex-wrap: wrap;
+}
+
+/* ── Вкладки: «Стандартные» / «Свой выбор» (как theme-tabs в TensorMedia) ── */
+.theme-tabs {
+  display: flex;
+  background: var(--bg-tertiary);
+  padding: 4px;
+  border-radius: var(--radius-lg, 8px);
+  border: 1px solid var(--border-color);
+  gap: 2px;
+  box-sizing: border-box;
+}
+.theme-tab-btn {
+  flex: 1;
+  background: transparent;
+  border: none;
+  padding: 8px 12px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  font-family: inherit;
+  color: var(--text-secondary);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+.theme-tab-btn:hover { color: var(--text-primary); }
+.theme-tab-btn.active {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  font-weight: 700;
+}
+.theme-tab-panel { display: flex; flex-direction: column; gap: 14px; }
+.theme-tab-panel[hidden] { display: none; }
+
+/* Галочка выбранной темы на свотче (видна на любом фоне — кружок акцентом) */
+.theme-swatch { position: relative; }
+.theme-swatch-check {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--text-on-accent, #fff);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+.theme-swatch.active .theme-swatch-check { display: flex; }

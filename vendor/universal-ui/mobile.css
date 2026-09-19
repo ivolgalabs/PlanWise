@@ -1,0 +1,132 @@
+/* === Universal UI — мобильная база (touch/тач-устройства) ===
+ * Повторно-используемый слой для мобильных приложений: touch-таргеты,
+ * крупная типографика, safe-area, двухстрочная шапка, скроллбары.
+ * Вынесен из ежедневника (App.css) — общие паттерны, которые могут
+ * использовать все мобильные приложения.
+ *
+ * Подключение: @import 'universal-ui/mobile.css' (или в all.css).
+ * Контейнер приложения — #root: системные выступы (статус-бар, вырез
+ * камеры, жестовая зона навигации) не заходят под контент. viewport-fit=cover
+ * в index.html включает env(safe-area-inset-*); на десктопе инсеты нулевые.
+ */
+
+#root {
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+    env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+/* === Мобильный/тач-режим ===
+ * Срабатывает на тач-устройствах (pointer: coarse) или в узком окне ≤560px.
+ * Два рычага:
+ *  1. Крупнее типографика — переопределяем --fs-* токены (rem): инлайн-стили
+ *     компонентов ссылаются на var(--fs-*), поэтому подхватывают автоматически.
+ *  2. Тач-таргеты: чекбоксы, иконки-кнопки, чипы, поля настроек. */
+@media (pointer: coarse), (max-width: 560px) {
+  :root {
+    --fs-2xs: 0.8rem;
+    --fs-xs: 0.85rem;
+    --fs-sm: 0.95rem;
+  }
+
+  /* Тап-зона чекбоксов — компактнее, чем 44px: строка задачи не раздувается.
+     Остаётся удобной для пальца. */
+  .checkbox-hit {
+    min-width: calc(36px * var(--ui-scale, 1));
+    min-height: calc(36px * var(--ui-scale, 1));
+    margin-right: 4px;
+  }
+
+  .icon-btn {
+    min-width: calc(36px * var(--ui-scale, 1));
+    height: calc(36px * var(--ui-scale, 1));
+  }
+
+  /* Чипы действий — визуально компактные (26px), тап-зона расширена псевдо-
+     элементом до ~38px, чтобы не промахиваться пальцем. */
+  .chip-btn {
+    width: calc(26px * var(--ui-scale, 1));
+    height: calc(26px * var(--ui-scale, 1));
+    position: relative;
+  }
+  .chip-btn::after {
+    content: "";
+    position: absolute;
+    inset: -6px;
+  }
+
+  .text-chip {
+    min-height: 40px;
+    padding: 6px 12px;
+  }
+
+  /* Кнопки действий в модалках — крупный тап-таргет. */
+  .modal-action-btn {
+    min-height: 44px;
+  }
+
+  .preset-btn {
+    padding: 10px 14px;
+  }
+
+  .set-name {
+    padding: 10px 12px;
+  }
+
+  /* Переключатель День/Неделя/Месяц — компактнее на узком экране. */
+  .view-switcher-btn {
+    padding: 3px 5px;
+  }
+
+  /* Шапка на мобиле — ВСЕГДА две строки, детерминированно (не зависит от
+     crowded-флага JS и длины заголовка). Раньше месяц (длинный «август 2026»)
+     уходил в crowded → 2 строки, а день/неделя — 1 строка; align-items:center
+     центрировал их по-разному → заголовок «прыгал» по вертикали при смене вида.
+     Раскладка через order + spacer(flex-basis:100%):
+       1-я строка (order 0): [‹] [заголовок-дата] [›] [⚙ настройки]
+       разрыв   (order 1):   top-bar-spacer — width:100%, переносит строку
+       2-я строка (order 2): [День/Неделя/Месяц] [toggle недели] [поиск]
+     nav (стрелки, заголовок) и gear — order:0 (1-я строка); spacer order:1
+     занимает всю ширину → принудительный перенос; switcher/toggle/поиск
+     order:2 идут на 2-ю строку. */
+  .top-bar {
+    gap: 4px;
+    padding: 6px 8px;
+    flex-wrap: wrap;
+    row-gap: 2px;
+    align-items: center;
+  }
+  /* nav-группа (стрелки, заголовок) и gear — остаются на 1-й строке. */
+  .top-bar > .icon-btn,
+  .top-bar > button {
+    order: 0;
+  }
+  /* Растяжка-разрыв: вся ширина, переносит switcher/поиск на новую строку. */
+  .top-bar .top-bar-spacer {
+    order: 1;
+    flex: 0 0 100%;
+    height: 0;
+  }
+  /* 2-я строка: switcher, toggle недели, поиск. */
+  .top-bar .view-switcher,
+  .top-bar .search-btn,
+  .top-bar .week-toggle-btn {
+    order: 2;
+  }
+}
+
+/* === Скроллбары === */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--bg-hover);
+  border-radius: var(--radius-sm);
+  border: 2px solid var(--bg-primary);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}

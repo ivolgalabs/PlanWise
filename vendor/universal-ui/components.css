@@ -1,0 +1,548 @@
+/* --- UNIVERSAL COMPONENT STYLES --- */
+
+/* Custom Range Sliders with full-height hitboxes and mathematically perfect centering */
+input[type="range"]:not(.rainbow-hue-slider) {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent !important;
+  border: none !important;
+  outline: none;
+  height: 20px;
+  width: 100%;
+  display: block;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  cursor: pointer;
+}
+
+input[type="range"]:not(.rainbow-hue-slider):focus {
+  outline: none;
+}
+
+/* Webkit / Safari Track */
+input[type="range"]:not(.rainbow-hue-slider)::-webkit-slider-runnable-track {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  height: 6px;
+  border-radius: 3px;
+}
+
+/* Webkit / Safari Thumb */
+input[type="range"]:not(.rainbow-hue-slider)::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  margin-top: -5px; /* Centers the thumb vertically on a 6px track */
+  border: 1px solid var(--bg-secondary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: transform 0.1s ease, background-color 0.1s ease;
+}
+
+input[type="range"]:not(.rainbow-hue-slider)::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+  background: var(--accent-hover);
+}
+
+/* Mozilla Firefox Track */
+input[type="range"]:not(.rainbow-hue-slider)::-moz-range-track {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  height: 6px;
+  border-radius: 3px;
+}
+
+/* Mozilla Firefox Thumb */
+input[type="range"]:not(.rainbow-hue-slider)::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: 1px solid var(--bg-secondary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: transform 0.1s ease, background-color 0.1s ease;
+}
+
+input[type="range"]:not(.rainbow-hue-slider)::-moz-range-thumb:hover {
+  transform: scale(1.2);
+  background: var(--accent-hover);
+}
+
+input[type="range"]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Custom Scrollbars matching dark/light themes */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Premium Buttons */
+button {
+  font-family: inherit;
+  font-size: var(--fs-base);
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  padding: 8px 16px;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+  outline: none;
+}
+button:hover:not(:disabled) {
+  background-color: var(--bg-hover);
+  border-color: var(--accent);
+  box-shadow: 0 2px 8px var(--accent-glow);
+}
+button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Primary/Accent Action Buttons */
+button.primary-btn, button.action-btn {
+  background-color: var(--accent);
+  border-color: var(--accent);
+  color: #ffffff;
+}
+button.primary-btn:hover:not(:disabled), button.action-btn:hover:not(:disabled) {
+  background-color: var(--accent-hover);
+  border-color: var(--accent-hover);
+  box-shadow: 0 4px 12px var(--accent-glow);
+}
+
+/* Dropdowns & Select Fields */
+select {
+  font-family: inherit;
+  font-size: var(--fs-base);
+  color: var(--text-primary);
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 6px 12px;
+  outline: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+}
+select:hover:not(:disabled) {
+  border-color: var(--accent);
+  background-color: var(--bg-hover);
+}
+select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-glow);
+}
+
+/* Stylized Checkboxes */
+.checkbox-container {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  border: 1.5px solid var(--border-color);
+  border-radius: 4px;
+  background-color: var(--bg-secondary);
+  cursor: pointer;
+  transition: all 0.1s ease;
+}
+input[type="checkbox"]:hover {
+  border-color: var(--accent);
+}
+
+/* Reusable Glassmorphism Cards & Panels */
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px var(--shadow);
+  color: var(--text-primary);
+  box-sizing: border-box;
+}
+
+/* Standardized Text Inputs & Textareas */
+input[type="text"], input[type="password"], textarea {
+  font-family: inherit;
+  font-size: var(--fs-base);
+  color: var(--text-primary);
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 8px 12px;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+input[type="text"]:focus, input[type="password"]:focus, textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-glow);
+}
+input[type="text"]:disabled, input[type="password"]:disabled, textarea:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Premium Segmented Controls (horizontal button switches) */
+.segmented-control {
+  display: flex;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 3px;
+  gap: 2px;
+  box-sizing: border-box;
+}
+.segmented-control button {
+  flex: 1;
+  font-weight: 500;
+  font-size: calc(var(--fs-base) - 1px);
+  padding: 6px 12px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  transition: all 0.15s ease;
+}
+.segmented-control button:hover:not(:disabled) {
+  color: var(--text-primary);
+  background-color: rgba(128, 128, 128, 0.08);
+  box-shadow: none;
+}
+.segmented-control button.active {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  font-weight: 600;
+}
+
+/* Sidebar Groups & Labeling */
+.sidebar-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.sidebar-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+}
+
+/* Row Lists & Tree Items with mathematical height matching */
+.list-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 6px;
+  background-color: transparent;
+  cursor: pointer;
+  transition: background-color 0.1s ease;
+  user-select: none;
+}
+.list-row:hover {
+  background-color: var(--bg-hover);
+}
+.list-row.selected {
+  background-color: var(--row-selected) !important;
+  color: var(--text-primary);
+}
+
+/* Progress Indicators */
+.progress-bar {
+  width: 100%;
+  height: 6px;
+  background-color: var(--bg-tertiary);
+  border-radius: 3px;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+.progress-fill {
+  height: 100%;
+  background-color: var(--accent);
+  border-radius: 3px;
+  transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Clean Alert Banners & Callouts */
+.alert-banner {
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: var(--fs-base);
+  line-height: 1.4;
+  margin-bottom: 12px;
+  border: 1px solid var(--border-color);
+  box-sizing: border-box;
+}
+.alert-banner.success {
+  background-color: var(--success-bg);
+  border-color: var(--success-border);
+  color: var(--success);
+}
+.alert-banner.danger {
+  background-color: var(--danger-bg);
+  border-color: var(--danger-border);
+  color: var(--danger);
+}
+.alert-banner.info {
+  background-color: var(--ref-bg);
+  border-color: var(--ref-border);
+  color: var(--ref-color);
+}
+
+/* Overlay Modals & Dialogs */
+.modal-overlay, .help-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.modal-dialog, .help-modal, .confirm-modal {
+  width: 90%;
+  max-width: 520px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-xl);       /* было хардкод 12px */
+  box-shadow: var(--shadow-xl);          /* было хардкод 0 12px 36px rgba(0,0,0,.3) */
+  padding: var(--pad-modal);             /* было хардкод 24px */
+  box-sizing: border-box;
+  background: var(--glass-bg);           /* shorthand — перебивает background-color, поэтому его не пишем */
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+/* Button & Controls Standardization (38px Grid) */
+.sub-btn, .action-btn, .main-compare-btn, .preset-btn, .segmented-control button, select, .folder-input-row input, .filter-search, .icon-btn, .lang-select, .theme-trigger-btn {
+  height: 38px !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+.sub-btn {
+  padding-left: 16px !important;
+  padding-right: 16px !important;
+  border-radius: 8px;
+}
+
+/* Floating Island Scrubber ("Плавающий остров").
+   Единая каноническая версия (раньше дублировалась в App.css приложений
+   с !important-переопределениями). Значения — из токенов: высота --island-h,
+   радиус --radius-3xl, отступ --pad-pane, gap --gap-control, тень --shadow-md. */
+.unified-control-slot {
+  padding: 8px 16px !important;
+  box-sizing: border-box !important;
+  width: 100%;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  pointer-events: auto;
+  position: relative;
+  z-index: var(--z-overlay, 5);
+  flex: 0 0 auto;
+  min-height: 64px;
+}
+
+.unified-scrubber-box {
+  pointer-events: auto;
+  width: 100% !important;
+  max-width: 500px !important;
+  margin: 0 auto !important;
+  border-radius: var(--radius-3xl) !important;
+  border: 1px solid var(--border-color) !important;
+  height: var(--island-h) !important;
+  padding: 0 var(--pad-pane) !important;
+  box-sizing: border-box !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: var(--gap-control) !important;
+  background: rgba(150, 150, 150, 0.05) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: var(--shadow-md) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Selection summary (одиночный файл, без транспорта) — центрируем контент */
+.unified-scrubber-box.selection-summary {
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  text-align: center;
+}
+
+.unified-scrubber-box input[type="range"] {
+  flex: 1 1 auto !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  min-width: 0 !important;
+  height: 24px !important; /* фикс. высота — идеальное вертикальное центрирование */
+}
+
+/* Progress-bar: варианты высоты (тонкий 4px для таблиц, обычный 6px) */
+.progress-bar.sm { height: 4px; border-radius: 2px; }
+.progress-bar.with-border { border: 1px solid var(--border-color); box-sizing: border-box; }
+
+/* Slider со значением: ползунок + число accent справа */
+.slider-row { display: flex; align-items: center; gap: 10px; }
+.slider-row input[type="range"] { flex: 1; }
+.slider-value {
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--accent);
+  min-width: 44px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Drag & Drop оверлей: зона приёма файлов */
+.drop-zone {
+  border: 2px dashed var(--border-color);
+  border-radius: var(--radius-xl);
+  padding: 26px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+  background: var(--bg-tertiary);
+  transition: all 0.2s;
+  box-sizing: border-box;
+}
+.drop-zone.over {
+  border-color: var(--accent);
+  background: var(--accent-glow);
+  color: var(--accent);
+}
+
+/* Три-стейт чекбокс + метрики */
+.tri-check { display: flex; align-items: center; gap: 8px; font-size: var(--fs-sm); color: var(--text-secondary); }
+.tri-check input { accent-color: var(--accent); }
+.metric {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.metric b { color: var(--accent); }
+
+/* Текст-счётчики внутри острова (время/кадры) */
+.unified-scrubber-box .text-counter,
+.unified-scrubber-box .gif-counter,
+.unified-scrubber-box span {
+  color: var(--text-primary) !important;
+  font-weight: 600;
+  line-height: 1 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  height: 20px !important;
+  margin: 0 !important;
+}
+.unified-scrubber-box .text-counter {
+  font-variant-numeric: tabular-nums !important;
+  font-size: var(--fs-xs) !important;
+  min-width: 48px !important;
+  text-align: center !important;
+  flex: 0 0 auto !important;
+}
+
+/* Кнопки внутри острова — круглые, прозрачные, с hover-подложкой */
+.unified-scrubber-box button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 16px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+.unified-scrubber-box button:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+.unified-scrubber-box button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* Иконки плеера (см. icons.css — .icon с масками) */
+.player-icon {
+  width: 20px;
+  height: 20px;
+  display: block !important;
+}
+
+/* Theme trigger button */
+.theme-trigger-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 6px 12px;
+  color: var(--text-primary);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  height: 38px;
+}
+.theme-trigger-btn:hover {
+  background-color: var(--bg-hover);
+  border-color: var(--accent);
+}

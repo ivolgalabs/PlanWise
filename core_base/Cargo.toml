@@ -1,0 +1,37 @@
+[package]
+name = "core_base"
+version = "0.1.0"
+edition = "2021"
+description = "Единая базовая библиотека для проектов воркспейса"
+# Внутренний крейт: не публикуется. Нужно и для cargo-deny (private = ignore),
+# и как явный сигнал, что это не публичная библиотека.
+publish = false
+
+[features]
+default = ["fs"]
+
+# Опциональные модули. Каждый включает только нужные зависимости — крейт
+# остаётся лёгким для потребителей, которым хватает части функционала.
+fs = []
+mime = []
+net = ["dep:reqwest"]
+licensing = ["dep:reqwest"]
+# finance нужен и rust_decimal, и rust_decimal_macros (модуль использует макрос dec!).
+finance = ["dep:rust_decimal", "dep:rust_decimal_macros"]
+# supervision — обёртки для долгоживущих tokio-задач (паника + перезапуск).
+supervision = ["dep:tokio"]
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2.0"
+
+# Опциональные зависимости
+reqwest = { version = "0.12", features = ["json"], optional = true }
+rust_decimal = { version = "1.36", optional = true }
+rust_decimal_macros = { version = "1.36", optional = true }
+tokio = { version = "1", features = ["rt", "time"], optional = true }
+
+[dev-dependencies]
+# Для тестов супервизии: макрос #[tokio::test] и текущий рантайм.
+tokio = { version = "1", features = ["rt", "macros", "time"] }

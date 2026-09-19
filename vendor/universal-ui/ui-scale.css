@@ -1,0 +1,135 @@
+/* --- UI-SCALE: масштаб интерфейса (--ui-scale) и размер шрифта (--font-scale) ---
+ * Опциональный слой: подключается приложением, которое даёт пользователю
+ * настройку масштаба. По умолчанию множители = 1 — значения токенов не меняются.
+ *
+ * Применение (JS, эталон — multispend-tracker/src/App.tsx):
+ *   document.documentElement.style.fontSize = `${16 * uiScale}px`;   // rem-база
+ *   document.documentElement.style.setProperty('--ui-scale', uiScale);
+ *   document.documentElement.style.setProperty('--font-scale', fontScale);
+ *
+ * Механика: rem-база (font-size на <html>) масштабирует rem-токены (--fs-*);
+ * --ui-scale масштабирует px-токены (spacing, сетку контролов) через calc —
+ * при масштабе >100% ничего не обрезается, лэйаут перестраивается.
+ * Диапазон как в multispend: 0.7–1.5 (70–150%), шаг 0.05. */
+
+:root {
+  /* ── Масштаб px-токенов (spacing 4px-база) ── */
+  --sp-1:  calc(2px   * var(--ui-scale, 1));
+  --sp-2:  calc(4px   * var(--ui-scale, 1));
+  --sp-3:  calc(6px   * var(--ui-scale, 1));
+  --sp-4:  calc(8px   * var(--ui-scale, 1));
+  --sp-5:  calc(10px  * var(--ui-scale, 1));
+  --sp-6:  calc(12px  * var(--ui-scale, 1));
+  --sp-7:  calc(14px  * var(--ui-scale, 1));
+  --sp-8:  calc(16px  * var(--ui-scale, 1));
+  --sp-9:  calc(20px  * var(--ui-scale, 1));
+  --sp-10: calc(24px  * var(--ui-scale, 1));
+  --sp-11: calc(32px  * var(--ui-scale, 1));
+  --sp-12: calc(40px  * var(--ui-scale, 1));
+
+  /* ── Масштаб сетки контролов (38/32/48/64) ── */
+  --control-h:    calc(38px * var(--ui-scale, 1));
+  --control-h-sm: calc(32px * var(--ui-scale, 1));
+  --row-h:        calc(38px * var(--ui-scale, 1));
+  --slot-h:       calc(64px * var(--ui-scale, 1));
+  --island-h:     calc(48px * var(--ui-scale, 1));
+
+  /* ── Размер шрифта: множитель поверх типографики ── */
+  --fs-2xs:  calc(0.65rem * var(--font-scale, 1));
+  --fs-xs:   calc(0.72rem * var(--font-scale, 1));
+  --fs-sm:   calc(0.8rem  * var(--font-scale, 1));
+  --fs-base: calc(0.85rem * var(--font-scale, 1));
+  --fs-md:   calc(0.95rem * var(--font-scale, 1));
+  --fs-lg:   calc(1.05rem * var(--font-scale, 1));
+  --fs-xl:   calc(1.35rem * var(--font-scale, 1));
+  --fs-2xl:  calc(2.25rem * var(--font-scale, 1));
+  --fs-3xl:  calc(4rem    * var(--font-scale, 1));
+}
+
+/* ── Контролы настроек масштаба (секции «Масштаб интерфейса» / «Размер шрифта») ── */
+.scale-section {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-xl, 12px);
+  padding: var(--sp-6, 12px) var(--sp-6, 12px) var(--sp-5, 10px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5, 10px);
+  box-sizing: border-box;
+}
+.scale-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-6, 12px);
+  flex-wrap: wrap;
+}
+.scale-title {
+  margin: 0;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.scale-desc {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.scale-value {
+  font-family: var(--font-mono);
+  font-weight: 800;
+  font-size: var(--fs-base);
+  color: var(--accent);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg, 8px);
+  padding: 2px 10px;
+  white-space: nowrap;
+}
+
+/* Слайдер с подписями 70% / 100% / 150% */
+.scale-slider-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.scale-labels {
+  position: relative;
+  height: 16px;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+.scale-labels .min { position: absolute; left: 0; }
+.scale-labels .mid { position: absolute; left: 50%; transform: translateX(-50%); }
+.scale-labels .max { position: absolute; right: 0; }
+
+/* Быстрые пресеты */
+.scale-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3, 6px);
+}
+.scale-preset-btn {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  font-family: inherit;
+  padding: 6px 12px;
+  border-radius: var(--radius-lg, 8px);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.scale-preset-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.scale-preset-btn.active {
+  background: var(--accent-glow);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 700;
+}

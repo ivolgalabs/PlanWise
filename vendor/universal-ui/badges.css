@@ -1,0 +1,44 @@
+/* --- BADGES / ПЛАШКИ ---
+ * Семантические пилюли: keep (success), del (danger), ref/inbox (REF/INBOX —
+ * классическая пара «эталон vs входящие»). Цвета берутся из themes.css
+ * (--success/--danger/--ref-color/--inbox-color + пары -bg/-border). */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: var(--radius-full, 9999px);
+  font-size: var(--fs-2xs);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border: 1px solid transparent;
+  line-height: 1.7;
+  white-space: nowrap;
+}
+.badge.keep  { color: var(--success);     background: var(--success-bg);     border-color: var(--success-border); }
+.badge.del   { color: var(--danger);      background: var(--danger-bg);      border-color: var(--danger-border); }
+.badge.ref   { color: var(--ref-color);   background: var(--ref-bg);         border-color: var(--ref-border); }
+.badge.inbox { color: var(--inbox-color); background: var(--inbox-bg);       border-color: var(--inbox-border); }
+
+/* Компактный ряд бейджей внутри строки таблицы */
+.inline-badges {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: 8px;
+}
+
+/* Счётчик-капсула (уведомления, количество элементов) */
+.badge-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--radius-full);
+  background: var(--danger);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  box-sizing: border-box;
+}

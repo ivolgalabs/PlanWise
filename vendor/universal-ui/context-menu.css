@@ -1,0 +1,47 @@
+/* --- CONTEXT MENU (кастомное контекстное меню) --- */
+.ctx-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-popover, 1200);
+}
+.ctx-menu {
+  position: fixed;
+  min-width: 200px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-2xl, 16px);
+  padding: 4px;
+  box-shadow: var(--shadow-lg, 0 8px 24px var(--shadow));
+  display: flex;
+  flex-direction: column;
+  animation: ctxFadeIn 0.12s ease-out;
+}
+@keyframes ctxFadeIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.ctx-menu button {
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  padding: 8px 12px;
+  border-radius: var(--radius-lg, 8px);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background-color 0.1s;
+  font-family: inherit;
+}
+.ctx-menu button:hover {
+  background: var(--bg-hover);
+}
+.ctx-menu .ctx-danger { color: var(--danger); }
+.ctx-menu .ctx-sep {
+  height: 1px;
+  background: var(--border-color);
+  margin: 4px 0;
+}

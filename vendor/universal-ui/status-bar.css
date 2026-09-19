@@ -1,0 +1,24 @@
+/* --- STATUS-BAR: нижняя строка состояния окна ---
+ * Слева статус/прогресс, справа метрики. Компактный (26px), на токенах.
+ * Классы: .status-bar · .s-text (жирный статус) · .s-busy (accent) ·
+ * .s-progress (процент) · .s-spacer (распорка) · .s-metrics (метрики). */
+
+.status-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 14px;
+  height: 26px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+  box-sizing: border-box;
+}
+.status-bar .s-text    { font-weight: 600; }
+.status-bar .s-busy    { color: var(--accent); }
+.status-bar .s-progress { font-variant-numeric: tabular-nums; color: var(--text-muted); }
+.status-bar .s-spacer  { flex: 1; }
+.status-bar .s-metrics { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.status-bar .s-metrics b { color: var(--text-secondary); }

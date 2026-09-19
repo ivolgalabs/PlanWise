@@ -1,0 +1,20 @@
+/* Universal UI — единый импорт всех слоёв дизайн-системы.
+ * Подключение: @import 'universal-ui/all.css'; */
+@import './tokens.css';
+@import './themes.css';
+@import './typography.css';
+@import './components.css';
+@import './badges.css';
+@import './buttons.css';
+@import './context-menu.css';
+@import './toolbar.css';
+@import './empty-state.css';
+@import './icons.css';
+@import './theme-status.css';
+@import './ui-scale.css';
+@import './toast.css';
+@import './motion.css';
+@import './status-bar.css';
+@import './help.css';
+@import './app-card.css';
+@import './mobile.css';

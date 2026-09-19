@@ -1,0 +1,22 @@
+/* --- APP-CARD: пара «карточка / вложенная карточка» ---
+ * Секции настроек, дашборды, списки. app-card — внешний блок на --bg-secondary,
+ * app-card-inner — вложенная группа на --bg-tertiary. */
+
+.app-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-xl);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-sizing: border-box;
+}
+.app-card-inner {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 10px 12px;
+}
+.app-card h3 { margin: 0; font-size: var(--fs-base); }
+.app-card p  { margin: 0; font-size: var(--fs-xs); color: var(--text-muted); }
