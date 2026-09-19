@@ -218,9 +218,11 @@ function App() {
           else if (o.datePickerOpen) setDatePickerOpen(false);
           else if (o.searchOpen) setSearchOpen(false);
           else {
-            // Всё закрыто — стандартное поведение: выйти из приложения.
+            // Всё закрыто — свернуть в фон, не убивая процесс: следующий
+            // запуск из лончера тёплый, без холодного экрана. Полный выход —
+            // только «Выйти» в настройках.
             import("@tauri-apps/api/core")
-              .then(({ invoke }) => invoke("exit_app"))
+              .then(({ invoke }) => invoke("minimize_app"))
               .catch(() => {});
           }
         }),

@@ -27,4 +27,26 @@ class WidgetPushPlugin(activity: Activity) : Plugin(activity) {
       invoke.reject(e.message ?: "Ошибка обновления виджета", null as String?)
     }
   }
+
+  /**
+   * Свернуть приложение (кнопка «назад» при закрытых модалках): задача
+   * уходит в фон через moveTaskToBack, ПРОЦЕСС ОСТАЁТСЯ ЖИВ — следующий
+   * запуск из лончера тёплый (WebView уже создан, нет холодного экрана).
+   * Полный выход — только «Выйти» в настройках (exit_app).
+   */
+  @Command
+  fun minimize(invoke: Invoke) {
+    try {
+      val activity = appContext as? Activity
+      if (activity == null || activity.isFinishing) {
+        invoke.reject("нет активной activity", null as String?)
+        return
+      }
+      activity.runOnUiThread { activity.moveTaskToBack(true) }
+      invoke.resolve()
+    } catch (e: Exception) {
+      e.printStackTrace()
+      invoke.reject(e.message ?: "Не удалось свернуть приложение", null as String?)
+    }
+  }
 }

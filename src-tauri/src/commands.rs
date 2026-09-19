@@ -823,6 +823,25 @@ pub fn exit_app(app: tauri::AppHandle) {
     app.exit(0);
 }
 
+/// Свернуть приложение на Android (кнопка «назад» при закрытых модалках):
+/// задача уходит в фон, процесс остаётся жив — следующий запуск из лончера
+/// тёплый (WebView уже создан), без холодного экрана. На десктопе no-op.
+/// Асинхронно: sync-версия run_mobile_plugin блокирует поток до ответа
+/// главного потока Android (см. write_widget_data — там дедлок).
+#[tauri::command]
+#[cfg_attr(not(target_os = "android"), allow(unused_variables))]
+pub fn minimize_app(app: tauri::AppHandle) {
+    #[cfg(target_os = "android")]
+    if let Some(state) = app.try_state::<crate::WidgetPush>() {
+        if let Some(handle) = &state.0 {
+            let h = handle.clone();
+            tauri::async_runtime::spawn(async move {
+                let _ = h.run_mobile_plugin_async::<()>("minimize", ()).await;
+            });
+        }
+    }
+}
+
 /// Метка этапа холодного старта — в кольцевой журнал диагностики. Фронтенд
 /// отмечает «tasks-loaded»; по журналу после жалобы «не запустилось с первого
 /// раза» видно, докуда дошёл старт (нет записи «старт» — процесс не
