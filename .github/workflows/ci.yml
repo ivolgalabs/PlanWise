@@ -8,7 +8,8 @@ name: CI
 
 on:
   push:
-    branches: [main, master]
+    # every branch: a development line on a renamed branch produced zero CI runs for two months (ComiFlow, 22.09.2026)
+    branches: ['**']
   pull_request:
 
 jobs:
