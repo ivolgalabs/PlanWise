@@ -2,10 +2,22 @@ package com.zkproject.dailyplanner
 
 import android.app.Activity
 import android.content.Context
+import android.util.Log
 import app.tauri.annotation.Command
-import app.tauri.notification.BatchArgs
+import app.tauri.annotation.InvokeArg
 import app.tauri.plugin.Invoke
 import app.tauri.plugin.Plugin
+
+/**
+ * Аргументы persistScheduled: готовую строку уведомления собирает Rust
+ * (sourceJson плагина 2.3.3 не заполняется нигде, поэтому его `batch` кладёт в
+ * хранилище "null"). Формат строки — тот, что разбирает jackson плагина.
+ */
+@InvokeArg
+class PersistArgs {
+  var id: Int = 0
+  var json: String? = null
+}
 
 /**
  * Ключ persisted-хранилища плагина уведомлений (приватная константа
@@ -75,28 +87,48 @@ class WidgetPushPlugin(activity: Activity) : Plugin(activity) {
   @Command
   fun persistScheduled(invoke: Invoke) {
     try {
-      val args = invoke.parseArgs(BatchArgs::class.java)
-      val prefs = appContext.getSharedPreferences(NOTIFICATION_STORE, Context.MODE_PRIVATE)
-      val editor = prefs.edit()
-      var saved = 0
-      for (notification in args.notifications) {
-        val raw = notification.sourceJson ?: continue
-        if (notification.schedule == null) continue
-        editor.putString(notification.id.toString(), raw)
-        saved++
-      }
-      editor.apply()
-      // Пустая запись при непустом запросе = плагин изменил разбор аргументов
-      // (sourceJson больше не заполняется): сообщаем ошибкой, чтобы не
-      // деградировать молча.
-      if (saved == 0 && args.notifications.isNotEmpty()) {
-        invoke.reject("sourceJson пуст — разбор аргументов плагина изменился", null as String?)
+      val args = invoke.parseArgs(PersistArgs::class.java)
+      val raw = args.json
+      if (raw.isNullOrEmpty()) {
+        invoke.reject("пустая строка уведомления", null as String?)
         return
       }
-      invoke.resolveObject(saved)
+      appContext
+        .getSharedPreferences(NOTIFICATION_STORE, Context.MODE_PRIVATE)
+        .edit()
+        .putString(args.id.toString(), raw)
+        .apply()
+      // Диагностика хранилища: по этим строкам видно, попала ли запись и что
+      // именно лежит в SharedPreferences (логика restore/cancel живёт в Rust).
+      Log.w("PlanWise", "persist id=${args.id} len=${raw.length}")
+      invoke.resolveObject(args.id)
     } catch (e: Exception) {
       e.printStackTrace()
-      invoke.reject(e.message ?: "Не удалось записать уведомления в хранилище", null as String?)
+      invoke.reject(e.message ?: "Не удалось записать уведомление в хранилище", null as String?)
+    }
+  }
+
+  /**
+   * Id уведомлений, лежащих в persisted-хранилище плагина, — это и есть
+   * поставленные алармы (publisher удаляет запись при срабатывании, cancel —
+   * при отмене). Команда `getPending` плагина отдаёт другое — уведомления,
+   * УЖЕ висящие в шторке, поэтому Rust-планировщику нужен этот список.
+   */
+  @Command
+  fun scheduledIds(invoke: Invoke) {
+    try {
+      val prefs = appContext.getSharedPreferences(NOTIFICATION_STORE, Context.MODE_PRIVATE)
+      // Обычный список, а не JSArray: resolveObject сериализует его jackson-ом,
+      // а тот отдаёт JSONArray пустым объектом ({}), и Rust получает map вместо
+      // массива ("invalid type: map, expected a sequence").
+      val ids = ArrayList<Int>()
+      for (key in prefs.all.keys) {
+        key.toIntOrNull()?.let { ids.add(it) }
+      }
+      invoke.resolveObject(ids)
+    } catch (e: Exception) {
+      e.printStackTrace()
+      invoke.reject(e.message ?: "Не удалось прочитать хранилище уведомлений", null as String?)
     }
   }
 }

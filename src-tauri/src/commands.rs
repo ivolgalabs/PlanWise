@@ -12,7 +12,7 @@ fn now_ms() -> i64 {
 
 /// Колонки таблицы tasks — единый список для SELECT и INSERT: новая колонка
 /// добавляется в одном месте (маппинг в Task — см. task_from_row).
-const TASK_COLUMNS: &str = "id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes, someday, archived, travel_time, duration_minutes, difficulty, notify_minutes, travel_notify_minutes, due_epoch_day";
+pub(crate) const TASK_COLUMNS: &str = "id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes, someday, archived, travel_time, duration_minutes, difficulty, notify_minutes, travel_notify_minutes, due_epoch_day";
 
 /// Маппинг строки tasks в Task (единый для всех выборок — колонки не разъезжаются).
 fn task_from_row(row: &rusqlite::Row) -> rusqlite::Result<Task> {
@@ -762,7 +762,7 @@ fn export_to_string(
 }
 
 /// FNV-1a 64-bit — быстрый хеш содержимого экспорта (сравнение, не безопасность).
-fn fnv64(data: &[u8]) -> u64 {
+pub(crate) fn fnv64(data: &[u8]) -> u64 {
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
     for b in data {
         h ^= u64::from(*b);

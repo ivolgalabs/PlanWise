@@ -86,6 +86,24 @@ mod tests {
         assert_eq!(notes, "", "default notes — пустая строка");
     }
 
+    /// Контракт: каждый столбец из TASK_COLUMNS существует в схеме tasks.
+    /// Дрейф между миграциями и SELECT-списком (список — один на все команды)
+    /// ломает их разом, поэтому проверяем здесь, а не на устройстве.
+    #[test]
+    fn task_columns_match_schema() {
+        let conn = open(":memory:").expect("open test db");
+        for col in crate::commands::TASK_COLUMNS.split(", ") {
+            let exists: bool = conn
+                .query_row(
+                    "SELECT COUNT(*) > 0 FROM pragma_table_info('tasks') WHERE name = ?1",
+                    [col],
+                    |row| row.get(0),
+                )
+                .expect("pragma_table_info");
+            assert!(exists, "колонки {col} из TASK_COLUMNS нет в схеме tasks");
+        }
+    }
+
     /// V5: у tasks есть колонка someday с default 0.
     #[test]
     fn migrations_add_someday_column() {

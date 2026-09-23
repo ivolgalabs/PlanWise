@@ -323,6 +323,48 @@ artifacts there must not be overwritten by a same-version build with different c
 (version bump, signing, placement, device pass) is a separate decision. Device checks still pending:
 reboot restore and cancellation of stale alarms.
 
-Still open after P2: **N10** (the Android digest pre-arms tomorrow's alarm with frozen content — needs a
-content fingerprint in the sync loop), the TASK_COLUMNS/`?N` contract test, and the dual `core_base`
-copy (repo copy for CI vs `Modules/core_base` locally) as a process risk.
+Closed in the 23.09 batch: **N10** (digest content fingerprint), the TASK_COLUMNS contract test, and
+the device pass below. Still open: the dual `core_base` copy (repo copy for CI vs `Modules/core_base`
+locally) as a process risk, and the macOS artifacts lag (0.1.13 vs 0.1.16).
+
+## Device pass 23.09.2026 — Pixel 7 Pro (Android 17), v0.1.16
+
+Everything below was checked by running it on the device, not by reading the code:
+
+| Check | Evidence |
+|---|---|
+| Digest fires in the configured hour | posted at 21:00:00 — "План на сегодня: 1 задача", summary "в течение дня" (`dumpsys notification`) |
+| Digest pre-armed for tomorrow | AlarmManager alarm `2026-09-24 21:00:00`, RTC_WAKEUP, `window=0` (exact allowed) |
+| N10: re-arm when the day's content changes | adding a task for tomorrow moved the TimedNotificationPublisher cancellation counter 3 -> 6 (`show()` cancels the previous alarm of the same id) |
+| Reminder fires with the app backgrounded | "Напоминание" / "«TestRemindNow» — за 15 мин" at 21:10 = 21:25 - 15 min |
+| Cancel sweep (task done -> day empty) | the digest alarm disappeared within one 60 s tick |
+| Reboot restore | after `adb reboot` the process was started ONLY for `LocalNotificationRestoreReceiver` (0 activities) and the digest alarm was back |
+| BACK minimizes | app went to the background, relaunch was warm |
+
+Two P0 defects were found ONLY by this pass (both fixed in the same batch):
+
+1. **`persistScheduled` never wrote anything.** `Invoke.parseArgs(BatchArgs::class.java)` runs jackson over the
+   plugin's own arg classes, and the date produced by `time::serde::iso8601` is
+   `+002026-09-24T19:00:00.000000000Z` — jackson's `SimpleDateFormat` pattern `yyyy-MM-dd'T'HH:mm:ss.SSS'Z'`
+   cannot parse it, so the command was rejected and the error was swallowed by `let _ = ...` on the Rust side.
+   Fix: Rust builds the whole JSON (`scheduled_json`, `js_date_utc`) and the bridge only stores the string;
+   `persist_scheduled` now reads the store back and logs a mismatch.
+2. **`pending()` is the wrong API, and `scheduledIds` first returned a map.** The Kotlin `getPending` returns
+   `NotificationManager.activeNotifications` — notifications already in the shade — so the sync guard never
+   blocked anything and the "cancel the extras" step cancelled nothing (it had never worked, in any build).
+   Fix: read the persisted store through the bridge instead. The response must be a plain `ArrayList<Int>`:
+   jackson serializes a `JSArray` as `{}`, and Rust reported `invalid type: map, expected a sequence`.
+
+Found upstream (documented in PROJECT.md, not fixable here — the plugin's own code):
+`Notification.sourceJson` is never assigned anywhere (so the plugin's `batch` stores the string "null");
+`getSavedNotification` catches only `org.json.JSONException` while jackson throws `JsonProcessingException`
+(a parse failure escapes the restore receiver); the restore path re-appends past-dated notifications with a
+null `sourceJson`; `isUserUnlocked` early-returns during Direct Boot — on one of three reboots the alarm was
+not yet restored ~20 s after boot (it was there on the next check, and the app re-arms on launch).
+
+Residual limitation: a reminder restored after a reboot carries no `taskId` (`extra` is a `JSObject`, which
+jackson cannot deserialize, so the entry must omit it) — the tap opens the app, not the task, until the next
+launch re-schedules it.
+
+Guards added in this batch: `persisted_json_matches_plugin_fields`, `js_date_is_plugin_format`,
+`digest_action_reschedules_on_content_change`, `task_columns_match_schema` — 24 tests total.

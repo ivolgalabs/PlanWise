@@ -503,7 +503,7 @@ const DIGEST_NOTIFICATION_ID: i32 = 1_000_000;
 /// heads-up) и легко теряются. Свой канал с IMPORTANCE_HIGH: звук, вибрация,
 /// всплывание поверх приложений. Создаётся один раз на фоновом потоке
 /// планировщика (sync-вызов run_mobile_plugin с главного потока — дедлок).
-#[cfg(target_os = "android")]
+#[cfg(any(target_os = "android", test))]
 const TASKS_CHANNEL_ID: &str = "tasks";
 
 #[cfg(target_os = "android")]
@@ -543,12 +543,33 @@ fn stable_id(salt: &str, task_id: &str, due_minute: i64) -> i32 {
     id
 }
 
-/// ISO 8601-значение для плагина (NotificationData.schedule.at.date) — тем же
-/// сериализатором, что у плагина, иначе Kotlin не разберёт дату будильника.
-#[cfg(target_os = "android")]
-fn iso8601_at(ts: i64) -> Option<serde_json::Value> {
-    let at = time::OffsetDateTime::from_unix_timestamp(ts).ok()?;
-    time::serde::iso8601::serialize(&at, serde_json::value::Serializer).ok()
+/// Дата будильника в формате, который разбирает Kotlin-класс плагина
+/// (NotificationSchedule.At.date, @JsonFormat JS_DATE_FORMAT). Живёт и в
+/// test-сборке: формат проверяется юнит-тестом — ошибка в нём ломает запись в
+/// хранилище молча (см. ниже), на устройстве это видно только по пропавшим
+/// напоминаниям.
+#[cfg(any(target_os = "android", test))]
+fn js_date_utc(ts: i64) -> Option<String> {
+    // Формат плагина (JS_DATE_FORMAT): yyyy-MM-dd'T'HH:mm:ss.SSS'Z' в UTC.
+    // Джексон разбирает эту строку в java.util.Date через SimpleDateFormat с
+    // этим шаблоном: без миллисекунд разбор падает, запись молча пропускается и
+    // хранилище остаётся пустым (проверено на устройстве 23.09). Собираем строку
+    // вручную — крейт time подключён только под android-таргет, а функцию
+    // проверяет юнит-тест на десктопе.
+    // Импорт внутри функции: трейты нужны только там, где она компилируется
+    // (android-сборка и тесты) — иначе clippy ругается на unused import.
+    use chrono::{Datelike, Utc};
+    let utc = Utc.timestamp_opt(ts, 0).single()?;
+    Some(format!(
+        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{:03}Z",
+        utc.year(),
+        utc.month(),
+        utc.day(),
+        utc.hour(),
+        utc.minute(),
+        utc.second(),
+        utc.timestamp_subsec_millis()
+    ))
 }
 
 /// Записать запланированное уведомление в persisted-хранилище плагина
@@ -562,17 +583,87 @@ fn iso8601_at(ts: i64) -> Option<serde_json::Value> {
 /// Kotlin пишет строку уведомления напрямую в SharedPreferences плагина —
 /// jackson/ObjectMapper плагина для этого не нужен.
 #[cfg(target_os = "android")]
-fn persist_scheduled(app: &tauri::AppHandle, payload: serde_json::Value) {
+fn persist_scheduled(app: &tauri::AppHandle, id: i32, notification: serde_json::Value) {
     let Some(state) = app.try_state::<crate::WidgetPush>() else {
         return;
     };
     let Some(handle) = &state.0 else {
         return;
     };
+    // Строку собирает Rust, а не плагин: Notification.sourceJson в 2.3.3 не
+    // заполняется нигде (в Kotlin поле только читается, Rust его не передаёт),
+    // поэтому `batch`-путь плагина кладёт в хранилище строку "null" — restore
+    // после перезагрузки и чтение списка отложенных не работают.
+    let payload = serde_json::json!({ "id": id, "json": notification.to_string() });
     // Sync-вызов допустим: планировщик живёт в своём потоке (дедлок sync-
     // варианта — только при вызове с главного).
     if let Err(e) = handle.run_mobile_plugin::<i32>("persistScheduled", payload) {
         eprintln!("[notify] persistScheduled не удался: {e}");
+        return;
+    }
+    // Самопроверка записи: если её нет в хранилище, restore после перезагрузки
+    // молча ничего не восстановит, а список отложенных не увидит аларм — лучше
+    // увидеть это в логе сразу (на устройстве 23.09 так нашлась пустая запись).
+    if !scheduled_ids(app).contains(&id) {
+        eprintln!("[notify] запись {id} не появилась в хранилище плагина");
+    }
+}
+
+/// JSON записи для persisted-хранилища плагина. Живёт и в test-сборке: состав
+/// полей — контракт с Kotlin-классом Notification (jackson падает на неизвестном
+/// поле, а JSObject из extra разобрать не умеет — тогда запись целиком
+/// пропускается и хранилище пустеет). Проверяется юнит-тестом.
+#[cfg(any(target_os = "android", test))]
+fn scheduled_json(
+    id: i32,
+    title: &str,
+    body: Option<&str>,
+    large_body: Option<&str>,
+    inbox_lines: Option<&[String]>,
+    summary: Option<&str>,
+    date: &str,
+) -> serde_json::Value {
+    let mut n = serde_json::json!({
+        "id": id,
+        "channelId": TASKS_CHANNEL_ID,
+        "title": title,
+        "schedule": { "at": {
+            "date": date, "repeating": false, "allowWhileIdle": true,
+        }},
+    });
+    if let Some(v) = body {
+        n["body"] = serde_json::json!(v);
+    }
+    if let Some(v) = large_body {
+        n["largeBody"] = serde_json::json!(v);
+    }
+    if let Some(v) = inbox_lines {
+        n["inboxLines"] = serde_json::json!(v);
+    }
+    if let Some(v) = summary {
+        n["summary"] = serde_json::json!(v);
+    }
+    n
+}
+
+/// Id уведомлений, лежащих в persisted-хранилище плагина, — это и есть
+/// поставленные алармы: publisher удаляет запись при срабатывании, cancel — при
+/// отмене. `pending()` плагина для этого не годится (см. sync_scheduled).
+#[cfg(target_os = "android")]
+fn scheduled_ids(app: &tauri::AppHandle) -> Vec<i32> {
+    let Some(state) = app.try_state::<crate::WidgetPush>() else {
+        return Vec::new();
+    };
+    let Some(handle) = &state.0 else {
+        return Vec::new();
+    };
+    match handle.run_mobile_plugin::<Vec<i32>>("scheduledIds", ()) {
+        Ok(ids) => ids,
+        // Пустой ответ безопаснее отказа: планировщик переставит всё заново.
+        Err(e) => {
+            eprintln!("[notify] хранилище уведомлений недоступно: {e}");
+            Vec::new()
+        }
     }
 }
 
@@ -618,22 +709,14 @@ fn schedule_at(
             allow_while_idle: true,
         })
         .show();
-    if let Some(date) = iso8601_at(ts) {
+    if let Some(date) = js_date_utc(ts) {
+        // taskId (extra) в запись не кладём — см. scheduled_json: после
+        // перезагрузки напоминание восстановится без deep-link, а id задачи
+        // вернётся при следующем запуске приложения.
         persist_scheduled(
             app,
-            serde_json::json!({
-                "notifications": [{
-                    "id": id,
-                    "channelId": TASKS_CHANNEL_ID,
-                    "title": title,
-                    "body": body,
-                    "largeBody": body,
-                    "schedule": { "at": {
-                        "date": date, "repeating": false, "allowWhileIdle": true,
-                    }},
-                    "extra": { "taskId": task_id },
-                }],
-            }),
+            id,
+            scheduled_json(id, title, Some(body), Some(body), None, None, &date),
         );
     }
 }
@@ -695,42 +778,101 @@ fn schedule_digest(app: &tauri::AppHandle, ts: NaiveDateTime, rows: &[(String, O
     let _ = b.show();
     // Запись в persisted-хранилище плагина (см. persist_scheduled) — без неё
     // дайджест не переживёт перезагрузку и не будет отменён при выключении.
-    if let Some(date) = iso8601_at(to_local(&ts).timestamp()) {
+    if let Some(date) = js_date_utc(to_local(&ts).timestamp()) {
         persist_scheduled(
             app,
-            serde_json::json!({
-                "notifications": [{
-                    "id": DIGEST_NOTIFICATION_ID,
-                    "channelId": TASKS_CHANNEL_ID,
-                    "title": title,
-                    "inboxLines": lines,
-                    "summary": summary,
-                    "schedule": { "at": {
-                        "date": date, "repeating": false, "allowWhileIdle": true,
-                    }},
-                }],
-            }),
+            DIGEST_NOTIFICATION_ID,
+            scheduled_json(
+                DIGEST_NOTIFICATION_ID,
+                &title,
+                None,
+                None,
+                Some(&lines),
+                Some(&summary),
+                &date,
+            ),
         );
     }
 }
 
+/// Что делать с алармом дайджеста в этом тике. Чистая логика (живёт под
+/// `test` тоже) — синхронизацию на Android иначе нечем проверить.
+#[cfg(any(target_os = "android", test))]
+#[derive(Debug, PartialEq, Eq)]
+enum DigestAction {
+    /// Поставить аларм: его нет, сменился день или изменился контент.
+    Schedule,
+    /// Аларм стоит с тем же контентом — не трогаем (JNI + запись хранилища).
+    Keep,
+    /// День пуст — аларм не нужен (снимет шаг «отмена лишних»).
+    Cancel,
+}
+
+#[cfg(any(target_os = "android", test))]
+fn digest_action(
+    pending: bool,
+    armed: Option<(i64, u64)>,
+    target: (i64, u64),
+    has_tasks: bool,
+) -> DigestAction {
+    if !has_tasks {
+        return DigestAction::Cancel;
+    }
+    if !pending || armed != Some(target) {
+        DigestAction::Schedule
+    } else {
+        DigestAction::Keep
+    }
+}
+
+/// Отпечаток контента дайджеста (день + строки задач): им отличаем «тот же
+/// дайджест» от «задачи поменялись».
+#[cfg(target_os = "android")]
+fn digest_fingerprint(target_epoch: i64, tasks: &[(String, Option<i64>)]) -> u64 {
+    use std::fmt::Write as _;
+    let mut buf = target_epoch.to_string();
+    for (title, time) in tasks {
+        let _ = write!(buf, "\n{time:?}|{title}");
+    }
+    crate::commands::fnv64(buf.as_bytes())
+}
+
+/// Ячейка «с каким контентом дайджест ушёл в OS-планировщик». Пусто —
+/// неизвестно (первый тик после запуска процесса): тогда аларм перезапишется
+/// текущим контентом, операция идемпотентна (show() снимает старый аларм).
+#[cfg(target_os = "android")]
+fn armed_cell() -> &'static Mutex<Option<(i64, u64)>> {
+    static ARMED: std::sync::OnceLock<Mutex<Option<(i64, u64)>>> = std::sync::OnceLock::new();
+    ARMED.get_or_init(|| Mutex::new(None))
+}
+
+#[cfg(target_os = "android")]
+fn digest_armed() -> Option<(i64, u64)> {
+    *armed_cell().lock().unwrap_or_else(|e| e.into_inner())
+}
+
+#[cfg(target_os = "android")]
+fn set_digest_armed(v: Option<(i64, u64)>) {
+    *armed_cell().lock().unwrap_or_else(|e| e.into_inner()) = v;
+}
+
 /// Android: сверка OS-планировщика с ожидаемыми уведомлениями.
 ///
-/// Модель «sync»: каждый тик сравниваем отложенные уведомления плагина
-/// (pending(), persisted в его хранилище) с тем, что должно быть запланировано.
-/// Недостающие ставим на момент due, лишние отменяем (задача выполнена,
-/// удалена, время изменено). После срабатывания одноразового уведомления
-/// плагин удаляет его запись — следующий день планируется при первом тике.
+/// Модель «sync»: каждый тик сравниваем уже поставленные алармы с тем, что
+/// должно быть запланировано. Недостающие ставим на момент due, лишние
+/// отменяем (задача выполнена, удалена, время изменено). Список поставленных
+/// берём из persisted-хранилища плагина: наш мост пишет туда запись на каждый
+/// show, publisher удаляет её при срабатывании, cancel — при отмене.
+///
+/// Плагинный `pending()` для этого НЕ годится: его Kotlin-реализация
+/// (getPending) отдаёт `NotificationManager.activeNotifications` — уведомления,
+/// уже висящие в шторке. До первого срабатывания список пуст, поэтому guard
+/// ничего не блокировал (лишние перепланирования + JNI на каждом тике), а
+/// «отмена лишних» не отменяла ничего (проверено на устройстве 23.09.2026).
 #[cfg(target_os = "android")]
 fn sync_scheduled(app: &tauri::AppHandle, prefs: &NotifyPrefs) {
     let notif = app.notification();
-    let pending_ids: HashSet<i32> = match notif.pending() {
-        Ok(list) => list.iter().map(|p| p.id()).collect(),
-        Err(e) => {
-            eprintln!("[notify] не удалось получить отложенные уведомления: {e}");
-            return;
-        }
-    };
+    let scheduled: HashSet<i32> = scheduled_ids(app).into_iter().collect();
     let mut expected: HashSet<i32> = HashSet::new();
     let now = Local::now().naive_local();
 
@@ -749,19 +891,30 @@ fn sync_scheduled(app: &tauri::AppHandle, prefs: &NotifyPrefs) {
                 .map(|ts| (ts, crate::commands::date_to_epoch(ts.date())))
         };
         if let Some((ts, target_epoch)) = target {
-            // Guard по pending_ids (как у напоминаний ниже): дайджест
-            // перепланируется только когда его аларма ещё не стоит, а не
-            // на каждом 60-секундном тике (JNI-вызов + перезапись хранилища
-            // плагина). Контент фиксируется на момент планирования — так же,
-            // как у напоминаний.
-            if !pending_ids.contains(&DIGEST_NOTIFICATION_ID) {
-                let tasks = day_task_rows(app, target_epoch);
-                if !tasks.is_empty() {
+            // Перепланируем не только когда аларма нет, но и когда сменился
+            // КОНТЕНТ дня: поставленный вечером дайджест на завтра иначе
+            // застывал — задачи, добавленные после планирования, в него уже
+            // не попадали. Запрос дня дешёвый (индекс idx_tasks_date_active),
+            // поэтому отпечаток считаем каждый тик, а JNI-вызов (show +
+            // запись хранилища) делаем только при реальном изменении.
+            let tasks = day_task_rows(app, target_epoch);
+            let fp = digest_fingerprint(target_epoch, &tasks);
+            let action = digest_action(
+                scheduled.contains(&DIGEST_NOTIFICATION_ID),
+                digest_armed(),
+                (target_epoch, fp),
+                !tasks.is_empty(),
+            );
+            match action {
+                DigestAction::Schedule => {
                     expected.insert(DIGEST_NOTIFICATION_ID);
                     schedule_digest(app, ts, &tasks);
+                    set_digest_armed(Some((target_epoch, fp)));
                 }
-            } else {
-                expected.insert(DIGEST_NOTIFICATION_ID);
+                DigestAction::Keep => {
+                    expected.insert(DIGEST_NOTIFICATION_ID);
+                }
+                DigestAction::Cancel => set_digest_armed(None),
             }
         }
     }
@@ -778,7 +931,7 @@ fn sync_scheduled(app: &tauri::AppHandle, prefs: &NotifyPrefs) {
             }
             let nid = stable_id(ev.kind, &ev.task_id, due_unix_minute(ev.due));
             expected.insert(nid);
-            if !pending_ids.contains(&nid) {
+            if !scheduled.contains(&nid) {
                 schedule_at(app, nid, &ev.task_id, ev.title, &ev.body, ev.due);
             }
         }
@@ -786,7 +939,7 @@ fn sync_scheduled(app: &tauri::AppHandle, prefs: &NotifyPrefs) {
 
     // 3. Отмена лишних: запланированные, но не ожидаемые — задача выполнена,
     // удалена или её время изменилось (id у нового due другой).
-    for id in pending_ids {
+    for id in scheduled {
         if !expected.contains(&id) {
             let _ = notif.cancel(vec![id]);
         }
@@ -1078,6 +1231,119 @@ mod tests {
                 .unwrap()
                 .and_hms_opt(9, 15, 0)
                 .unwrap()
+        );
+    }
+
+    /// Запись для persisted-хранилища плагина: только поля его Kotlin-класса
+    /// Notification и никакого `extra` (JSObject jackson не разбирает, и вся
+    /// запись пропускается — так хранилище осталось пустым на устройстве).
+    #[test]
+    fn persisted_json_matches_plugin_fields() {
+        let fields = [
+            "id",
+            "title",
+            "body",
+            "largeBody",
+            "summary",
+            "sound",
+            "icon",
+            "largeIcon",
+            "iconColor",
+            "actionTypeId",
+            "group",
+            "inboxLines",
+            "isGroupSummary",
+            "isOngoing",
+            "isAutoCancel",
+            "extra",
+            "attachments",
+            "schedule",
+            "channelId",
+            "sourceJson",
+            "visibility",
+            "number",
+        ];
+        let lines = vec!["09:00  Задача".to_string()];
+        let v = scheduled_json(
+            1,
+            "План на сегодня: 1 задача",
+            None,
+            None,
+            Some(&lines),
+            Some("в течение дня"),
+            "2026-09-24T19:00:00.000Z",
+        );
+        for key in v.as_object().expect("object").keys() {
+            assert!(
+                fields.contains(&key.as_str()),
+                "поля {key} нет в Kotlin-классе Notification плагина"
+            );
+        }
+        assert!(
+            v.get("extra").is_none(),
+            "extra ломает разбор записи jackson-ом"
+        );
+        assert_eq!(v["id"], 1);
+        assert_eq!(v["channelId"], TASKS_CHANNEL_ID);
+        assert_eq!(v["inboxLines"][0], "09:00  Задача");
+        assert_eq!(v["schedule"]["at"]["allowWhileIdle"], true);
+        assert_eq!(v["schedule"]["at"]["date"], "2026-09-24T19:00:00.000Z");
+        // Минимальный набор (напоминание) тоже валиден.
+        let r = scheduled_json(2, "Напоминание", Some("B"), Some("B"), None, None, "x");
+        assert_eq!(r["largeBody"], "B");
+        assert!(r.get("summary").is_none());
+    }
+
+    /// Дата для persisted-хранилища плагина: UTC, миллисекунды, суффикс Z —
+    /// ровно шаблон JS_DATE_FORMAT. Без миллисекунд SimpleDateFormat плагина
+    /// не разбирает строку: запись молча пропускается, хранилище остаётся
+    /// пустым (нет ни restore после перезагрузки, ни списка отложенных).
+    #[test]
+    fn js_date_is_plugin_format() {
+        assert_eq!(
+            js_date_utc(1_800_000_000).as_deref(),
+            Some("2027-01-15T08:00:00.000Z")
+        );
+        assert_eq!(
+            js_date_utc(1_790_190_000).as_deref(),
+            Some("2026-09-23T19:00:00.000Z")
+        );
+        assert_eq!(js_date_utc(i64::MAX), None);
+    }
+
+    /// Решение по аларму дайджеста: без аларма — ставим; с тем же контентом —
+    /// не трогаем; контент дня изменился (задачи добавили вечером) или
+    /// сменился день — переставляем; пустой день — снимаем.
+    #[test]
+    fn digest_action_reschedules_on_content_change() {
+        let target = (20_000i64, 111u64);
+        assert_eq!(
+            digest_action(false, None, target, true),
+            DigestAction::Schedule
+        );
+        assert_eq!(
+            digest_action(true, Some(target), target, true),
+            DigestAction::Keep
+        );
+        assert_eq!(
+            digest_action(true, Some((20_000, 222)), target, true),
+            DigestAction::Schedule
+        );
+        assert_eq!(
+            digest_action(true, Some((19_999, 111)), target, true),
+            DigestAction::Schedule
+        );
+        assert_eq!(
+            digest_action(true, None, target, true),
+            DigestAction::Schedule
+        );
+        assert_eq!(
+            digest_action(true, Some(target), target, false),
+            DigestAction::Cancel
+        );
+        assert_eq!(
+            digest_action(false, None, target, false),
+            DigestAction::Cancel
         );
     }
 
