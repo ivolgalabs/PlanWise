@@ -21,6 +21,8 @@ export interface TaskPattern {
   notifyMinutes?: number | null;
   /** Выехать заранее (минуты на дорогу) — как в карточке задачи. */
   travelTime?: number | null;
+  /** «Пора собираться» — за сколько минут до выезда напомнить. */
+  travelNotifyMinutes?: number | null;
   /** Категория (цвет-сет), заметка и подзадачи — как в карточке задачи. */
   colorSetId?: string | null;
   notes?: string;

@@ -171,6 +171,8 @@ export const createTaskFromPattern = async (
     durationMinutes: p.durationMinutes,
     notifyMinutes: p.notifyMinutes ?? null,
     travelTime: p.travelTime ?? null,
+    // Раньше терялось: задача из шаблона не получала «время собираться».
+    travelNotifyMinutes: p.travelNotifyMinutes ?? null,
     colorSetId: p.colorSetId ?? null,
     notes: p.notes ?? "",
   });

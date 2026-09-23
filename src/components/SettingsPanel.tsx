@@ -344,6 +344,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
     difficulty: number;
     durationMinutes: number | null;
     travelTime: number | null;
+    travelNotifyMinutes: number | null;
     notifyMinutes: number | null;
     colorSetId: string | null;
     notes: string;
@@ -358,6 +359,8 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
       durationMinutes: data.durationMinutes,
       notifyMinutes: data.notifyMinutes,
       travelTime: data.travelTime,
+      // Раньше значение терялось: задача из шаблона была без «времени собираться».
+      travelNotifyMinutes: data.travelNotifyMinutes,
       colorSetId: data.colorSetId,
       notes: data.notes,
       subtasks: data.subs,

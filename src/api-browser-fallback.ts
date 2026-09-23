@@ -6,6 +6,7 @@
  */
 import type { Task, ColorSet, Subtask } from "./api";
 import { toEpochDay } from "./date";
+import { showToast } from "./toast";
 
 const K = { tasks: "fb:tasks", sets: "fb:sets", subs: "fb:subtasks" };
 
@@ -22,7 +23,19 @@ const DEFAULT_SETS: ColorSet[] = [
 ];
 
 const load = <T,>(k: string): T[] => {
-  try { return JSON.parse(localStorage.getItem(k) ?? "[]"); } catch { return []; }
+  const raw = localStorage.getItem(k);
+  if (raw == null) return [];
+  try {
+    return JSON.parse(raw) as T[];
+  } catch (e) {
+    // Битый JSON — это НЕ «пустая база»: раньше молчаливый [] выглядел как
+    // потеря всех задач и первая же запись затирала исходные данные. Копию
+    // сохраняем отдельным ключом, пользователю говорим.
+    localStorage.setItem(`${k}:broken`, raw);
+    console.error(`Повреждённые локальные данные (${k}), копия в ${k}:broken`, e);
+    showToast("Локальные данные повреждены — сохранена копия, изменения начнутся заново");
+    return [];
+  }
 };
 const save = (k: string, v: unknown) => localStorage.setItem(k, JSON.stringify(v));
 
@@ -62,16 +75,16 @@ export const browserApi = {
       // План-задача («Когда-нибудь» со сроком): перенос меняет мягкий срок,
       // задача остаётся план-задачей (ср. move_task в commands.rs).
       if (t.someday) {
-        return { ...t, dueEpochDay: newDay, date: 0, archived: false, notes: t.notes ?? "" };
+        return { ...t, dueEpochDay: newDay, date: 0, archived: false, notes: t.notes ?? "", updatedAt: Date.now() };
       }
-      return { ...t, date: newDay, someday: false, archived: false, isDone: newDay < today ? true : newDay > today ? false : t.isDone, notes: t.notes ?? "" };
+      return { ...t, date: newDay, someday: false, archived: false, isDone: newDay < today ? true : newDay > today ? false : t.isDone, notes: t.notes ?? "", updatedAt: Date.now() };
     }));
   },
   async getSomedayTasks(): Promise<Task[]> {
     return sortTasks(load<Task>(K.tasks).filter((t) => t.someday && !t.archived));
   },
   async setSomeday(id: string): Promise<void> {
-    save(K.tasks, load<Task>(K.tasks).map((t) => (t.id === id ? { ...t, someday: true, date: 0, dueEpochDay: null, archived: false, notes: t.notes ?? "" } : t)));
+    save(K.tasks, load<Task>(K.tasks).map((t) => (t.id === id ? { ...t, someday: true, date: 0, dueEpochDay: null, archived: false, notes: t.notes ?? "", updatedAt: Date.now() } : t)));
   },
   async getColorSets(): Promise<ColorSet[]> {
     // Первый запуск (или после очистки storage): создаём дефолтные категории.
@@ -96,7 +109,7 @@ export const browserApi = {
     const threshold = toEpochDay(new Date()) - 1;
     let n = 0;
     save(K.tasks, load<Task>(K.tasks).map((t) => {
-      if (t.date < threshold && !t.isDone && !t.someday && !t.archived) { n++; return { ...t, archived: true }; }
+      if (t.date < threshold && !t.isDone && !t.someday && !t.archived) { n++; return { ...t, archived: true, updatedAt: Date.now() }; }
       return t;
     }));
     return n;
@@ -110,7 +123,7 @@ export const browserApi = {
   async restoreArchived(id: string, date: number): Promise<void> {
     // Возврат в прошлое = выполнена (иначе снова уйдёт в архив); в будущее = актуальна.
     const today = todayEpochDay();
-    save(K.tasks, load<Task>(K.tasks).map((t) => (t.id === id ? { ...t, archived: false, date, someday: false, isDone: date < today ? true : date > today ? false : t.isDone, notes: t.notes ?? "" } : t)));
+    save(K.tasks, load<Task>(K.tasks).map((t) => (t.id === id ? { ...t, archived: false, date, someday: false, isDone: date < today ? true : date > today ? false : t.isDone, notes: t.notes ?? "", updatedAt: Date.now() } : t)));
   },
   async getSubtasks(taskId: string): Promise<Subtask[]> {
     return load<Subtask>(K.subs)

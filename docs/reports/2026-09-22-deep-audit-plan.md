@@ -261,3 +261,54 @@ auto-done boundary, pattern travelNotify, IPC range validation + DB CHECKs, catc
 comments), N24-N29 (browser fallback, stable_id collisions, 60 s drift, persist version, index gaps,
 hygiene). Android runtime behaviour (reboot restore, cancel of stale alarms) needs a device pass
 during the next Android build.
+
+## P2 batch (2026-09-22, commit fa72e59)
+
+Rust: `sanitize_task` clamps every field fed from the webview and from a backup file (time 0..1439,
+difficulty 0..3, durations ≤168 h, reminder interval ≤30 days) — applied in `upsert_task` and in
+`prepare_import`; `same_as_db` now also compares `someday/archived/is_done` so un-archiving or leaving
+the "Someday" group no longer slips into an occupied slot past the overlap check; interval semantics
+fixed (0 and negative values = "do not remind", previously a negative value silently fell back to the
+global intervals); notification text renders "за 1 ч 30 мин" instead of "через 1 ч" (minutes were
+truncated) with the same preposition as the settings UI; the desktop catch-up window became a named
+constant with an honest comment (it was 15 minutes while comments claimed ±2); an empty day is no
+longer stamped as "digest sent" (a task added later inside the window now still gets the digest);
+`stable_id` uses the whole positive i32 instead of `% 999_999` (real collisions at ~1000 scheduled
+events); the Android 60 s loop is aligned to the minute boundary (it drifted by the tick duration);
+errors from `app_data_dir` and from the widget day query are logged instead of swallowed; V14 adds
+the missing indexes (archived/date/updated_at and date/is_done/archived/someday). Deliberate
+non-change: DB-level `CHECK` constraints were rejected — SQLite cannot add a CHECK without rebuilding
+`tasks` (with FK cascades from subtasks/attachments), and the app is the only writer, so the range
+invariants live in one place (app code) instead of two.
+
+Frontend: `reload` uses `Promise.allSettled` (one failing query no longer freezes the other data) and
+a successful reload clears the error banner that previously stuck forever; command rejections now
+surface as toasts in drag.tsx (five branches), ArchivePanel (single restore and the done checkbox) and
+SettingsPanel (category save/delete); SettingsPanel subscribes to its 52 fields through `useShallow`
+(full-store subscription re-rendered the 1631-line panel on every store tick) and DragGhost uses a
+selector; the departure label reuses `travelTimeText` (the inline copy produced garbage for travel
+longer than a day and lost the "накануне" note); auto-done is computed from the task END (a task
+running right now is no longer marked done in its start minute); an empty interval list now shows a
+warning; leaving the app asks for confirmation; the widget timer and the toast listener are cleaned up
+properly; `useSubtasks` guards against a stale response after a taskId change; the persisted settings
+got `version`/`migrate` plus validation of numeric settings and reminder intervals; the browser
+fallback keeps a copy of corrupt localStorage data (and tells the user) instead of silently treating
+it as an empty database, and stamps `updatedAt` on every mutation like Rust does.
+
+Verification after the batch: `cargo clippy --all-targets -- -D warnings` clean, `cargo test` 20/20,
+`npm test` (tsc) and `npm run build` clean.
+
+### Lesson from the Android build (verification paid off)
+
+The first Android build compiled the new Kotlin and failed for a real reason: `jsonMapper()` returns
+`com.fasterxml.jackson.databind.ObjectMapper`, which the plugin AAR keeps as an `implementation`
+dependency — not visible to the app module. Reading the plugin source also showed that
+`Notification.sourceJson` is never assigned in Kotlin (only `parseArgs` fills it) and that its own
+restore path re-appends parsed notifications with a null `sourceJson`. The design therefore changed:
+the alarm stays on the proven `show()` path and the persistence is a small bridge command that writes
+`sourceJson` into the plugin's SharedPreferences. Remaining verification: a device pass (reboot
+restore, cancellation of stale alarms) during the next Android build.
+
+Still open after P2: **N10** (the Android digest pre-arms tomorrow's alarm with frozen content — needs a
+content fingerprint in the sync loop), the TASK_COLUMNS/`?N` contract test, and the dual `core_base`
+copy (repo copy for CI vs `Modules/core_base` locally) as a process risk.
