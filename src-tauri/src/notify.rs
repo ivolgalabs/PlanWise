@@ -7,14 +7,17 @@
 //     время (timeMinutes) — «пришло время заняться задачей».
 //
 // Реализация зависит от платформы:
-//  - Android: уведомления планируются на уровне ОС (AlarmManager через
-//    tauri-plugin-notification Schedule::At). Плагин хранит отложенные
-//    в своём persisted-хранилище и восстанавливает после перезагрузки
-//    устройства; ОС доставляет их, даже если процесс приложения убит.
+//  - Android: уведомления планируются на уровне ОС (AlarmManager) через мост
+//    «widget» — WidgetPushPlugin.scheduleBatch (эквивалент команды batch
+//    плагина уведомлений): будильник + запись в persisted-хранилище плагина.
+//    Без записи в хранилище pending() пуст, а BOOT-restore после перезагрузки
+//    терял все напоминания (show() плагина 2.3.3 в хранилище не пишет —
+//    пишет только batch). ОС доставляет уведомления и при убитом процессе.
 //    Каждый тик (60 с) сверяем отложенные с ожидаемыми: недостающие ставим,
 //    лишние отменяем (модель «sync», а не окно отправки).
 //  - Десктоп (macOS): плагин не умеет планировать на будущее — поллинг
-//    каждые 60 секунд с окном отправки ±2 минуты (процесс на десктопе жив).
+//    каждые 60 секунд с окном отправки до 15 минут после due (см.
+//    check_reminders; процесс на десктопе жив).
 //
 // Интервал 60 секунд — компромисс между точностью и энергопотреблением.
 
@@ -31,8 +34,6 @@ use chrono::{Local, NaiveDateTime, TimeZone};
 use serde::Deserialize as _;
 use tauri::Manager;
 use tauri_plugin_notification::NotificationExt;
-#[cfg(target_os = "android")]
-use tauri_plugin_notification::Schedule;
 
 use crate::db::Db;
 
@@ -105,7 +106,19 @@ fn prefs_path(app: &tauri::AppHandle) -> std::path::PathBuf {
 
 pub fn load_prefs(app: &tauri::AppHandle) -> NotifyPrefs {
     let raw = std::fs::read_to_string(prefs_path(app)).unwrap_or_default();
-    serde_json::from_str(&raw).unwrap_or_default()
+    let mut prefs: NotifyPrefs = serde_json::from_str(&raw).unwrap_or_default();
+    sanitize_prefs(&mut prefs);
+    prefs
+}
+
+/// Привести настройки к допустимым диапазонам. Битый/рукоправленный
+/// notify-prefs.json раньше уходил дальше как есть: час вне 0..23 через
+/// `as u32` давал u32::MAX — дайджест молча переставал приходить навсегда,
+/// а нулевой/отрицательный интервал напоминания либо стрелял ПОСЛЕ начала
+/// задачи, либо незаметно отключались все напоминания.
+pub fn sanitize_prefs(prefs: &mut NotifyPrefs) {
+    prefs.day_summary_hour = prefs.day_summary_hour.clamp(0, 23);
+    prefs.remind_minutes.retain(|m| *m > 0);
 }
 
 /// Сохранить настройки (вызывается командой set_notification_prefs).
@@ -355,14 +368,23 @@ fn tick(app: &tauri::AppHandle) {
 
 // ── Android: планирование на уровне ОС (AlarmManager) ────────────────────
 
-/// NaiveDateTime → DateTime<Local> с запасом для DST-неоднозначных времён
-/// (fallback — UTC-интерпретация). Единый для расчёта due, unix-таймстампов
-/// и планирования.
+/// NaiveDateTime → DateTime<Local>. Единый для расчёта due, unix-таймстампов
+/// и планирования. Точки перехода на летнее время:
+///  - неоднозначное время (стрелки назад) — берём раннюю интерпретацию:
+///    напоминание придёт на час раньше, а не на час позже;
+///  - несуществующее (стрелки вперёд, «дыра») — сдвигаем на час назад к
+///    ближайшему валидному моменту. Прежний fallback «интерпретировать как
+///    UTC» сдвигал момент на весь сдвиг пояса: будильник на Android и окно
+///    отправки на десктопе (сравнивают «наивные» часы) расходились на часы.
 fn to_local(dt: &NaiveDateTime) -> chrono::DateTime<Local> {
-    Local
-        .from_local_datetime(dt)
-        .single()
-        .unwrap_or_else(|| Local.from_utc_datetime(dt))
+    match Local.from_local_datetime(dt) {
+        chrono::LocalResult::Single(v) => v,
+        chrono::LocalResult::Ambiguous(earliest, _) => earliest,
+        chrono::LocalResult::None => Local
+            .from_local_datetime(&(*dt - chrono::Duration::hours(1)))
+            .earliest()
+            .unwrap_or_else(|| Local.from_utc_datetime(dt)),
+    }
 }
 
 /// Тело утреннего дайджеста на десктопе: до 4 заголовков + «…и ещё N задач».
@@ -499,9 +521,37 @@ fn stable_id(salt: &str, task_id: &str, due_minute: i64) -> i32 {
     (h % 999_999) as i32 + 1
 }
 
-/// Запланировать уведомление на момент `due` (локальное время) через плагин:
-/// AlarmManager доставит его, даже если процесс приложения убит. Канал —
-/// TASKS_CHANNEL_ID (высокая важность: звук и heads-up).
+/// ISO 8601-значение для плагина (NotificationData.schedule.at.date) — тем же
+/// сериализатором, что у плагина, иначе Kotlin не разберёт дату будильника.
+#[cfg(target_os = "android")]
+fn iso8601_at(ts: i64) -> Option<serde_json::Value> {
+    let at = time::OffsetDateTime::from_unix_timestamp(ts).ok()?;
+    time::serde::iso8601::serialize(&at, serde_json::value::Serializer).ok()
+}
+
+/// Отправить пачку уведомлений в Kotlin (WidgetPushPlugin.scheduleBatch):
+/// ставит будильники И пишет их в persisted-хранилище плагина уведомлений.
+#[cfg(target_os = "android")]
+fn schedule_batch(app: &tauri::AppHandle, payload: serde_json::Value) {
+    let Some(state) = app.try_state::<crate::WidgetPush>() else {
+        return;
+    };
+    let Some(handle) = &state.0 else {
+        return;
+    };
+    // Sync-вызов допустим: планировщик живёт в своём потоке (дедлок sync-
+    // варианта — только при вызове с главного).
+    if let Err(e) = handle.run_mobile_plugin::<Vec<i32>>("scheduleBatch", payload) {
+        eprintln!("[notify] scheduleBatch не удался: {e}");
+    }
+}
+
+/// Запланировать уведомление на момент `due` (локальное время): AlarmManager
+/// доставит его, даже если процесс приложения убит. Канал — TASKS_CHANNEL_ID
+/// (высокая важность: звук и heads-up).
+///
+/// Форма JSON повторяет сериализацию NotificationData плагина — при
+/// обновлении tauri-plugin-notification её надо сверять.
 #[cfg(target_os = "android")]
 fn schedule_at(
     app: &tauri::AppHandle,
@@ -511,32 +561,31 @@ fn schedule_at(
     body: &str,
     due: NaiveDateTime,
 ) {
-    // Абсолютный момент в unix-секундах — смещение часового пояса в
-    // ISO-строке плагину не нужно: Kotlin ставит будильник по миллисекундам.
-    let ts = to_local(&due).timestamp();
-    let Ok(at) = time::OffsetDateTime::from_unix_timestamp(ts) else {
+    // Абсолютный момент в unix-секундах — смещение часового пояса в ISO-строке
+    // плагину не нужно: Kotlin ставит будильник по миллисекундам.
+    let Some(date) = iso8601_at(to_local(&due).timestamp()) else {
         return;
     };
-    let _ = app
-        .notification()
-        .builder()
-        .id(id)
-        .title(title)
-        .body(body)
-        // large_body → BigTextStyle: уведомление разворачивается и показывает
-        // полный текст целиком, а не одну строку (по умолчанию body в Android
-        // обрезается).
-        .large_body(body)
-        .channel_id(TASKS_CHANNEL_ID)
-        // taskId в extra — фронт читает его в событии «actionPerformed» и
-        // открывает карточку задачи по тапу на уведомление (deep-link).
-        .extra("taskId", task_id)
-        .schedule(Schedule::At {
-            date: at,
-            repeating: false,
-            allow_while_idle: true,
-        })
-        .show();
+    schedule_batch(
+        app,
+        serde_json::json!({
+            "notifications": [{
+                "id": id,
+                "channelId": TASKS_CHANNEL_ID,
+                "title": title,
+                "body": body,
+                // largeBody → BigTextStyle: уведомление разворачивается и
+                // показывает полный текст, а не одну строку.
+                "largeBody": body,
+                "schedule": { "at": {
+                    "date": date, "repeating": false, "allowWhileIdle": true,
+                }},
+                // taskId в extra — фронт читает его в «actionPerformed» и
+                // открывает карточку задачи по тапу (deep-link).
+                "extra": { "taskId": task_id },
+            }],
+        }),
+    );
 }
 
 /// «1 задача», «2 задачи», «5 задач» — русская плюрализация для заголовков.
@@ -560,35 +609,37 @@ fn plural_tasks(n: usize) -> String {
 /// В развёрнутом виде — весь список, в сводке — сколько задач со временем.
 #[cfg(target_os = "android")]
 fn schedule_digest(app: &tauri::AppHandle, ts: NaiveDateTime, rows: &[(String, Option<i64>)]) {
-    let Ok(at) = time::OffsetDateTime::from_unix_timestamp(to_local(&ts).timestamp()) else {
+    let Some(date) = iso8601_at(to_local(&ts).timestamp()) else {
         return;
     };
     let n = rows.len();
     let timed = rows.iter().filter(|(_, t)| t.is_some()).count();
-    let mut b = app
-        .notification()
-        .builder()
-        .id(DIGEST_NOTIFICATION_ID)
-        .title(format!("План на сегодня: {}", plural_tasks(n)))
-        .channel_id(TASKS_CHANNEL_ID)
-        .schedule(Schedule::At {
-            date: at,
-            repeating: false,
-            allow_while_idle: true,
-        });
-    for (title, time) in rows {
-        let line = match time {
+    let lines: Vec<String> = rows
+        .iter()
+        .map(|(title, time)| match time {
             Some(m) => format!("{:02}:{:02}  {}", m / 60, m % 60, title),
             None => format!("• {title}"),
-        };
-        b = b.inbox_line(line);
-    }
-    b = b.summary(if timed == 0 {
-        "в течение дня".to_string()
-    } else {
-        format!("{} со временем", plural_tasks(timed))
-    });
-    let _ = b.show();
+        })
+        .collect();
+    schedule_batch(
+        app,
+        serde_json::json!({
+            "notifications": [{
+                "id": DIGEST_NOTIFICATION_ID,
+                "channelId": TASKS_CHANNEL_ID,
+                "title": format!("План на сегодня: {}", plural_tasks(n)),
+                "inboxLines": lines,
+                "summary": if timed == 0 {
+                    "в течение дня".to_string()
+                } else {
+                    format!("{} со временем", plural_tasks(timed))
+                },
+                "schedule": { "at": {
+                    "date": date, "repeating": false, "allowWhileIdle": true,
+                }},
+            }],
+        }),
+    );
 }
 
 /// Android: сверка OS-планировщика с ожидаемыми уведомлениями.
@@ -998,5 +1049,27 @@ mod tests {
         assert_eq!(task_intervals(Some(1440), &p), vec![1440]);
         assert_eq!(task_intervals(None, &p), vec![15, 60]);
         assert_eq!(task_intervals(Some(0), &p), vec![15, 60]); // 0 фильтруется вызывающим
+    }
+
+    /// Настройки из битого/рукоправленного файла приводятся к диапазонам: час
+    /// вне 0..23 через `as u32` отключал дайджест навсегда, неположительный
+    /// интервал стрелял после начала задачи.
+    #[test]
+    fn prefs_are_sanitized() {
+        let mut p = NotifyPrefs {
+            day_summary_hour: -5,
+            remind_minutes: vec![0, -30, 60],
+            ..NotifyPrefs::default()
+        };
+        sanitize_prefs(&mut p);
+        assert_eq!(p.day_summary_hour, 0);
+        assert_eq!(p.remind_minutes, vec![60]);
+
+        let mut p2 = NotifyPrefs {
+            day_summary_hour: 99,
+            ..NotifyPrefs::default()
+        };
+        sanitize_prefs(&mut p2);
+        assert_eq!(p2.day_summary_hour, 23);
     }
 }

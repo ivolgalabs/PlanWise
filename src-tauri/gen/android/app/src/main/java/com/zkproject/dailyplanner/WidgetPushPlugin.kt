@@ -3,6 +3,9 @@ package com.zkproject.dailyplanner
 import android.app.Activity
 import android.content.Context
 import app.tauri.annotation.Command
+import app.tauri.notification.BatchArgs
+import app.tauri.notification.NotificationStorage
+import app.tauri.notification.TauriNotificationManager
 import app.tauri.plugin.Invoke
 import app.tauri.plugin.Plugin
 
@@ -47,6 +50,40 @@ class WidgetPushPlugin(activity: Activity) : Plugin(activity) {
     } catch (e: Exception) {
       e.printStackTrace()
       invoke.reject(e.message ?: "Не удалось свернуть приложение", null as String?)
+    }
+  }
+
+  /**
+   * Пакетное планирование уведомлений с записью в persisted-хранилище плагина
+   * уведомлений — эквивалент команды batch из NotificationPlugin
+   * (tauri-plugin-notification): manager.schedule + storage.appendNotifications.
+   *
+   * Нужен потому, что Rust-метод show() плагина ставит будильник, но в
+   * хранилище НЕ пишет (пишет только batch): pending() всегда пуст — guard
+   * синхронизации не срабатывает, лишние будильники не отменяются, а
+   * BOOT-restore после перезагрузки восстанавливает пустой список (все
+   * напоминания и дайджест терялись до следующего запуска приложения).
+   *
+   * Хранилище — SharedPreferences с фиксированным ключом, поэтому записи видны
+   * и приёмнику плагина, восстанавливающему будильники после перезагрузки.
+   */
+  @Command
+  fun scheduleBatch(invoke: Invoke) {
+    try {
+      val args = invoke.parseArgs(BatchArgs::class.java)
+      val storage = NotificationStorage(appContext, jsonMapper())
+      val manager = TauriNotificationManager(
+        storage,
+        appContext as? Activity,
+        appContext,
+        null,
+      )
+      val ids = manager.schedule(args.notifications)
+      storage.appendNotifications(args.notifications)
+      invoke.resolveObject(ids)
+    } catch (e: Exception) {
+      e.printStackTrace()
+      invoke.reject(e.message ?: "Не удалось запланировать уведомления", null as String?)
     }
   }
 }

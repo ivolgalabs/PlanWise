@@ -48,8 +48,9 @@ tauri-plugin-fs = "2"
 tauri-plugin-notification = "2"
 tauri-plugin-opener = "2"
 
-# Тип времени для Schedule::At уведомлений — нужен только на Android
-# (тот же crate, что у плагина).
+# Тип времени для уведомлений Android (date будильника). Фичи serde и
+# serde-well-known обязательны: у time default = только std, а дата уходит
+# плагину в ISO 8601 — тем же сериализатором, что у самого плагина.
 [target.'cfg(target_os = "android")'.dependencies]
-time = "0.3"
+time = { version = "0.3", features = ["serde", "serde-well-known"] }
 
