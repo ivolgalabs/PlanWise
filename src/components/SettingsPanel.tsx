@@ -15,7 +15,7 @@ import type { CustomSlot, ThemePreset } from "../theme";
 import type { ThemeMode, VisibilityState, SortMode, TaskPattern } from "../store";
 import { DEFAULT_VISIBILITY } from "../store";
 import { parseTimeToMinutes, formatMinutes } from "../date";
-import { api, isTauri } from "../api";
+import { api, isAndroid, isTauri } from "../api";
 import { useMediaQuery } from "../useMediaQuery";
 import { Icon, type IconName } from "./Icon";
 import { DurationSelect } from "./TimePicker";
@@ -463,6 +463,20 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
       setDataMsg("Доступно в приложении");
       return;
     }
+    if (!isAndroid()) {
+      // Десктоп: диалог и запись файла выполняет Rust (у вебвью нет прав на
+      // произвольную запись — см. capabilities/default.json). Атомарная запись
+      // на стороне Rust: обрыв не оставит обрезанный бэкап.
+      try {
+        const path = await invoke<string>("export_backup");
+        setDataError(false);
+        setDataMsg(path ? "Экспортировано ✓" : "Экспорт отменён");
+      } catch (e) {
+        setDataError(true);
+        setDataMsg(String(e));
+      }
+      return;
+    }
     const d = new Date();
     const name = `daily-planner-backup-${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}.json`;
     let path: string | null;
@@ -471,8 +485,8 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
     } catch (e) { setDataError(true); setDataMsg(String(e)); return; }
     if (!path) return;
     try {
-      // Данные отдаёт Rust (export_json); файл пишет плагин fs — на Android
-      // это единственный способ записать по content:// из системного диалога.
+      // Android: content:// из системного диалога умеет писать только плагин
+      // fs (std::fs его не понимает); данные отдаёт Rust (export_json).
       const json = await invoke<string>("export_json");
       await writeTextFile(path, json);
       setDataError(false); setDataMsg("Экспортировано ✓");
@@ -484,6 +498,18 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
       setDataMsg("Доступно в приложении");
       return;
     }
+    if (!isAndroid()) {
+      // Десктоп: выбор файла, чтение и импорт — на стороне Rust.
+      if (!window.confirm("Данные будут ЗАМЕНЕНЫ данными из файла. Продолжить?")) return;
+      try {
+        const n = await invoke<number | null>("import_backup");
+        if (n === null) { setDataError(false); setDataMsg("Импорт отменён"); return; }
+        setDataError(false); setDataMsg(`Импортировано задач: ${n}`);
+        onSetsChanged();
+        onTasksChanged();
+      } catch (e) { setDataError(true); setDataMsg(String(e)); }
+      return;
+    }
     let path: string | string[] | null;
     try {
       path = await open({ filters: [{ name: "JSON", extensions: ["json"] }] });
@@ -491,7 +517,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
     if (!path || Array.isArray(path)) return;
     if (!window.confirm("Данные будут ЗАМЕНЕНЫ данными из файла. Продолжить?")) return;
     try {
-      // Читаем файл плагином fs (content:// на Android), замену данных
+      // Android: читаем файл плагином fs (content://), замену данных
       // выполняет Rust-команда import_json в транзакции (ошибка — откат).
       const json = await readTextFile(path);
       const n = await invoke<number>("import_json", { json });

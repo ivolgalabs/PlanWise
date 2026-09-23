@@ -199,6 +199,9 @@ pub fn upsert_task(state: State<'_, Db>, mut task: Task) -> Result<Task, String>
         ],
     )
     .map_err(|e| e.to_string())?;
+    // Пересчёт расписания уведомлений: без этого планировщик до следующего
+    // тика считал бы по устаревшим данным (десктоп — до 30 минут).
+    crate::notify::wake_scheduler();
     Ok(task)
 }
 
@@ -289,6 +292,8 @@ pub fn delete_task(state: State<'_, Db>, app: tauri::AppHandle, id: String) -> R
     for f in files {
         let _ = std::fs::remove_file(dir.join(f));
     }
+    // У задачи могли быть запланированные напоминания — пересчитываем сразу.
+    crate::notify::wake_scheduler();
     Ok(())
 }
 
@@ -321,6 +326,7 @@ pub fn move_task(state: State<'_, Db>, id: String, new_date: i64) -> Result<(), 
     // Перенос в прошлое = задача закрыта (выполнена); перенос в будущее из
     // прошлого = снова актуальна (не выполнена). Сегодня не трогаем.
     move_task_to_date(&conn, &id, new_date)?;
+    crate::notify::wake_scheduler();
     Ok(())
 }
 
@@ -345,6 +351,7 @@ pub fn set_someday(state: State<'_, Db>, id: String) -> Result<(), String> {
         rusqlite::params![now_ms(), id],
     )
     .map_err(|e| e.to_string())?;
+    crate::notify::wake_scheduler();
     Ok(())
 }
 
@@ -455,6 +462,9 @@ pub fn archive_overdue(state: State<'_, Db>) -> Result<i64, String> {
     )
     .map_err(|e| e.to_string())?;
     tx.commit().map_err(|e| e.to_string())?;
+    if count > 0 {
+        crate::notify::wake_scheduler();
+    }
     Ok(count)
 }
 
@@ -488,6 +498,7 @@ pub fn restore_archived(state: State<'_, Db>, id: String, date: i64) -> Result<(
     // Возврат на прошедший день = задача закрыта (иначе на следующем старте
     // она снова уйдёт в архив как просроченная); в будущее = снова актуальна.
     move_task_to_date(&conn, &id, date)?;
+    crate::notify::wake_scheduler();
     Ok(())
 }
 
@@ -556,12 +567,71 @@ pub fn delete_subtask(state: State<'_, Db>, id: String) -> Result<(), String> {
     Ok(())
 }
 
-/// Экспорт всех данных JSON-строкой (файл пишет tauri-plugin-fs — на Android
-/// системные диалоги возвращают content://, который std::fs не понимает).
+/// Экспорт всех данных JSON-строкой (ручной экспорт на Android пишет файл
+/// плагином fs — системные диалоги там возвращают content:// из плагина;
+/// на десктопе файл пишет export_backup напрямую, см. ниже).
 #[tauri::command]
 pub fn export_json(app: tauri::AppHandle, state: State<'_, Db>) -> Result<String, String> {
     let conn = state.lock();
     export_to_string(&conn, &attachments_dir(&app))
+}
+
+/// Ручной экспорт (десктоп): путь выбирает системный диалог НА СТОРОНЕ Rust,
+/// файл пишет Rust — вебвью не получает прав на запись в произвольное место.
+/// Раньше запись делал tauri-plugin-fs с правом fs:write-files по $HOME/**,
+/// из-за чего компрометация рендерера давала чтение/запись любого файла
+/// домашнего каталога. Пустая строка — пользователь отменил диалог.
+///
+/// Команда async: sync-команды выполняются на главном потоке, а диалог
+/// отвечает тоже с главного — блокирующее ожидание там дало бы вечный дедлок.
+#[tauri::command]
+pub async fn export_backup(app: tauri::AppHandle) -> Result<String, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let (tx, rx) = std::sync::mpsc::channel();
+    let date = chrono::Local::now().date_naive();
+    app.dialog()
+        .file()
+        .add_filter("JSON", &["json"])
+        .set_file_name(format!("daily-planner-backup-{date}.json"))
+        .save_file(move |p| {
+            let _ = tx.send(p);
+        });
+    let Some(picked) = rx.recv().map_err(|e| e.to_string())? else {
+        return Ok(String::new());
+    };
+    let path = picked.into_path().map_err(|e| e.to_string())?;
+    let json = export_json(app.clone(), app.state::<Db>())?;
+    write_atomic(&path, json.as_bytes())?;
+    Ok(path.display().to_string())
+}
+
+/// Ручной импорт (десктоп): путь выбирает системный диалог на стороне Rust.
+/// Ok(None) — диалог отменён.
+#[tauri::command]
+pub async fn import_backup(
+    app: tauri::AppHandle,
+    state: State<'_, Db>,
+) -> Result<Option<usize>, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let (tx, rx) = std::sync::mpsc::channel();
+    app.dialog()
+        .file()
+        .add_filter("JSON", &["json"])
+        .pick_file(move |p| {
+            let _ = tx.send(p);
+        });
+    let Some(picked) = rx.recv().map_err(|e| e.to_string())? else {
+        return Ok(None);
+    };
+    let path = picked.into_path().map_err(|e| e.to_string())?;
+    let json =
+        std::fs::read_to_string(&path).map_err(|e| format!("Не удалось прочитать файл: {e}"))?;
+    // Разбор и декод base64 — до блокировки БД (см. import_json).
+    let prepared = prepare_import(&json)?;
+    let mut conn = state.lock();
+    let n = apply_import(&mut conn, &attachments_dir(&app), &prepared)?;
+    crate::notify::wake_scheduler();
+    Ok(Some(n))
 }
 
 /// Сериализация данных в JSON-бэкап (без State — для тестов). Формат:
@@ -646,15 +716,31 @@ fn export_to_string(
         }
     }
 
-    let payload = serde_json::json!({
+    let mut payload = serde_json::json!({
         "version": 2,
-        "exportedAt": chrono::Utc::now().timestamp_millis(),
+        "exportedAt": 0i64,
         "colorSets": sets,
         "tasks": tasks,
         "subtasks": subs,
         "attachments": atts,
     });
+    // Хеш содержимого (без метки времени): автоэкспорт сравнивает его с прошлым
+    // и не переписывает файл без изменений — иначе каждая правка гоняла бы
+    // multi-МБ JSON с base64 вложений, а после импорта на другом устройстве
+    // экспорты пошли бы по кругу (импорт тоже вызывает перезагрузку данных).
+    payload["contentHash"] = serde_json::json!(fnv64(payload.to_string().as_bytes()));
+    payload["exportedAt"] = serde_json::json!(chrono::Utc::now().timestamp_millis());
     serde_json::to_string_pretty(&payload).map_err(|e| e.to_string())
+}
+
+/// FNV-1a 64-bit — быстрый хеш содержимого экспорта (сравнение, не безопасность).
+fn fnv64(data: &[u8]) -> u64 {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for b in data {
+        h ^= u64::from(*b);
+        h = h.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    h
 }
 
 /// Структура бэкапа для импорта. Массивы задач/категорий/подзадач
@@ -679,18 +765,66 @@ pub fn import_json(
     state: State<'_, Db>,
     json: String,
 ) -> Result<usize, String> {
-    import_from_string(&mut state.lock(), &attachments_dir(&app), &json)
+    // Декод base64 вложений (десятки МБ) — ДО блокировки БД: иначе интерфейс
+    // стоял секунды на большом бэкапе (мьютекс держал все команды).
+    let prepared = prepare_import(&json)?;
+    let mut conn = state.lock();
+    let n = apply_import(&mut conn, &attachments_dir(&app), &prepared)?;
+    crate::notify::wake_scheduler();
+    Ok(n)
 }
 
 /// Импорт данных из JSON-строки (полная замена в транзакции: при ошибке —
 /// откат, старые данные остаются). Отсутствующие поля берутся как дефолты,
 /// лишние/неизвестные поля игнорируются. Версии бэкапа: 1 (без вложений) и
-/// 2 (с вложениями). Без State — для тестов.
+/// 2 (с вложениями). Обёртка «разбор + запись» — только для тестов.
+#[cfg(test)]
 fn import_from_string(
     conn: &mut rusqlite::Connection,
     files_dir: &std::path::Path,
     json: &str,
 ) -> Result<usize, String> {
+    let prepared = prepare_import(json)?;
+    apply_import(conn, files_dir, &prepared)
+}
+
+/// Вложение бэкапа, уже декодированное из base64 (БД и диск не трогает).
+struct PreparedAttachment {
+    id: String,
+    task_id: String,
+    file_name: String,
+    mime: String,
+    size: i64,
+    stored_name: String,
+    created_at: i64,
+    data: Vec<u8>,
+}
+
+/// Разобранный бэкап: проверки и декод base64 выполнены без блокировки БД.
+struct PreparedImport {
+    color_sets: Vec<ColorSet>,
+    tasks: Vec<Task>,
+    subtasks: Vec<Subtask>,
+    attachments: Vec<PreparedAttachment>,
+}
+
+/// Имя файла вложения из бэкапа: ровно «основа.расширение», части непустые.
+/// Прежний фильтр («алфавитно-цифровые и точка») пропускал имена из одних
+/// точек: `..` давал запись в родительский каталог (EISDIR) и импорт падал
+/// целиком вместо отказа от одного вложения.
+fn valid_stored_name(name: &str) -> bool {
+    let mut parts = name.split('.');
+    let (Some(base), Some(ext), None) = (parts.next(), parts.next(), parts.next()) else {
+        return false;
+    };
+    !base.is_empty()
+        && !ext.is_empty()
+        && base.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+        && ext.chars().all(|c| c.is_ascii_alphanumeric())
+}
+
+/// Разбор бэкапа: версия, лимиты, декод вложений. Без БД и диска.
+fn prepare_import(json: &str) -> Result<PreparedImport, String> {
     // Защита от гигантских payload: 100 МБ строки достаточно для бэкапа
     // личного планировщика (включая вложения до 25 МБ каждое).
     if json.len() > 100 * 1024 * 1024 {
@@ -710,6 +844,70 @@ fn import_from_string(
         return Err("Слишком много задач в бэкапе".to_string());
     }
 
+    // Вложения (версия бэкапа 2): base64 → байты. Файла в бэкапе нет (v1) —
+    // вложение пропускаем, осиротевший файл на диске почистит apply_import.
+    let mut attachments = Vec::new();
+    for a in &doc.attachments {
+        let stored = a.get("storedName").and_then(|x| x.as_str()).unwrap_or("");
+        let Some(b64) = a.get("base64").and_then(|x| x.as_str()) else {
+            continue;
+        };
+        if !valid_stored_name(stored) {
+            continue;
+        }
+        let data =
+            base64::Engine::decode(&base64::engine::general_purpose::STANDARD, b64.as_bytes())
+                .map_err(|e| format!("Не удалось декодировать вложение: {e}"))?;
+        if data.is_empty() {
+            continue;
+        }
+        attachments.push(PreparedAttachment {
+            id: a
+                .get("id")
+                .and_then(|x| x.as_str())
+                .unwrap_or("")
+                .to_string(),
+            task_id: a
+                .get("taskId")
+                .and_then(|x| x.as_str())
+                .unwrap_or("")
+                .to_string(),
+            file_name: a
+                .get("fileName")
+                .and_then(|x| x.as_str())
+                .unwrap_or("file")
+                .to_string(),
+            mime: a
+                .get("mime")
+                .and_then(|x| x.as_str())
+                .unwrap_or("")
+                .to_string(),
+            size: a
+                .get("size")
+                .and_then(|x| x.as_i64())
+                .unwrap_or(data.len() as i64),
+            stored_name: stored.to_string(),
+            created_at: a.get("createdAt").and_then(|x| x.as_i64()).unwrap_or(0),
+            data,
+        });
+    }
+    Ok(PreparedImport {
+        color_sets: doc.color_sets,
+        tasks: doc.tasks,
+        subtasks: doc.subtasks,
+        attachments,
+    })
+}
+
+/// Записать разобранный бэкап: полная замена в одной транзакции. Файлы
+/// вложений пишем ДО commit (сбой записи откатывает транзакцию целиком), а
+/// написанное в этом импорте удаляем в ветке ошибки — раньше такие файлы
+/// оставались на диске сиротами навсегда.
+fn apply_import(
+    conn: &mut rusqlite::Connection,
+    files_dir: &std::path::Path,
+    p: &PreparedImport,
+) -> Result<usize, String> {
     // conn — &mut Connection, поэтому обычная transaction()
     // (unchecked_transaction не нужен: активных prepared-стейтментов нет).
     let tx = conn.transaction().map_err(|e| e.to_string())?;
@@ -736,14 +934,14 @@ fn import_from_string(
     tx.execute("DELETE FROM color_sets", [])
         .map_err(|e| e.to_string())?;
 
-    for s in &doc.color_sets {
+    for s in &p.color_sets {
         tx.execute(
             "INSERT INTO color_sets (id, name, color, sort_order) VALUES (?1, ?2, ?3, ?4)",
             rusqlite::params![s.id, s.name, s.color, s.sort_order],
         )
         .map_err(|e| e.to_string())?;
     }
-    for t in &doc.tasks {
+    for t in &p.tasks {
         tx.execute(
             &format!(
                 "INSERT INTO tasks ({TASK_COLUMNS})
@@ -758,62 +956,58 @@ fn import_from_string(
         )
         .map_err(|e| e.to_string())?;
     }
-    for s in &doc.subtasks {
+    for s in &p.subtasks {
         tx.execute(
             "INSERT INTO subtasks (id, task_id, title, is_done, sort_order, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             rusqlite::params![s.id, s.task_id, s.title, s.is_done as i64, s.sort_order, s.created_at],
         )
         .map_err(|e| e.to_string())?;
     }
-    // Вложения (версия бэкапа 2): строка в БД + файл на диск (base64 → bytes).
-    // Если файла в бэкапе нет (старый бэкап v1) — только метаданные не пишем:
-    // вложения целиком пропускаем, сироты почистим ниже.
-    let mut new_files: std::collections::HashSet<String> = std::collections::HashSet::new();
+    // Вложения: файл на диск + строка в БД. Пишем до commit, а при сбое
+    // удаляем написанное в этом импорте (иначе — осиротевшие файлы навсегда).
+    let new_files: std::collections::HashSet<&str> = p
+        .attachments
+        .iter()
+        .map(|a| a.stored_name.as_str())
+        .collect();
     std::fs::create_dir_all(files_dir).map_err(|e| e.to_string())?;
-    for a in &doc.attachments {
-        let stored = a.get("storedName").and_then(|x| x.as_str()).unwrap_or("");
-        let b64 = a.get("base64").and_then(|x| x.as_str());
-        let Some(b64) = b64 else { continue };
-        let data =
-            base64::Engine::decode(&base64::engine::general_purpose::STANDARD, b64.as_bytes())
-                .map_err(|e| format!("Не удалось декодировать вложение: {e}"))?;
-        if data.is_empty() || stored.is_empty() {
-            continue;
+    let mut written: Vec<&str> = Vec::new();
+    let files_result = (|| -> Result<(), String> {
+        for a in &p.attachments {
+            std::fs::write(files_dir.join(&a.stored_name), &a.data)
+                .map_err(|e| format!("Не удалось записать вложение: {e}"))?;
+            written.push(a.stored_name.as_str());
+            tx.execute(
+                "INSERT INTO attachments (id, task_id, file_name, mime, size, stored_name, created_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                rusqlite::params![
+                    a.id,
+                    a.task_id,
+                    a.file_name,
+                    a.mime,
+                    a.size,
+                    a.stored_name,
+                    a.created_at,
+                ],
+            )
+            .map_err(|e| e.to_string())?;
         }
-        // Безопасное имя: только существовавшие на диске файлы (uuid.ext).
-        if !stored
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '.')
-        {
-            continue;
+        Ok(())
+    })();
+    if let Err(e) = files_result {
+        for f in written {
+            let _ = std::fs::remove_file(files_dir.join(f));
         }
-        new_files.insert(stored.to_string());
-        std::fs::write(files_dir.join(stored), &data).map_err(|e| e.to_string())?;
-        tx.execute(
-            "INSERT INTO attachments (id, task_id, file_name, mime, size, stored_name, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-            rusqlite::params![
-                a.get("id").and_then(|x| x.as_str()).unwrap_or(""),
-                a.get("taskId").and_then(|x| x.as_str()).unwrap_or(""),
-                a.get("fileName").and_then(|x| x.as_str()).unwrap_or("file"),
-                a.get("mime").and_then(|x| x.as_str()).unwrap_or(""),
-                a.get("size")
-                    .and_then(|x| x.as_i64())
-                    .unwrap_or(data.len() as i64),
-                stored,
-                a.get("createdAt").and_then(|x| x.as_i64()).unwrap_or(0),
-            ],
-        )
-        .map_err(|e| e.to_string())?;
+        return Err(e); // транзакция откатится при drop
     }
     tx.commit().map_err(|e| e.to_string())?;
     // Чистка сирот: файлы старых вложений, не вошедшие в новый набор.
     for f in old_files {
-        if !new_files.contains(&f) {
+        if !new_files.contains(f.as_str()) {
             let _ = std::fs::remove_file(files_dir.join(f));
         }
     }
-    Ok(doc.tasks.len())
+    Ok(p.tasks.len())
 }
 
 /// Закрывает приложение (системная кнопка «назад» на Android, кнопка «Выйти»
@@ -851,41 +1045,54 @@ pub fn startup_milestone(name: String) {
     core_base::diagnostics::record(format!("start: {name}"));
 }
 
-/// Имя файла автосинхронизации. Путь всегда фиксирует это имя (фронтенд
-/// дописывает его к папке, выбранной пользователем в диалоге), поэтому
-/// команды принимают только его: произвольное чтение/запись файлов из
-/// webview невозможны даже при компрометации рендерера.
+/// Имя файла автосинхронизации. Имя фиксирует Rust, а фронтенд передаёт
+/// только ПАПКУ (выбранную системным диалогом): задать произвольный путь из
+/// webview невозможно даже при компрометации рендерера. Раньше команды
+/// принимали полный путь и проверяли лишь имя файла — symlink с тем же именем
+/// в любом каталоге проверку обходил.
 const SYNC_FILE_NAME: &str = "daily-planner-sync.json";
 
-/// Проверка пути из фронтенда: разрешено только <папка>/<SYNC_FILE_NAME>.
-fn ensure_sync_path(path: &str) -> Result<(), String> {
-    match std::path::Path::new(path)
-        .file_name()
-        .and_then(|n| n.to_str())
-    {
-        Some(SYNC_FILE_NAME) => Ok(()),
-        _ => Err("Недопустимый путь файла синхронизации".to_string()),
+/// Путь файла автосинхронизации: <папка>/<SYNC_FILE_NAME>.
+fn sync_file_path(dir: &str) -> Result<std::path::PathBuf, String> {
+    let d = std::path::Path::new(dir);
+    if !d.is_dir() {
+        return Err(format!("Папка синхронизации не найдена: {dir}"));
+    }
+    Ok(d.join(SYNC_FILE_NAME))
+}
+
+/// Атомарная запись файла: временный файл в той же папке + rename. Обрыв
+/// (сбой питания/процесса) не оставит оборванный JSON, который импорт молча
+/// пропускал бы, — канал синхронизации «умирал» бы тихо.
+fn write_atomic(path: &std::path::Path, bytes: &[u8]) -> Result<(), String> {
+    let tmp = path.with_extension("tmp");
+    std::fs::write(&tmp, bytes).map_err(|e| format!("Не удалось записать файл: {e}"))?;
+    std::fs::rename(&tmp, path).map_err(|e| {
+        let _ = std::fs::remove_file(&tmp);
+        format!("Не удалось сохранить файл: {e}")
+    })
+}
+
+/// Прочитать файл автосинхронизации из папки `dir`. Ok(None) — файла нет
+/// (норма), Ok(Some) — содержимое, Err — файл есть, но не читается (папка
+/// отозвана/перемещена): фронт отличает это от «файла нет» и сообщает
+/// пользователю, а не выключает автоимпорт молча навсегда.
+#[tauri::command]
+pub fn read_sync_file(dir: String) -> Result<Option<String>, String> {
+    let path = sync_file_path(&dir)?;
+    match std::fs::read_to_string(&path) {
+        Ok(s) => Ok(Some(s)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(format!("Файл синхронизации не читается: {e}")),
     }
 }
 
-/// Прочитать файл автосинхронизации (полный путь — как выбрал пользователь).
-/// None, если файла нет или он не читается — фронт тихо пропускает проверку.
-#[tauri::command]
-pub fn read_sync_file(path: String) -> Option<String> {
-    ensure_sync_path(&path).ok()?;
-    std::fs::read_to_string(&path).ok()
-}
-
-/// Записать файл автосинхронизации (полный путь). На Android не используется:
+/// Записать файл автосинхронизации в папку `dir`. На Android не используется:
 /// content:// из системных диалогов std::fs не понимает (там — ручной экспорт).
 #[tauri::command]
-pub fn write_sync_file(path: String, content: String) -> Result<(), String> {
-    ensure_sync_path(&path)?;
-    // Создаём каталог, если пользователь выбрал ещё не существующую папку.
-    if let Some(dir) = std::path::Path::new(&path).parent() {
-        let _ = std::fs::create_dir_all(dir);
-    }
-    std::fs::write(&path, content).map_err(|e| e.to_string())
+pub fn write_sync_file(dir: String, content: String) -> Result<(), String> {
+    let path = sync_file_path(&dir)?;
+    write_atomic(&path, content.as_bytes())
 }
 
 /// Сохранить настройки уведомлений (планировщик подхватит сразу: сохранение
@@ -893,8 +1100,12 @@ pub fn write_sync_file(path: String, content: String) -> Result<(), String> {
 #[tauri::command]
 pub fn set_notification_prefs(
     app: tauri::AppHandle,
-    prefs: crate::notify::NotifyPrefs,
+    mut prefs: crate::notify::NotifyPrefs,
 ) -> Result<(), String> {
+    // Диапазоны проверяем и здесь: значение приходит из webview, а битый
+    // час/интервал раньше молча ломал дайджест и напоминания (час вне 0..23 →
+    // дайджест не приходил никогда).
+    crate::notify::sanitize_prefs(&mut prefs);
     let res = crate::notify::save_prefs(&app, &prefs);
     // Будим на обеих платформах: настройка меняется редко, а мгновенная
     // пересинхронизация (Android — sync_scheduled, десктоп — next_wake_in)
@@ -1355,6 +1566,15 @@ mod tests {
         dir
     }
 
+    /// Отдельный пустой каталог для теста, проверяющего СОДЕРЖИМОЕ каталога:
+    /// общий test_files_dir делят параллельные тесты, счёт файлов в нём врёт.
+    fn unique_files_dir(tag: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("dp_test_{tag}_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("создать временный каталог");
+        dir
+    }
+
     /// Экспорт → импорт в чистую БД: данные не теряются (включая новые поля).
     #[test]
     fn export_import_roundtrip() {
@@ -1490,5 +1710,53 @@ mod tests {
             today_epoch_day(),
             date_to_epoch(chrono::Local::now().date_naive())
         );
+    }
+
+    /// Имя файла вложения из бэкапа — граница безопасности: путь собирается из
+    /// этого имени, поэтому пропускаем только «основа.расширение» без путей,
+    /// точек-обманок и лишних разделителей.
+    #[test]
+    fn stored_name_validation() {
+        assert!(valid_stored_name(
+            "3f2a1b4c-9d8e-4f0a-b1c2-3456789abcde.png"
+        ));
+        assert!(valid_stored_name("file.pdf"));
+        assert!(!valid_stored_name(".."));
+        assert!(!valid_stored_name("."));
+        assert!(!valid_stored_name(".hidden"));
+        assert!(!valid_stored_name("a.b.c"));
+        assert!(!valid_stored_name("../../etc/passwd"));
+        assert!(!valid_stored_name("a/b.png"));
+        assert!(!valid_stored_name("noext"));
+        assert!(!valid_stored_name(""));
+    }
+
+    /// Бэкап с враждебным именем вложения (имена из одних точек давали запись
+    /// в родительский каталог) отбрасывает такое вложение, а не падает целиком.
+    #[test]
+    fn import_skips_hostile_attachment_name() {
+        let dir = unique_files_dir("hostile");
+        let mut conn = open(":memory:").expect("open test db");
+        let json = r#"{"version":2,"tasks":[],"attachments":[{"id":"a1","taskId":"t1","fileName":"x","storedName":"..","base64":"aGk="}]}"#;
+        let n = import_from_string(&mut conn, &dir, json).expect("import");
+        assert_eq!(n, 0);
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM attachments", [], |r| r.get(0))
+            .expect("count");
+        assert_eq!(count, 0, "враждебное вложение не должно попасть в БД");
+        let left = std::fs::read_dir(&dir).expect("read dir").count();
+        assert_eq!(left, 0, "импорт не должен писать файлы по такому имени");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Путь файла синхронизации: имя фиксирует Rust, чужая/несуществующая
+    /// папка не проходит.
+    #[test]
+    fn sync_file_path_is_pinned() {
+        let dir = unique_files_dir("sync");
+        let p = sync_file_path(dir.to_str().expect("path")).expect("path");
+        assert_eq!(p.file_name().and_then(|n| n.to_str()), Some(SYNC_FILE_NAME));
+        assert!(sync_file_path("/no/such/dir/anywhere").is_err());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

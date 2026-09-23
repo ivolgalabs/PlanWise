@@ -65,6 +65,15 @@ export const isTauri = (): boolean =>
   typeof window !== "undefined" &&
   typeof (window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ !== "undefined";
 
+/**
+ * Android-рантайм. Только там системные диалоги возвращают content://, который
+ * умеет читать/писать tauri-plugin-fs (и только там ему выданы права fs:*):
+ * на десктопе ручной экспорт/импорт делает Rust (export_backup/import_backup),
+ * у вебвью прав на произвольную запись файлов нет.
+ */
+export const isAndroid = (): boolean =>
+  typeof navigator !== "undefined" && navigator.userAgent.includes("Android");
+
 export const api = {
   getTasks: (start: Date, end: Date) => {
     const startDay = toEpochDay(start), endDay = toEpochDay(end);

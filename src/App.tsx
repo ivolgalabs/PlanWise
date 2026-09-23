@@ -353,8 +353,8 @@ function App() {
       try {
         setArchiveCount(await api.archiveOverdue());
         // Заархивированные задачи должны исчезнуть из видов, а «Архив» —
-        // получить их: перезагружаем оба пула.
-        reload();
+        // получить их: перезагружаем оба пула (мутация → и автоэкспорт).
+        onMutation();
       } catch {
         /* некритично */
       }
@@ -413,15 +413,20 @@ function App() {
     // через дебаунс: всплеск правок коаллесится в один вызов (см.
     // scheduleWidgetWrite), экономя CPU/диск/батарею. Тему передаём явно:
     // виджет должен выглядеть как приложение, а не по системной теме устройства.
-    if (isTauri()) {
-      scheduleWidgetWrite(isDarkTheme());
-      // Автоэкспорт в заданную папку — тот же принцип: правки коаллесится.
-      scheduleAutoExport();
-    }
+    if (isTauri()) scheduleWidgetWrite(isDarkTheme());
   }, [setTasks, setArchivedTasks]);
 
   useEffect(() => {
     reload();
+  }, [reload]);
+
+  // Мутация данных: перезагрузка + отложенный автоэкспорт. Экспорт — ТОЛЬКО
+  // отсюда, не из reload(): после успешного автоимпорта App тоже зовёт reload,
+  // и экспорт внутри reload устраивал бы пинг-понг бэкапов между устройствами
+  // (каждый импорт порождал бы новый экспорт, и так по кругу).
+  const onMutation = useCallback(() => {
+    void reload();
+    if (isTauri()) scheduleAutoExport();
   }, [reload]);
 
   // Автоимпорт из заданной папки: при старте и раз в минуту проверяем, не
@@ -649,7 +654,7 @@ function App() {
       )}
       {/* Один общий drag-контекст на контент и панель: переносы между
           «Когда-нибудь» и днями работают во всех видах и в поиске. */}
-      <TaskDndContext onChange={reload}>
+      <TaskDndContext onChange={onMutation}>
         <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
           {/* Левая колонка: строка поиска над контентом — правая панель
               не сдвигается вниз при открытии поиска. minHeight 0 обязателен:
@@ -714,7 +719,7 @@ function App() {
                     resetSearch();
                     setSearchOpen(false);
                   }}
-                  onChange={reload}
+                  onChange={onMutation}
                   onResetFilters={() => {
                     // Сброс всех фильтров; поиск остаётся открытым.
                     resetSearch();
@@ -727,20 +732,20 @@ function App() {
                       day={selectedDate}
                       tasks={tasks}
                       archivedTasks={archivedTasks}
-                      onChange={reload}
+                      onChange={onMutation}
                     />
                   )}
                   {view === "week" && (
                     <WeekView
                       tasks={tasks}
                       archivedTasks={archivedTasks}
-                      onChange={reload}
+                      onChange={onMutation}
                     />
                   )}
                   {view === "month" && (
                     <MonthView
                       tasks={tasks}
-                      onChange={reload}
+                      onChange={onMutation}
                       onSelectDay={(d) => {
                         setSelectedDate(d);
                         setView("day");
@@ -769,7 +774,7 @@ function App() {
               calWidth={calWidth}
               onResize={setCalWidth}
               onSelect={pickDate}
-              onChange={reload}
+              onChange={onMutation}
             />
           )}
         </div>
@@ -796,7 +801,7 @@ function App() {
         <AddTaskModal
           day={fromEpochDay(focusTask.date)}
           initial={focusTask}
-          onChange={reload}
+          onChange={onMutation}
           onClose={() => {
             setFocusTask(null);
             reload();

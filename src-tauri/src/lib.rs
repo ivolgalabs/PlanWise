@@ -107,11 +107,15 @@ pub fn run() {
             commands::exit_app,
             commands::minimize_app,
             commands::startup_milestone,
-            // Экспорт/импорт через JSON-строку: файловый ввод-вывод делает
-            // tauri-plugin-fs (на Android умеет content:// из системных
-            // диалогов, где std::fs не работает).
+            // Экспорт/импорт через JSON-строку: на Android файловый ввод-вывод
+            // делает tauri-plugin-fs (на десктопе прав на fs у вебвью нет —
+            // там диалог и запись выполняет Rust, см. export_backup).
             commands::export_json,
             commands::import_json,
+            // Ручной экспорт/импорт (десктоп): путь выбирает системный диалог
+            // на стороне Rust — webview произвольных путей не задаёт.
+            commands::export_backup,
+            commands::import_backup,
             // Автосинхронизация: запись/чтение JSON-файла в заданной папке
             // (десктоп; на Android content:// не понимает std::fs — там
             // ручной экспорт через плагин fs).

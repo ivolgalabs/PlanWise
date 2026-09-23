@@ -1,0 +1,32 @@
+{
+  "$schema": "../gen/schemas/mobile-schema.json",
+  "identifier": "mobile",
+  "description": "Capability for the main window on Android: права fs нужны только здесь — системный диалог возвращает content://, который читает/пишет tauri-plugin-fs (std::fs его не понимает).",
+  "windows": [
+    "main"
+  ],
+  "platforms": [
+    "android"
+  ],
+  "permissions": [
+    "core:default",
+    "dialog:default",
+    "fs:default",
+    "fs:read-files",
+    "fs:write-files",
+    {
+      "identifier": "fs:scope",
+      "allow": [
+        "$HOME/**",
+        "$APPDATA/**",
+        "$CACHE/**",
+        "$DOWNLOAD/**",
+        "$DOCUMENT/**",
+        "$PICTURE/**"
+      ]
+    },
+    "opener:default",
+    "opener:allow-open-path",
+    "notification:default"
+  ]
+}

@@ -1,27 +1,18 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capability for the main window",
+  "description": "Capability for the main window (desktop). Файловых прав у вебвью нет: ручной экспорт/импорт выполняет Rust (export_backup/import_backup). Раньше fs:write-files с областью $HOME/** превращал компрометацию рендерера в чтение/запись любого файла домашнего каталога. Права fs остались только в capabilities/mobile.json (content:// на Android).",
   "windows": [
     "main"
+  ],
+  "platforms": [
+    "macOS",
+    "windows",
+    "linux"
   ],
   "permissions": [
     "core:default",
     "dialog:default",
-    "fs:default",
-    "fs:read-files",
-    "fs:write-files",
-    {
-      "identifier": "fs:scope",
-      "allow": [
-        "$HOME/**",
-        "$APPDATA/**",
-        "$CACHE/**",
-        "$DOWNLOAD/**",
-        "$DOCUMENT/**",
-        "$PICTURE/**"
-      ]
-    },
     "opener:default",
     "opener:allow-open-path",
     "notification:default"
