@@ -28,9 +28,9 @@ use std::collections::HashSet;
 use std::sync::Mutex;
 use std::time::Duration;
 
-#[cfg(not(target_os = "android"))]
-use chrono::Timelike;
-use chrono::{Local, NaiveDateTime, TimeZone};
+// Timelike нужен обеим платформам: на десктопе — часы дайджеста и окно отправки,
+// на Android — выравнивание 60-секундного цикла по границе минуты (next_sleep).
+use chrono::{Local, NaiveDateTime, TimeZone, Timelike};
 use serde::Deserialize as _;
 use tauri::Manager;
 use tauri_plugin_notification::NotificationExt;
