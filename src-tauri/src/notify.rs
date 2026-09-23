@@ -34,6 +34,8 @@ use chrono::{Local, NaiveDateTime, TimeZone};
 use serde::Deserialize as _;
 use tauri::Manager;
 use tauri_plugin_notification::NotificationExt;
+#[cfg(target_os = "android")]
+use tauri_plugin_notification::Schedule;
 
 use crate::db::Db;
 
@@ -145,6 +147,12 @@ pub fn save_prefs(app: &tauri::AppHandle, prefs: &NotifyPrefs) -> Result<(), Str
 /// ключ, который больше никогда не удаляется).
 /// Только десктоп: на Android используется OS-планирование (sync_scheduled),
 /// где повторение исключено самим планировщиком.
+/// Окно отправки напоминания на десктопе: сколько минут после due ещё считаем
+/// напоминание актуальным (Mac мог спать). Просроченные сильнее не отправляем —
+/// напоминание, пришедшее с опозданием на часы, вреднее пропуска.
+#[cfg(not(target_os = "android"))]
+const REMIND_CATCHUP_MINUTES: i64 = 15;
+
 #[cfg(not(target_os = "android"))]
 static FIRED: std::sync::OnceLock<Mutex<HashMap<String, i64>>> = std::sync::OnceLock::new();
 
@@ -153,7 +161,9 @@ fn fired() -> &'static Mutex<HashMap<String, i64>> {
     FIRED.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-/// Пометить событие как отправленное; заодно удалить записи старше суток.
+/// Пометить событие как отправленное. Чистка старых записей — только при
+/// разросшемся кеше (retain на каждый тик лишний), поэтому записи старше суток
+/// живут до переполнения — ключи содержат дату, коллизий это не даёт.
 #[cfg(not(target_os = "android"))]
 fn mark_fired(key: String) {
     let now = chrono::Utc::now().timestamp_millis();
@@ -220,7 +230,12 @@ pub fn start_scheduler(app: tauri::AppHandle) {
 /// спим до ближайшего события с потолком MAX_SLEEP (см. next_wake_in).
 #[cfg(target_os = "android")]
 fn next_sleep(_app: &tauri::AppHandle, _fell: bool) -> Duration {
-    Duration::from_secs(60)
+    // 60-с цикл, выровненный по стене минуты: фиксированные «60 с после тика»
+    // давали период 60 с + время тика, и сверка с минутными величинами
+    // (настройки, дайджест) уползала от границы минуты навсегда.
+    let now = chrono::Local::now();
+    let elapsed_ms = u64::from(now.second()) * 1000 + u64::from(now.timestamp_subsec_millis());
+    Duration::from_millis(60_000_u64.saturating_sub(elapsed_ms).max(1_000))
 }
 
 #[cfg(not(target_os = "android"))]
@@ -518,7 +533,14 @@ fn stable_id(salt: &str, task_id: &str, due_minute: i64) -> i32 {
         h ^= b as u32;
         h = h.wrapping_mul(0x0100_0193);
     }
-    (h % 999_999) as i32 + 1
+    // Диапазон — весь положительный i32, кроме id дайджеста. Прежний модуль
+    // 999_999 давал настоящие коллизии (парадокс дней рождения) уже около
+    // тысячи запланированных событий, а коллизия = потерянное напоминание.
+    let mut id = (h & 0x7fff_ffff) as i32;
+    if id == 0 || id == DIGEST_NOTIFICATION_ID {
+        id += 1;
+    }
+    id
 }
 
 /// ISO 8601-значение для плагина (NotificationData.schedule.at.date) — тем же
@@ -529,10 +551,18 @@ fn iso8601_at(ts: i64) -> Option<serde_json::Value> {
     time::serde::iso8601::serialize(&at, serde_json::value::Serializer).ok()
 }
 
-/// Отправить пачку уведомлений в Kotlin (WidgetPushPlugin.scheduleBatch):
-/// ставит будильники И пишет их в persisted-хранилище плагина уведомлений.
+/// Записать запланированное уведомление в persisted-хранилище плагина
+/// уведомлений через наш Kotlin-мост (WidgetPushPlugin.persistScheduled).
+///
+/// Зачем: `builder().show()` ставит будильник, но в хранилище НЕ пишет (пишет
+/// только команда `batch`). С пустым хранилищем `pending()` всегда пуст — guard
+/// синхронизации не блокирует перепланирование, лишние будильники не
+/// отменяются, а BOOT-приёмник плагина после перезагрузки устройства
+/// восстанавливает пустой список (все напоминания и дайджест терялись).
+/// Kotlin пишет строку уведомления напрямую в SharedPreferences плагина —
+/// jackson/ObjectMapper плагина для этого не нужен.
 #[cfg(target_os = "android")]
-fn schedule_batch(app: &tauri::AppHandle, payload: serde_json::Value) {
+fn persist_scheduled(app: &tauri::AppHandle, payload: serde_json::Value) {
     let Some(state) = app.try_state::<crate::WidgetPush>() else {
         return;
     };
@@ -541,8 +571,8 @@ fn schedule_batch(app: &tauri::AppHandle, payload: serde_json::Value) {
     };
     // Sync-вызов допустим: планировщик живёт в своём потоке (дедлок sync-
     // варианта — только при вызове с главного).
-    if let Err(e) = handle.run_mobile_plugin::<Vec<i32>>("scheduleBatch", payload) {
-        eprintln!("[notify] scheduleBatch не удался: {e}");
+    if let Err(e) = handle.run_mobile_plugin::<i32>("persistScheduled", payload) {
+        eprintln!("[notify] persistScheduled не удался: {e}");
     }
 }
 
@@ -550,8 +580,9 @@ fn schedule_batch(app: &tauri::AppHandle, payload: serde_json::Value) {
 /// доставит его, даже если процесс приложения убит. Канал — TASKS_CHANNEL_ID
 /// (высокая важность: звук и heads-up).
 ///
-/// Форма JSON повторяет сериализацию NotificationData плагина — при
-/// обновлении tauri-plugin-notification её надо сверять.
+/// Будильник ставит проверенный путь плагина (`show()`), а запись в его
+/// persisted-хранилище — наш мост (см. persist_scheduled). Форма JSON повторяет
+/// сериализацию NotificationData плагина — сверять при обновлении плагина.
 #[cfg(target_os = "android")]
 fn schedule_at(
     app: &tauri::AppHandle,
@@ -563,29 +594,48 @@ fn schedule_at(
 ) {
     // Абсолютный момент в unix-секундах — смещение часового пояса в ISO-строке
     // плагину не нужно: Kotlin ставит будильник по миллисекундам.
-    let Some(date) = iso8601_at(to_local(&due).timestamp()) else {
+    let ts = to_local(&due).timestamp();
+    let Ok(at) = time::OffsetDateTime::from_unix_timestamp(ts) else {
         return;
     };
-    schedule_batch(
-        app,
-        serde_json::json!({
-            "notifications": [{
-                "id": id,
-                "channelId": TASKS_CHANNEL_ID,
-                "title": title,
-                "body": body,
-                // largeBody → BigTextStyle: уведомление разворачивается и
-                // показывает полный текст, а не одну строку.
-                "largeBody": body,
-                "schedule": { "at": {
-                    "date": date, "repeating": false, "allowWhileIdle": true,
-                }},
-                // taskId в extra — фронт читает его в «actionPerformed» и
-                // открывает карточку задачи по тапу (deep-link).
-                "extra": { "taskId": task_id },
-            }],
-        }),
-    );
+    let _ = app
+        .notification()
+        .builder()
+        .id(id)
+        .title(title)
+        .body(body)
+        // large_body → BigTextStyle: уведомление разворачивается и показывает
+        // полный текст целиком, а не одну строку (по умолчанию body в Android
+        // обрезается).
+        .large_body(body)
+        .channel_id(TASKS_CHANNEL_ID)
+        // taskId в extra — фронт читает его в событии «actionPerformed» и
+        // открывает карточку задачи по тапу на уведомление (deep-link).
+        .extra("taskId", task_id)
+        .schedule(Schedule::At {
+            date: at,
+            repeating: false,
+            allow_while_idle: true,
+        })
+        .show();
+    if let Some(date) = iso8601_at(ts) {
+        persist_scheduled(
+            app,
+            serde_json::json!({
+                "notifications": [{
+                    "id": id,
+                    "channelId": TASKS_CHANNEL_ID,
+                    "title": title,
+                    "body": body,
+                    "largeBody": body,
+                    "schedule": { "at": {
+                        "date": date, "repeating": false, "allowWhileIdle": true,
+                    }},
+                    "extra": { "taskId": task_id },
+                }],
+            }),
+        );
+    }
 }
 
 /// «1 задача», «2 задачи», «5 задач» — русская плюрализация для заголовков.
@@ -609,7 +659,7 @@ fn plural_tasks(n: usize) -> String {
 /// В развёрнутом виде — весь список, в сводке — сколько задач со временем.
 #[cfg(target_os = "android")]
 fn schedule_digest(app: &tauri::AppHandle, ts: NaiveDateTime, rows: &[(String, Option<i64>)]) {
-    let Some(date) = iso8601_at(to_local(&ts).timestamp()) else {
+    let Ok(at) = time::OffsetDateTime::from_unix_timestamp(to_local(&ts).timestamp()) else {
         return;
     };
     let n = rows.len();
@@ -621,25 +671,47 @@ fn schedule_digest(app: &tauri::AppHandle, ts: NaiveDateTime, rows: &[(String, O
             None => format!("• {title}"),
         })
         .collect();
-    schedule_batch(
-        app,
-        serde_json::json!({
-            "notifications": [{
-                "id": DIGEST_NOTIFICATION_ID,
-                "channelId": TASKS_CHANNEL_ID,
-                "title": format!("План на сегодня: {}", plural_tasks(n)),
-                "inboxLines": lines,
-                "summary": if timed == 0 {
-                    "в течение дня".to_string()
-                } else {
-                    format!("{} со временем", plural_tasks(timed))
-                },
-                "schedule": { "at": {
-                    "date": date, "repeating": false, "allowWhileIdle": true,
-                }},
-            }],
-        }),
-    );
+    let title = format!("План на сегодня: {}", plural_tasks(n));
+    let summary = if timed == 0 {
+        "в течение дня".to_string()
+    } else {
+        format!("{} со временем", plural_tasks(timed))
+    };
+    let mut b = app
+        .notification()
+        .builder()
+        .id(DIGEST_NOTIFICATION_ID)
+        .title(title.clone())
+        .summary(summary.clone())
+        .channel_id(TASKS_CHANNEL_ID)
+        .schedule(Schedule::At {
+            date: at,
+            repeating: false,
+            allow_while_idle: true,
+        });
+    for line in &lines {
+        b = b.inbox_line(line.clone());
+    }
+    let _ = b.show();
+    // Запись в persisted-хранилище плагина (см. persist_scheduled) — без неё
+    // дайджест не переживёт перезагрузку и не будет отменён при выключении.
+    if let Some(date) = iso8601_at(to_local(&ts).timestamp()) {
+        persist_scheduled(
+            app,
+            serde_json::json!({
+                "notifications": [{
+                    "id": DIGEST_NOTIFICATION_ID,
+                    "channelId": TASKS_CHANNEL_ID,
+                    "title": title,
+                    "inboxLines": lines,
+                    "summary": summary,
+                    "schedule": { "at": {
+                        "date": date, "repeating": false, "allowWhileIdle": true,
+                    }},
+                }],
+            }),
+        );
+    }
 }
 
 /// Android: сверка OS-планировщика с ожидаемыми уведомлениями.
@@ -776,8 +848,10 @@ fn check_digest(app: &tauri::AppHandle, prefs: &NotifyPrefs, now: NaiveDateTime)
     let tasks = today_titles(app);
 
     if tasks.is_empty() {
-        // Пустой день тоже можно отмечать как «отправлено», чтобы не спамить.
-        mark_fired(key);
+        // Пустой день НЕ отмечаем как «отправлено»: задача, добавленная позже
+        // в окне отправки, ещё должна получить дайджест (раньше такой день
+        // молча оставался без него). Спама нет — отметка ставится только при
+        // реальной отправке.
         return;
     }
 
@@ -838,10 +912,15 @@ fn load_timed_tasks(app: &tauri::AppHandle) -> Vec<ReminderRow> {
 
 /// Интервалы напоминаний задачи: своё notify_minutes (N>0) перекрывает
 /// глобальные настройки; 0 отфильтровывается вызывающим (задачу не уведомлять).
+/// Свои интервалы напоминаний задачи: положительное значение перекрывает
+/// общие, 0 и отрицательные — «не напоминать» (раньше отрицательное значение
+/// молча уходило в общие интервалы, а отрицательный интервал стрелял ПОСЛЕ
+/// начала задачи), None — общие интервалы из настроек.
 fn task_intervals(notify_minutes: Option<i64>, prefs: &NotifyPrefs) -> Vec<i64> {
     match notify_minutes {
         Some(n) if n > 0 => vec![n],
-        _ => prefs.remind_minutes.clone(),
+        Some(_) => Vec::new(),
+        None => prefs.remind_minutes.clone(),
     }
 }
 
@@ -854,17 +933,28 @@ fn task_start(minutes: i64, date_epoch: i64) -> Option<NaiveDateTime> {
 }
 
 /// Человеческое «за сколько» для тела напоминания: 1440 → «за 1 дн».
+/// Как показать интервал напоминания в тексте уведомления. Предлог «за» — как
+/// в настройках (fmtRemindInterval на фронте): напоминание объявляется за N до
+/// начала, а не «через N» от текущего момента.
 fn format_interval(rm: i64) -> String {
     if rm >= 1440 {
-        if rm % 1440 == 0 {
-            format!("за {} дн", rm / 1440)
-        } else {
-            format!("за {} дн {} ч", rm / 1440, (rm % 1440) / 60)
+        let (d, h, m) = (rm / 1440, (rm % 1440) / 60, rm % 60);
+        match (h, m) {
+            (0, 0) => format!("за {d} дн"),
+            (0, m) => format!("за {d} дн {m} мин"),
+            (h, 0) => format!("за {d} дн {h} ч"),
+            (h, m) => format!("за {d} дн {h} ч {m} мин"),
         }
     } else if rm >= 60 {
-        format!("через {} ч", rm / 60)
+        // Минуты не обрезаем: 90 мин раньше показывались как «через 1 ч».
+        let (h, m) = (rm / 60, rm % 60);
+        if m == 0 {
+            format!("за {h} ч")
+        } else {
+            format!("за {h} ч {m} мин")
+        }
     } else {
-        format!("через {} мин", rm)
+        format!("за {rm} мин")
     }
 }
 
@@ -888,8 +978,8 @@ fn check_reminders(app: &tauri::AppHandle, prefs: &NotifyPrefs, now: NaiveDateTi
     // уведомление вместо всех глобальных). Если задано travel_time — дополнительно
     // «Пора выезжать» за это время до начала.
     for ev in reminder_events(app, prefs) {
-        // Окно отправки: до 15 минут после наступления момента (на случай выхода Mac из сна).
-        if now < ev.due || now > ev.due + chrono::Duration::minutes(15) {
+        // Окно отправки: до REMIND_CATCHUP_MINUTES после due (см. константу).
+        if now < ev.due || now > ev.due + chrono::Duration::minutes(REMIND_CATCHUP_MINUTES) {
             continue;
         }
         // Ключ дедупликации: id + момент due достаточны — разные интервалы
@@ -1048,7 +1138,10 @@ mod tests {
         let p = prefs(true, true, vec![15, 60]);
         assert_eq!(task_intervals(Some(1440), &p), vec![1440]);
         assert_eq!(task_intervals(None, &p), vec![15, 60]);
-        assert_eq!(task_intervals(Some(0), &p), vec![15, 60]); // 0 фильтруется вызывающим
+        // 0 и отрицательные — «не напоминать» (раньше отрицательное значение
+        // молча уходило в общие интервалы, а 0 зависел от фильтра вызывающего).
+        assert!(task_intervals(Some(0), &p).is_empty());
+        assert!(task_intervals(Some(-30), &p).is_empty());
     }
 
     /// Настройки из битого/рукоправленного файла приводятся к диапазонам: час

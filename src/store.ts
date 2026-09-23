@@ -263,6 +263,10 @@ export const useStore = create<PlannerState>()(
     }),
     {
       name: "todo-settings",
+      // version+migrate: без версии любое переименование поля в будущем молча
+      // сбрасывало бы настройки у старых установок (zustand считает всё v0).
+      version: 1,
+      migrate: (persisted) => persisted as PlannerState,
       // Сохраняем только настройки UI — без tasks и selectedDate.
       partialize: (s) => ({
         view: s.view,
@@ -300,11 +304,13 @@ export const useStore = create<PlannerState>()(
         // Старые настройки хранили notifyRemindMinutes ЧИСЛОМ (одно значение);
         // теперь это массив — превращаем, иначе рендер настроек падает
         // (T.includes is not a function → белый экран при открытии).
-        const rmm = Array.isArray(p.notifyRemindMinutes)
-          ? p.notifyRemindMinutes
-          : typeof p.notifyRemindMinutes === "number"
-            ? [p.notifyRemindMinutes]
-            : current.notifyRemindMinutes;
+        const rmm = (
+          Array.isArray(p.notifyRemindMinutes)
+            ? p.notifyRemindMinutes
+            : typeof p.notifyRemindMinutes === "number"
+              ? [p.notifyRemindMinutes]
+              : current.notifyRemindMinutes
+        ).filter((m): m is number => typeof m === "number" && Number.isFinite(m) && m > 0);
         // Аналогично: время-пресеты и шаблоны должны быть массивами.
         const tp = Array.isArray(p.timePresets) ? p.timePresets : current.timePresets;
         const pats = Array.isArray(p.taskPatterns) ? p.taskPatterns : current.taskPatterns;

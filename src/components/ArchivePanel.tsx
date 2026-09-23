@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Task } from "../api";
 import { api } from "../api";
 import { fromEpochDay } from "../date";
+import { showToast } from "../toast";
 import { COLORS } from "../theme";
 import { Icon } from "./Icon";
 import { DatePickerModal } from "./DatePickerModal";
@@ -26,7 +27,13 @@ export function ArchivePanel({ tasks, onClose, onChange }: Props) {
   const [restoreMsg, setRestoreMsg] = useState("");
 
   const restore = async (t: Task, d: Date) => {
-    await api.restoreArchived(t.id, d);
+    try {
+      await api.restoreArchived(t.id, d);
+    } catch (e) {
+      // Отказ (наложение по времени) раньше был unhandled rejection: модалка
+      // закрывалась без объяснения, задача «оставалась» в архиве.
+      showToast(String(e instanceof Error ? e.message : e));
+    }
     setRestoring(null);
     onChange();
   };
@@ -119,8 +126,14 @@ export function ArchivePanel({ tasks, onClose, onChange }: Props) {
                 type="checkbox"
                 checked={t.isDone}
                 onChange={async () => {
-                  await api.upsertTask({ ...t, isDone: !t.isDone });
-                  onChange();
+                  try {
+                    await api.upsertTask({ ...t, isDone: !t.isDone });
+                    onChange();
+                  } catch (e) {
+                    // Сбой записи иначе оставил бы чекбокс рассинхронизированным
+                    // с БД и молча ничего не сообщил.
+                    showToast(String(e instanceof Error ? e.message : e));
+                  }
                 }}
                 title={t.isDone ? "Отметить невыполненной" : "Отметить выполненной"}
                 style={{ flexShrink: 0 }}

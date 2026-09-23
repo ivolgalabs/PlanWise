@@ -208,19 +208,29 @@ export function TaskDndContext({ children, onChange }: TaskDndContextProps) {
       // due_epoch_day, а у обычной перенёс бы её на этот день как дневную.
       const group = parsePlanGroup(over);
       if (group) {
-        if (group === "someday") {
-          await api.setSomeday(task.id);
-        } else {
-          const today = toEpochDay(new Date());
-          await api.setSomeday(task.id);
-          await api.moveTask(task.id, fromEpochDay(today + (group === "week" ? 7 : 30)));
+        try {
+          if (group === "someday") {
+            await api.setSomeday(task.id);
+          } else {
+            const today = toEpochDay(new Date());
+            await api.setSomeday(task.id);
+            await api.moveTask(task.id, fromEpochDay(today + (group === "week" ? 7 : 30)));
+          }
+        } catch (err) {
+          // Отказ команды (например, запрет наложений) раньше был unhandled
+          // rejection: перенос молча ничего не делал и список не обновлялся.
+          showToast(String(err instanceof Error ? err.message : err));
         }
         onChange();
         return;
       }
       // Задача → «Когда-нибудь» (вся колонка): снять привязку ко дню.
       if (over === somedayZoneId) {
-        await api.setSomeday(task.id);
+        try {
+          await api.setSomeday(task.id);
+        } catch (err) {
+          showToast(String(err instanceof Error ? err.message : err));
+        }
         onChange();
         return;
       }
@@ -229,13 +239,21 @@ export function TaskDndContext({ children, onChange }: TaskDndContextProps) {
       // увело бы срок в 1970 (epoch-day 7).
       if (over === weekShiftNextId) {
         const base = task.someday ? (task.dueEpochDay ?? toEpochDay(new Date())) : task.date;
-        await api.moveTask(task.id, fromEpochDay(base + 7));
+        try {
+          await api.moveTask(task.id, fromEpochDay(base + 7));
+        } catch (err) {
+          showToast(String(err instanceof Error ? err.message : err));
+        }
         onChange();
         return;
       }
       const targetDay = parseDayId(over);
       if (targetDay == null || task.date === targetDay) return;
-      await api.moveTask(task.id, fromEpochDay(targetDay));
+      try {
+        await api.moveTask(task.id, fromEpochDay(targetDay));
+      } catch (err) {
+        showToast(String(err instanceof Error ? err.message : err));
+      }
       onChange();
       return;
     }
@@ -245,7 +263,12 @@ export function TaskDndContext({ children, onChange }: TaskDndContextProps) {
       const targetTaskId = parseTaskZone(over);
       if (targetTaskId) {
         if (targetTaskId === subtask.taskId) return; // тот же родитель
-        await api.upsertSubtask({ ...subtask, taskId: targetTaskId });
+        try {
+          await api.upsertSubtask({ ...subtask, taskId: targetTaskId });
+        } catch (err) {
+          showToast(String(err instanceof Error ? err.message : err));
+          return;
+        }
         // Списки подзадач обоих родителей должны перечитаться (у старого
         // родителя подзадача исчезает, у нового — появляется).
         useStore.getState().bumpSubtasks();
@@ -363,7 +386,9 @@ export function TaskDndContext({ children, onChange }: TaskDndContextProps) {
 
 /** Компактный «призрак» перетаскиваемой задачи. */
 function DragGhost({ task }: { task: Task }) {
-  const { colorSets } = useStore();
+  // Селектор вместо полной подписки: призрак перетаскивания не должен
+  // перерисовываться на каждое изменение стора (правки задач, тик автосинка).
+  const colorSets = useStore((s) => s.colorSets);
   const setHex = setHexOf(colorSets, task.colorSetId) ?? "transparent";
   return (
     <div

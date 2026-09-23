@@ -271,8 +271,11 @@ export function TaskFormFields({
           const now = new Date();
           const today = toEpochDay(now);
           const nowMin = now.getHours() * 60 + now.getMinutes();
-          const past = toEpochDay(day) < today || (toEpochDay(day) === today && time <= nowMin);
-          const future = toEpochDay(day) > today || (toEpochDay(day) === today && time > nowMin);
+          // Считаем по КОНЦУ задачи: идущая прямо сейчас (10:00–10:30 в 10:05)
+          // не должна помечаться выполненной в минуту старта.
+          const end = time + (initial.durationMinutes ?? 0);
+          const past = toEpochDay(day) < today || (toEpochDay(day) === today && end <= nowMin);
+          const future = toEpochDay(day) > today || (toEpochDay(day) === today && end > nowMin);
           if (past || future) {
             finalDone = past;
           }

@@ -4,10 +4,15 @@ import android.app.Activity
 import android.content.Context
 import app.tauri.annotation.Command
 import app.tauri.notification.BatchArgs
-import app.tauri.notification.NotificationStorage
-import app.tauri.notification.TauriNotificationManager
 import app.tauri.plugin.Invoke
 import app.tauri.plugin.Plugin
+
+/**
+ * Ключ persisted-хранилища плагина уведомлений (приватная константа
+ * NOTIFICATION_STORE_ID в его NotificationStorage.kt). Сверить при
+ * обновлении tauri-plugin-notification.
+ */
+private const val NOTIFICATION_STORE = "NOTIFICATION_STORE"
 
 /**
  * Плагин мгновенного обновления виджетов: Rust (write_widget_data) после
@@ -54,36 +59,44 @@ class WidgetPushPlugin(activity: Activity) : Plugin(activity) {
   }
 
   /**
-   * Пакетное планирование уведомлений с записью в persisted-хранилище плагина
-   * уведомлений — эквивалент команды batch из NotificationPlugin
-   * (tauri-plugin-notification): manager.schedule + storage.appendNotifications.
+   * Записать запланированные уведомления в persisted-хранилище плагина
+   * уведомлений — то, что делает команда batch и чего НЕ делает show():
+   * будильник show() ставит, но в хранилище не пишет. С пустым хранилищем
+   * pending() всегда пуст (guard синхронизации не срабатывает, лишние
+   * будильники не отменяются), а BOOT-приёмник плагина после перезагрузки
+   * восстанавливает пустой список — все напоминания и дайджест терялись.
    *
-   * Нужен потому, что Rust-метод show() плагина ставит будильник, но в
-   * хранилище НЕ пишет (пишет только batch): pending() всегда пуст — guard
-   * синхронизации не срабатывает, лишние будильники не отменяются, а
-   * BOOT-restore после перезагрузки восстанавливает пустой список (все
-   * напоминания и дайджест терялись до следующего запуска приложения).
-   *
-   * Хранилище — SharedPreferences с фиксированным ключом, поэтому записи видны
-   * и приёмнику плагина, восстанавливающему будильники после перезагрузки.
+   * Пишем строку уведомления напрямую в SharedPreferences плагина (ключ
+   * NOTIFICATION_STORE, запись по id — как NotificationStorage.appendNotifications).
+   * Классы Notification/ObjectMapper (jackson) при этом не нужны: строку
+   * разбирает сам плагин, а sourceJson заполняет parseArgs (на нём же
+   * держится и batch плагина).
    */
   @Command
-  fun scheduleBatch(invoke: Invoke) {
+  fun persistScheduled(invoke: Invoke) {
     try {
       val args = invoke.parseArgs(BatchArgs::class.java)
-      val storage = NotificationStorage(appContext, jsonMapper())
-      val manager = TauriNotificationManager(
-        storage,
-        appContext as? Activity,
-        appContext,
-        null,
-      )
-      val ids = manager.schedule(args.notifications)
-      storage.appendNotifications(args.notifications)
-      invoke.resolveObject(ids)
+      val prefs = appContext.getSharedPreferences(NOTIFICATION_STORE, Context.MODE_PRIVATE)
+      val editor = prefs.edit()
+      var saved = 0
+      for (notification in args.notifications) {
+        val raw = notification.sourceJson ?: continue
+        if (notification.schedule == null) continue
+        editor.putString(notification.id.toString(), raw)
+        saved++
+      }
+      editor.apply()
+      // Пустая запись при непустом запросе = плагин изменил разбор аргументов
+      // (sourceJson больше не заполняется): сообщаем ошибкой, чтобы не
+      // деградировать молча.
+      if (saved == 0 && args.notifications.isNotEmpty()) {
+        invoke.reject("sourceJson пуст — разбор аргументов плагина изменился", null as String?)
+        return
+      }
+      invoke.resolveObject(saved)
     } catch (e: Exception) {
       e.printStackTrace()
-      invoke.reject(e.message ?: "Не удалось запланировать уведомления", null as String?)
+      invoke.reject(e.message ?: "Не удалось записать уведомления в хранилище", null as String?)
     }
   }
 }

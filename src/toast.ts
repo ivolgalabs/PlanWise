@@ -11,6 +11,15 @@ export function setToastListener(l: Listener | null) {
   listener = l;
 }
 
+/**
+ * Снять слушатель, только если он всё ещё этот же. Обычный setToastListener(null)
+ * при быстром перемонтировании (StrictMode) гасил уже зарегистрированный новый —
+ * тосты после ремаунта молча пропадали.
+ */
+export function clearToastListener(l: Listener) {
+  if (listener === l) listener = null;
+}
+
 /** Показать тост: например, «Не удалось сохранить задачу». */
 export function showToast(msg: string) {
   listener?.(msg);

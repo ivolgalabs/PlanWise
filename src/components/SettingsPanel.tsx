@@ -5,6 +5,7 @@ import { open, save } from "@tauri-apps/plugin-dialog";
 // который std::fs не читает — плагин fs умеет работать с такими URI.
 import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { scheduleAutoExport } from "../autoSync";
+import { useShallow } from "zustand/react/shallow";
 import { useStore, resolveActiveTheme } from "../store";
 import {
   COLORS, THEME_FAMILIES, argbToHex, hexToArgb,
@@ -14,8 +15,9 @@ import {
 import type { CustomSlot, ThemePreset } from "../theme";
 import type { ThemeMode, VisibilityState, SortMode, TaskPattern } from "../store";
 import { DEFAULT_VISIBILITY } from "../store";
-import { parseTimeToMinutes, formatMinutes } from "../date";
+import { parseTimeToMinutes, formatMinutes, travelTimeText } from "../date";
 import { api, isAndroid, isTauri } from "../api";
+import { showToast } from "../toast";
 import { useMediaQuery } from "../useMediaQuery";
 import { Icon, type IconName } from "./Icon";
 import { DurationSelect } from "./TimePicker";
@@ -235,7 +237,64 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
     autoSyncPath,
     setAutoSyncEnabled,
     setAutoSyncPath,
-  } = useStore();
+  } = useStore(
+    // useShallow: подписка только на перечисленные поля — без него
+    // каждый тик автосинка и любая правка задачи перерисовывали всю панель.
+    useShallow((s) => ({
+      view: s.view,
+      mondayFirst: s.mondayFirst,
+      weekVertical: s.weekVertical,
+      themeMode: s.themeMode,
+      preferredLightTheme: s.preferredLightTheme,
+      preferredDarkTheme: s.preferredDarkTheme,
+      useOledForDarkMode: s.useOledForDarkMode,
+      customLight: s.customLight,
+      customDark: s.customDark,
+      presets: s.presets,
+      uiScale: s.uiScale,
+      fontScale: s.fontScale,
+      archiveEnabled: s.archiveEnabled,
+      colorSets: s.colorSets,
+      visibility: s.visibility,
+      panelGap: s.panelGap,
+      toggleMondayFirst: s.toggleMondayFirst,
+      setThemeMode: s.setThemeMode,
+      setPreferredLightTheme: s.setPreferredLightTheme,
+      setPreferredDarkTheme: s.setPreferredDarkTheme,
+      setUseOledForDarkMode: s.setUseOledForDarkMode,
+      setCustomLight: s.setCustomLight,
+      setCustomDark: s.setCustomDark,
+      setPresets: s.setPresets,
+      setWeekVertical: s.setWeekVertical,
+      setUiScale: s.setUiScale,
+      setFontScale: s.setFontScale,
+      setArchiveEnabled: s.setArchiveEnabled,
+      setVisibility: s.setVisibility,
+      setPanelGap: s.setPanelGap,
+      notifyDaySummary: s.notifyDaySummary,
+      notifyDayHour: s.notifyDayHour,
+      notifyReminders: s.notifyReminders,
+      notifyRemindMinutes: s.notifyRemindMinutes,
+      setNotifyDaySummary: s.setNotifyDaySummary,
+      setNotifyDayHour: s.setNotifyDayHour,
+      setNotifyReminders: s.setNotifyReminders,
+      setNotifyRemindMinutes: s.setNotifyRemindMinutes,
+      timePresets: s.timePresets,
+      toggleTimePreset: s.toggleTimePreset,
+      taskPatterns: s.taskPatterns,
+      setTaskPatterns: s.setTaskPatterns,
+      sortMode: s.sortMode,
+      setSortMode: s.setSortMode,
+      preventOverlaps: s.preventOverlaps,
+      setPreventOverlaps: s.setPreventOverlaps,
+      autoDonePastTime: s.autoDonePastTime,
+      setAutoDonePastTime: s.setAutoDonePastTime,
+      autoSyncEnabled: s.autoSyncEnabled,
+      autoSyncPath: s.autoSyncPath,
+      setAutoSyncEnabled: s.setAutoSyncEnabled,
+      setAutoSyncPath: s.setAutoSyncPath,
+    })),
+  );
 
   // ── Черновики категорий для редактирования (служебный cs-none скрыт).
   const [drafts, setDrafts] = useState<SetDraft[]>(() =>
@@ -409,11 +468,19 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
     ]);
 
   const saveDraft = async (d: SetDraft) => {
-    const saved = await api.upsertColorSet({
-      id: d.id || undefined,
-      name: d.name.trim() || "Без названия",
-      color: d.color,
-    });
+    let saved;
+    try {
+      saved = await api.upsertColorSet({
+        id: d.id || undefined,
+        name: d.name.trim() || "Без названия",
+        color: d.color,
+      });
+    } catch (e) {
+      // Раньше отказ был unhandled rejection, а id не проставлялся — следующее
+      // сохранение создавало дубль категории.
+      showToast(String(e instanceof Error ? e.message : e));
+      return;
+    }
     // Новая категория получает id от Rust — обновляем черновик, чтобы
     // повторное сохранение не создавало дубль.
     setDrafts((ds) =>
@@ -424,7 +491,13 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
 
   const removeDraft = async (d: SetDraft) => {
     if (d.id) {
-      await api.deleteColorSet(d.id);
+      try {
+        await api.deleteColorSet(d.id);
+      } catch (e) {
+        // Черновик не убираем: категория в БД осталась.
+        showToast(String(e instanceof Error ? e.message : e));
+        return;
+      }
       onSetsChanged();
     }
     setDrafts((ds) => ds.filter((x) => x.clientKey !== d.clientKey));
@@ -1187,7 +1260,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
                       {d.timeMinutes != null ? `${formatMinutes(d.timeMinutes)} · ` : ""}
                       {d.durationMinutes ? `${d.durationMinutes} мин` : "без длительности"}
                       {d.travelTime != null && d.timeMinutes != null
-                        ? ` · выезд в ${formatMinutes((d.timeMinutes - d.travelTime + 1440) % 1440)}`
+                        ? ` · ${travelTimeText(d)}`
                         : ""}
                       {d.notifyMinutes != null ? ` · напом. за ${d.notifyMinutes} мин` : ""}
                       {d.subtasks && d.subtasks.length > 0 ? ` · ${d.subtasks.length} подзадач` : ""}
@@ -1341,6 +1414,13 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
                 <span style={{ fontSize: "var(--fs-2xs)", color: "var(--text-muted)" }}>
                   введите ч/мин и нажмите «ОК»
                 </span>
+                {/* Пустой список интервалов = напоминаний не будет вовсе, хотя
+                    переключатель включён: раньше это было молча. */}
+                {notifyRemindMinutes.length === 0 && (
+                  <span style={{ fontSize: "var(--fs-2xs)", color: "var(--text-muted)" }}>
+                    не выбран ни один интервал — напоминаний не будет
+                  </span>
+                )}
               </div>
             )}
             <p className="section-hint" style={{ marginTop: "var(--sp-2)" }}>
@@ -1577,6 +1657,15 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
               <button
                 className="preset-btn"
                 onClick={() => {
+                  // Выход — необратимое действие (на Android процесс убивается,
+                  // напоминания пропадут до следующего запуска): спрашиваем.
+                  if (
+                    !window.confirm(
+                      "Выйти из приложения? Напоминания и дайджест не будут приходить, пока не запустите снова.",
+                    )
+                  ) {
+                    return;
+                  }
                   import("@tauri-apps/api/core")
                     .then(({ invoke }) => invoke("exit_app"))
                     .catch(() => {});

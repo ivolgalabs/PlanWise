@@ -17,6 +17,9 @@ export function useSubtasks(taskId: string, rev?: number) {
   const storeRev = useStore((s) => s.subtaskRev);
   const effectiveRev = rev ?? storeRev;
   const aliveRef = useRef(true);
+  // Номер запроса: ответ старого taskId не должен перетирать список нового
+  // (переиспользование инстанса хука при смене задачи).
+  const seqRef = useRef(0);
   useEffect(() => {
     aliveRef.current = true;
     return () => {
@@ -25,13 +28,14 @@ export function useSubtasks(taskId: string, rev?: number) {
   }, []);
 
   const reload = useCallback(async () => {
+    const seq = ++seqRef.current;
     try {
       setError(false);
       const list = await api.getSubtasks(taskId);
-      if (aliveRef.current) setItems(list);
+      if (aliveRef.current && seq === seqRef.current) setItems(list);
     } catch {
       // Старые items остаются (не мигаем пустотой), ошибка — флагом.
-      if (aliveRef.current) setError(true);
+      if (aliveRef.current && seq === seqRef.current) setError(true);
     }
   }, [taskId]);
 

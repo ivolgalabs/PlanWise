@@ -126,25 +126,37 @@ pub fn upsert_task(state: State<'_, Db>, mut task: Task) -> Result<Task, String>
     // Одна блокировка на проверку и вставку: иначе два параллельных
     // сохранения могли бы оба пройти проверку наложений и вставить конфликт.
     let conn = state.lock();
+    // Границы полей — до любых проверок: и наложения, и напоминания считают
+    // по sanitized-значениям.
+    sanitize_task(&mut task);
     // Правка текста/заметки существующей задачи — время не меняется:
     // такое пересохранение не проверяем (иначе старые конфликты не дали
     // бы редактировать текст, а свои же конфликтные задачи не исправить).
     let same_as_db: bool = conn
         .query_row(
-            "SELECT time_minutes, duration_minutes, date FROM tasks WHERE id = ?1",
+            "SELECT time_minutes, duration_minutes, date, someday, archived, is_done FROM tasks WHERE id = ?1",
             [&task.id],
             |r| {
                 Ok((
                     r.get::<_, Option<i64>>(0)?,
                     r.get::<_, Option<i64>>(1)?,
                     r.get::<_, i64>(2)?,
+                    r.get::<_, i64>(3)?,
+                    r.get::<_, i64>(4)?,
+                    r.get::<_, i64>(5)?,
                 ))
             },
         )
-        .map(|(tm, dur, date)| {
+        .map(|(tm, dur, date, someday, archived, done)| {
             tm == task.time_minutes.map(|v| v as i64)
                 && dur == task.duration_minutes.map(|v| v as i64)
                 && date == task.date
+                // Возврат из архива/снятие «Когда-нибудь» делает задачу снова
+                // активной — такую правку проверяем как обычно (иначе задача
+                // вставала в занятый слот мимо запрета наложений).
+                && someday == i64::from(task.someday)
+                && archived == i64::from(task.archived)
+                && done == i64::from(task.is_done)
         })
         .unwrap_or(false); // id нет в БД — это новая задача, проверяем
     if !same_as_db {
@@ -203,6 +215,22 @@ pub fn upsert_task(state: State<'_, Db>, mut task: Task) -> Result<Task, String>
     // тика считал бы по устаревшим данным (десктоп — до 30 минут).
     crate::notify::wake_scheduler();
     Ok(task)
+}
+
+/// Привести поля задачи к допустимым диапазонам. Граница доверия: значения
+/// приходят из webview и из файла бэкапа, а логика опирается на эти границы —
+/// время 0..1439 (иначе врут наложения, напоминания и формат «ЧЧ:ММ»),
+/// сложность 0..3 (иначе чипы приоритета рендерятся пустыми), длительности
+/// неотрицательны и не больше UI-потолка (168 ч), интервал напоминания
+/// не больше 30 дней.
+fn sanitize_task(task: &mut Task) {
+    task.time_minutes = task.time_minutes.map(|m| m.clamp(0, 1439));
+    task.duration_minutes = task.duration_minutes.map(|d| d.clamp(0, 10_080));
+    task.travel_time = task.travel_time.map(|t| t.clamp(0, 10_080));
+    task.travel_notify_minutes = task.travel_notify_minutes.map(|t| t.clamp(0, 10_080));
+    task.notify_minutes = task.notify_minutes.map(|n| n.clamp(0, 43_200));
+    task.difficulty = task.difficulty.clamp(0, 3);
+    task.due_epoch_day = task.due_epoch_day.map(|d| d.clamp(-719_162, 2_932_896));
 }
 
 /// Проверка пересечения времени с другими задачами дня (настройка
@@ -837,11 +865,15 @@ fn prepare_import(json: &str) -> Result<PreparedImport, String> {
     if version != 1 && version != 2 {
         return Err("Неподдерживаемая версия бэкапа".to_string());
     }
-    let doc: BackupDoc =
+    let mut doc: BackupDoc =
         serde_json::from_value(v).map_err(|e| format!("Бэкап не читается: {e}"))?;
     // Ограничение числа элементов: 100k задач больше чем достаточно.
     if doc.tasks.len() > 100_000 {
         return Err("Слишком много задач в бэкапе".to_string());
+    }
+    // Бэкап — тоже граница доверия (файл мог быть отредактирован вручную).
+    for t in &mut doc.tasks {
+        sanitize_task(t);
     }
 
     // Вложения (версия бэкапа 2): base64 → байты. Файла в бэкапе нет (v1) —
@@ -1192,10 +1224,15 @@ fn push_widget_refresh(_app: &tauri::AppHandle) {}
 /// виджет через context.filesDir), на десктопе — сам app_data_dir.
 #[cfg_attr(not(target_os = "android"), allow(unused_mut))]
 fn app_files_dir(app: &tauri::AppHandle) -> std::path::PathBuf {
-    let mut dir = app
-        .path()
-        .app_data_dir()
-        .unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let mut dir = match app.path().app_data_dir() {
+        Ok(d) => d,
+        Err(e) => {
+            // Каталог данных недоступен (экзотика) — работаем в текущем каталоге,
+            // но громко: иначе виджет молча пустой, а файлы уезжают неизвестно куда.
+            eprintln!("[daily-planner] app_data_dir недоступен ({e}), файлы — в текущем каталоге");
+            std::path::PathBuf::from(".")
+        }
+    };
     #[cfg(target_os = "android")]
     {
         dir = dir.join("files");
@@ -1246,7 +1283,12 @@ pub fn refresh_widget(
                     stmt.query_map([day, limit], task_row)
                         .and_then(|it| it.collect::<Result<Vec<_>, _>>())
                 })
-                .unwrap_or_default()
+                .unwrap_or_else(|e| {
+                    // Ошибку SQL не глотаем: иначе виджет молча показывает
+                    // пустой день вместо данных.
+                    eprintln!("[widget] выборка задач дня не удалась: {e}");
+                    Vec::new()
+                })
         };
     // Окно дней для интерактивного виджета «День»: вчера..+13 (задачи,
     // добавленные через «Другая дата», тоже видны), до 8 задач на день.

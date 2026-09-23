@@ -29,7 +29,7 @@ import { DayView } from "./views/DayView";
 import { WeekView } from "./views/WeekView";
 import { RightPanel } from "./components/RightPanel";
 import { TaskDndContext } from "./drag";
-import { setToastListener } from "./toast";
+import { clearToastListener, setToastListener } from "./toast";
 import { scheduleAutoExport, startAutoSync } from "./autoSync";
 import "./App.css";
 
@@ -182,16 +182,22 @@ function App() {
   const [loadError, setLoadError] = useState("");
   // Тост: короткое сообщение об ошибке сохранения и т.п. Автоскрытие — 4.5 с.
   const [toast, setToast] = useState("");
+  // Таймер записи данных виджета — модульный: чистим при размонтировании App,
+  // иначе отложенная запись срабатывает по устаревшему замыканию.
+  useEffect(() => () => clearTimeout(widgetWriteTimer), []);
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
-    setToastListener((msg) => {
+    const render = (msg: string) => {
       setToast(msg);
       clearTimeout(timer);
       timer = setTimeout(() => setToast(""), 4500);
-    });
+    };
+    setToastListener(render);
     return () => {
       clearTimeout(timer);
-      setToastListener(null);
+      // Снимаем ТОЛЬКО свой слушатель: при быстром перемонтировании
+      // (StrictMode) старый cleanup иначе гасил уже зарегистрированный новый.
+      clearToastListener(render);
     };
   }, []);
   const [searchQuery, setSearchQuery] = useState("");
@@ -280,7 +286,10 @@ function App() {
     apply();
     if (themeMode !== "system") return;
     return watchSystemTheme(apply);
-  }, [themeMode, preferredLightTheme, preferredDarkTheme, useOledForDarkMode]);
+    // customLight/customDark в зависимостях: их смена меняет эффективную тему,
+    // а значит и colorScheme с флагом темы виджета (раньше они оставались
+    // прежними до следующего переключения режима).
+  }, [themeMode, preferredLightTheme, preferredDarkTheme, useOledForDarkMode, customLight, customDark]);
 
   // Слот «Свой выбор»: акцент/фон поверх темы. Слот активен по текущему
   // режиму (тёмный/светлый); в system — по предпочтению ОС.
@@ -382,32 +391,41 @@ function App() {
     const seq = ++reloadSeq.current;
     // Обычные задачи (широкий диапазон для календаря) + «Когда-нибудь» +
     // «Архив» (отдельным пулом — в виды не попадает).
-    try {
-      const [regular, someday, archived] = await Promise.all([
-        api.getTasks(new Date(0), new Date(9999, 0, 1)),
-        api.getSomedayTasks(),
-        api.getArchivedTasks(),
-      ]);
-      if (seq !== reloadSeq.current) return; // ответ устарел — пропускаем
-      setTasks([...regular, ...someday]);
-      setArchivedTasks(archived);
-      // Метка холодного старта: данные отрисованы (в журнал диагностики
-      // пишется один раз за процесс — «не запустилось с первого раза»
-      // различает «процесс не стартовал» и «стартовал, но завис до данных»).
-      if (!milestoneSent.current && isTauri()) {
-        milestoneSent.current = true;
-        import("@tauri-apps/api/core")
-          .then(({ invoke }) =>
-            invoke("startup_milestone", { name: "tasks-loaded" }).catch(() => {}),
-          )
-          .catch(() => {});
+    // allSettled, а не all: падение одного из трёх запросов не должно
+    // замораживать остальные данные (раньше сбой любого оставлял и задачи,
+    // и архив устаревшими до следующей удачной перезагрузки).
+    const [regular, someday, archived] = await Promise.allSettled([
+      api.getTasks(new Date(0), new Date(9999, 0, 1)),
+      api.getSomedayTasks(),
+      api.getArchivedTasks(),
+    ]);
+    if (seq !== reloadSeq.current) return; // ответ устарел — пропускаем
+    if (regular.status === "fulfilled" && someday.status === "fulfilled") {
+      setTasks([...regular.value, ...someday.value]);
+    }
+    if (archived.status === "fulfilled") setArchivedTasks(archived.value);
+    // Сбой БД/загрузки — не оставляем пользователя с «пустым» приложением без
+    // объяснения. Успешная перезагрузка снимает прежнюю ошибку (раньше баннер
+    // залипал навсегда после одного сбоя).
+    const failures = [regular, someday, archived].filter((r) => r.status === "rejected");
+    if (failures.length > 0) {
+      for (const f of failures) {
+        console.error("Не удалось загрузить данные:", (f as PromiseRejectedResult).reason);
       }
-    } catch (e) {
-      // Сбой БД/загрузки — не оставляем пользователя с «пустым» приложением
-      // без объяснения: показываем заглушку-предупреждение.
-      console.error("Не удалось загрузить задачи:", e);
       setLoadError("Не удалось загрузить задачи. Проверьте доступ к данным приложения.");
-      return;
+    } else {
+      setLoadError("");
+    }
+    // Метка холодного старта: данные отрисованы (в журнал диагностики
+    // пишется один раз за процесс — «не запустилось с первого раза»
+    // различает «процесс не стартовал» и «стартовал, но завис до данных»).
+    if (!milestoneSent.current && isTauri()) {
+      milestoneSent.current = true;
+      import("@tauri-apps/api/core")
+        .then(({ invoke }) =>
+          invoke("startup_milestone", { name: "tasks-loaded" }).catch(() => {}),
+        )
+        .catch(() => {});
     }
     // Данные для виджетов (Android + macOS) — пишем при перезагрузке задач
     // через дебаунс: всплеск правок коаллесится в один вызов (см.
