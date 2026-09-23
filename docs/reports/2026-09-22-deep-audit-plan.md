@@ -226,3 +226,38 @@ Structurally weak (improve, in impact order):
 4. **P3** hygiene + formula tests (N24-N29) + refuted-list comments where docs mislead.
 
 Rough effort: P0 ~1-2 sessions, P1 ~1 session, P2 ~2 sessions, P3 ~1 session.
+
+## Applied in this session (2026-09-22)
+
+Verified: `cargo clippy --all-targets -- -D warnings` clean, `cargo test` 20/20 (4 new tests),
+`npm test` + `npm run build` clean.
+
+- **N1** (`f151846`) — Android scheduling moved to the Kotlin bridge: `WidgetPushPlugin.scheduleBatch`
+  mirrors the plugin's `batch` (manager.schedule + storage.appendNotifications) and Rust
+  `notify::schedule_batch` sends the same JSON shape `show()` used to send. Alarms are persisted
+  again: `pending()` is populated (guard + cancel sweep work) and the plugin's BOOT receiver has
+  something to restore after a reboot. Device verification still needed (runtime behaviour).
+- **N2** (`945f23b`) — capabilities split by platform: desktop `default.json` has no fs permissions,
+  `mobile.json` keeps them for Android content://. Manual desktop export/import moved into Rust
+  (`export_backup`/`import_backup`: Rust-side dialog + atomic write); SettingsPanel keeps the
+  plugin-fs path only under `isAndroid()`. Sync commands take a FOLDER and join the fixed file name
+  in Rust — the symlink/foreign-path hole is closed.
+- **N3** — `write_sync_file` and `export_backup` write via tmp+rename (`write_atomic`).
+- **N4** — auto-export is scheduled only from mutations (`App.onMutation`), never from `reload()`.
+- **N5 (mitigated)** — `export_json` emits `contentHash`; auto-export skips unchanged content. Known
+  ceiling: the routine export still embeds attachment bytes — a metadata-only format would break
+  attachments on cross-device restore, so the format change is deferred.
+- **N6** — `wake_scheduler()` in upsert/delete/move/set_someday/archive/restore/import.
+- **N7** — import: parse + base64 decode before the DB lock (`prepare_import`/`apply_import`), strict
+  attachment-name validation (dot-only names rejected; new tests), files from a failed import removed.
+- **N8** — `to_local` no longer reinterprets a local time as UTC (DST gap/ambiguity).
+- **N11** — `sanitize_prefs` clamps the digest hour and drops non-positive intervals (on load and on
+  `set_notification_prefs`).
+- **N15** — `read_sync_file` returns `Result<Option<String>, String>`: a read error is no longer
+  conflated with "file absent"; autoSync reports it (throttled toast) and has an export watchdog.
+
+Still open, in plan order: N9, N10, N12, N13, N14, N16, N17-N23 (notification text, travel label,
+auto-done boundary, pattern travelNotify, IPC range validation + DB CHECKs, catch-up window vs
+comments), N24-N29 (browser fallback, stable_id collisions, 60 s drift, persist version, index gaps,
+hygiene). Android runtime behaviour (reboot restore, cancel of stale alarms) needs a device pass
+during the next Android build.
