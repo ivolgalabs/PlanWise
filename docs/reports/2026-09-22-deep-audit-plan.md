@@ -306,8 +306,22 @@ dependency — not visible to the app module. Reading the plugin source also sho
 `Notification.sourceJson` is never assigned in Kotlin (only `parseArgs` fills it) and that its own
 restore path re-appends parsed notifications with a null `sourceJson`. The design therefore changed:
 the alarm stays on the proven `show()` path and the persistence is a small bridge command that writes
-`sourceJson` into the plugin's SharedPreferences. Remaining verification: a device pass (reboot
-restore, cancellation of stale alarms) during the next Android build.
+`sourceJson` into the plugin's SharedPreferences. The Android build then passed: the bridge compiles
+and the APK is produced.
+
+It also caught a second real defect that a desktop-only check cannot see: `Timelike` was imported under
+`#[cfg(not(target_os = "android"))]` while the new Android `next_sleep` calls `now.second()`.
+`cargo check --target aarch64-linux-android` is therefore part of the routine verification for
+anything behind `cfg(target_os = "android")`.
+
+Final state of this batch (run 2026-09-23): desktop `clippy -D warnings` clean, `cargo test` 20/20,
+`cargo check --target aarch64-linux-android` clean, `npm test`/`npm run build` clean, and
+`cargo tauri android build --apk --target aarch64` produced a release APK (universal, under
+`src-tauri/gen/android/app/build/outputs/apk/universal/release/`). The APK was NOT placed into
+`Ready-made versions of applications/PlanWise`: this was a verification build, and the existing 0.1.15
+artifacts there must not be overwritten by a same-version build with different content — a release
+(version bump, signing, placement, device pass) is a separate decision. Device checks still pending:
+reboot restore and cancellation of stale alarms.
 
 Still open after P2: **N10** (the Android digest pre-arms tomorrow's alarm with frozen content — needs a
 content fingerprint in the sync loop), the TASK_COLUMNS/`?N` contract test, and the dual `core_base`
