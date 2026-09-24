@@ -2,7 +2,8 @@ name: CI
 
 # Shared template: `checks/ci.yml` of your own rules store (Rules_Zai/ for ZCode,
 # Rules_Antigravity/ for Antigravity) → <project>/.github/workflows/ci.yml
-# Gate: fmt → clippy → tests → cargo audit/deny → npm test/audit.
+# Gate: fmt → clippy → tests → cargo audit/deny → npm test/audit +
+#       hygiene (gitleaks / actionlint / zizmor — job "hygiene").
 # Blocks only real defects: vulnerabilities, GPL, build errors.
 # Unmaintained/unknown/duplicate versions — warnings, not a CI failure.
 
@@ -88,12 +89,12 @@ jobs:
       # in a transitive dependency is visible immediately, not after a manual update.
       - name: Аудит зависимостей (RustSec)
         run: |
-          cargo install cargo-audit --locked --quiet
+          cargo install cargo-audit --version 0.22.2 --locked --quiet
           cargo audit
 
       - name: Лицензии и дубли (cargo-deny)
         run: |
-          cargo install cargo-deny --locked --quiet
+          cargo install cargo-deny --version 0.20.2 --locked --quiet
           cargo deny --config deny.toml check
         if: ${{ hashFiles('src-tauri/deny.toml') != '' }}
 
@@ -118,9 +119,20 @@ jobs:
         if: steps.guard.outputs.ok == '1'
         run: npm ci
 
+      - name: Типы (tsc --noEmit)
+        if: steps.guard.outputs.ok == '1'
+        run: npm run lint --if-present
+
       - name: Юнит-тесты
         if: steps.guard.outputs.ok == '1'
-        run: npm test --if-present
+        run: |
+          if [ -z "$(node -p "try { require('./package.json').scripts?.test || '' } catch(e) { '' }" 2>/dev/null)" ]; then
+            if find src tests -type f \( -name "*.test.*" -o -name "*.spec.*" \) 2>/dev/null | grep -q .; then
+              echo "::error::Найдены файлы тестов (*.test.*, *.spec.*), но в package.json не объявлен скрипт 'test'. Добавьте 'test' скрипт (напр. 'vitest run')."
+              exit 1
+            fi
+          fi
+          npm test --if-present
 
       - name: Сборка
         if: steps.guard.outputs.ok == '1'
@@ -129,3 +141,32 @@ jobs:
       - name: Аудит зависимостей (npm)
         if: steps.guard.outputs.ok == '1'
         run: npm audit --omit=dev --audit-level=high
+
+  # Hygiene: secrets across the full git history + workflow lint. Runs on every push.
+  # zizmor is advisory (continue-on-error) until the findings already accumulated in
+  # the projects are fixed — then remove that flag.
+  hygiene:
+    name: Hygiene (gitleaks + actionlint + zizmor)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # gitleaks scans the whole history, not the shallow clone
+
+      - name: Секреты (gitleaks)
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/gitleaks/gitleaks/master/scripts/install.sh \
+            | bash -s -- -b /usr/local/bin v8.30.1
+          gitleaks detect --redact
+
+      - name: Линт воркфлоу (actionlint)
+        run: |
+          bash <(curl -s https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          # -shellcheck=: structural gate only (shellcheck is not installed on the runner anyway)
+          ./actionlint -color -shellcheck=
+
+      - name: Гигиена воркфлоу (zizmor — advisory)
+        continue-on-error: true
+        run: |
+          pipx install "zizmor==1.30.1"
+          ~/.local/bin/zizmor .github/workflows
