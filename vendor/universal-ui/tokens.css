@@ -55,6 +55,12 @@
   --shadow-xl:    0 12px 36px var(--shadow);  /* modal-dialog */
   --shadow-2xl:   0 24px 64px var(--shadow);  /* license-blocker, theme modal */
   --shadow-focus: 0 0 0 2px var(--accent-glow);/* input focus ring */
+  --shadow-glow:  0 4px 12px var(--accent-glow);
+  --ring-focus:     0 0 0 2px var(--accent-glow);
+  --ring-accent:    0 0 0 2px var(--accent);
+  --ring-accent-sm: 0 0 0 1px var(--accent);
+  --ring-border:    0 0 0 1px var(--border-color);
+  --ring-primary:   0 0 0 2px var(--text-primary);
 
   /* ── Z-INDEX (слои) ────────────────────────────────────────────────── */
   --z-base:           0;

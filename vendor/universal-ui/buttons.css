@@ -10,7 +10,7 @@
 .btn-primary:hover:not(:disabled) {
   background-color: var(--accent-hover);
   border-color: var(--accent-hover);
-  box-shadow: 0 4px 12px var(--accent-glow);
+  box-shadow: var(--shadow-glow);
 }
 
 .btn-danger {
@@ -54,6 +54,7 @@
   height: 32px;
   padding: 0;
   border-radius: var(--radius-lg);
+  flex-shrink: 0;
 }
 
 /* Вкладки-кнопки: активная — подложка акцента (третий паттерн вкладок

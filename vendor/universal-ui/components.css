@@ -39,7 +39,7 @@ input[type="range"]:not(.rainbow-hue-slider)::-webkit-slider-thumb {
   cursor: pointer;
   margin-top: -5px; /* Centers the thumb vertically on a 6px track */
   border: 1px solid var(--bg-secondary);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-xs);
   transition: transform 0.1s ease, background-color 0.1s ease;
 }
 
@@ -64,7 +64,7 @@ input[type="range"]:not(.rainbow-hue-slider)::-moz-range-thumb {
   background: var(--accent);
   cursor: pointer;
   border: 1px solid var(--bg-secondary);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-xs);
   transition: transform 0.1s ease, background-color 0.1s ease;
 }
 
@@ -115,7 +115,7 @@ button {
 button:hover:not(:disabled) {
   background-color: var(--bg-hover);
   border-color: var(--accent);
-  box-shadow: 0 2px 8px var(--accent-glow);
+  box-shadow: var(--shadow-sm);
 }
 button:active:not(:disabled) {
   transform: scale(0.98);
@@ -129,12 +129,12 @@ button:disabled {
 button.primary-btn, button.action-btn {
   background-color: var(--accent);
   border-color: var(--accent);
-  color: #ffffff;
+  color: var(--text-on-accent);
 }
 button.primary-btn:hover:not(:disabled), button.action-btn:hover:not(:disabled) {
   background-color: var(--accent-hover);
   border-color: var(--accent-hover);
-  box-shadow: 0 4px 12px var(--accent-glow);
+  box-shadow: var(--shadow-glow);
 }
 
 /* Dropdowns & Select Fields */
@@ -157,7 +157,7 @@ select:hover:not(:disabled) {
 }
 select:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-glow);
+  box-shadow: var(--shadow-focus);
 }
 
 /* Stylized Checkboxes */
@@ -189,7 +189,7 @@ input[type="checkbox"]:hover {
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--border-color);
   border-radius: 16px;
-  box-shadow: 0 8px 32px var(--shadow);
+  box-shadow: var(--shadow-lg);
   color: var(--text-primary);
   box-sizing: border-box;
 }
@@ -209,7 +209,7 @@ input[type="text"], input[type="password"], textarea {
 }
 input[type="text"]:focus, input[type="password"]:focus, textarea:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-glow);
+  box-shadow: var(--shadow-focus);
 }
 input[type="text"]:disabled, input[type="password"]:disabled, textarea:disabled {
   opacity: 0.5;
@@ -245,7 +245,7 @@ input[type="text"]:disabled, input[type="password"]:disabled, textarea:disabled 
 .segmented-control button.active {
   background-color: var(--bg-secondary);
   color: var(--text-primary);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-xs);
   font-weight: 600;
 }
 
@@ -257,7 +257,7 @@ input[type="text"]:disabled, input[type="password"]:disabled, textarea:disabled 
   margin-bottom: 16px;
 }
 .sidebar-label {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
