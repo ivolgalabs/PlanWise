@@ -8,6 +8,7 @@
  *
  * Подстановки — `{name}`; см. t()/interpolate ниже.
  */
+import { invoke } from "@tauri-apps/api/core";
 import {
   createContext,
   createElement,
@@ -45,6 +46,19 @@ export function detectLang(): Lang {
   return LANGS.some((l) => l.code === code) ? code : "en";
 }
 
+/** Дублирует язык в Rust: тексты нативных уведомлений строятся там
+ *  (src-tauri/src/app_lang.rs, команда set_app_lang). В браузерной сборке
+ *  Tauri-хоста нет — вызов обязан молча ничего не делать. */
+function syncLangToRust(lang: Lang): void {
+  try {
+    void invoke("set_app_lang", { lang }).catch(() => {
+      /* нет Tauri-хоста (браузерный dev) */
+    });
+  } catch {
+    /* нет Tauri-хоста (браузерный dev) */
+  }
+}
+
 export function storeLang(lang: Lang): void {
   try {
     localStorage.setItem(STORAGE_KEY, lang);
@@ -52,6 +66,7 @@ export function storeLang(lang: Lang): void {
   } catch {
     /* ignore */
   }
+  syncLangToRust(lang);
 }
 
 const ru = {

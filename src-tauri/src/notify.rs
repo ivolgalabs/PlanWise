@@ -43,6 +43,7 @@ use tauri_plugin_notification::NotificationExt;
 #[cfg(target_os = "android")]
 use tauri_plugin_notification::{Schedule, ScheduleInterval};
 
+use crate::app_lang;
 use crate::db::Db;
 
 /// Настройки уведомлений (дублируются из фронтенда через команду).
@@ -419,7 +420,7 @@ fn digest_body(titles: &[String]) -> String {
         body.push_str(t);
     }
     if titles.len() > 4 {
-        body.push_str(&format!("\n… и ещё {} задач", titles.len() - 4));
+        body.push_str(&app_lang::more_tasks(titles.len() - 4));
     }
     body
 }
@@ -480,8 +481,11 @@ fn task_events(prefs: &NotifyPrefs, task: &ReminderRow) -> Vec<ReminderEvent> {
                 kind: "travel",
                 task_id: task_id.to_string(),
                 due: dep,
-                title: "Пора выезжать",
-                body: format!("«{title}» — в {:02}:{:02}", minutes / 60, minutes % 60),
+                title: app_lang::travel_title(),
+                body: app_lang::travel_body(
+                    title,
+                    &format!("{:02}:{:02}", minutes / 60, minutes % 60),
+                ),
             });
             // «Пора собираться»: напомнить за travel_notify минут ДО выезда
             // (выезд = start - tt), т.е. раньше, чем само «пора выезжать».
@@ -490,7 +494,7 @@ fn task_events(prefs: &NotifyPrefs, task: &ReminderRow) -> Vec<ReminderEvent> {
                     let total_diff = minutes - tt;
                     let dep = ((total_diff % 1440) + 1440) % 1440;
                     let extra = if total_diff < 0 {
-                        " (накануне)"
+                        app_lang::prev_day()
                     } else {
                         ""
                     };
@@ -500,8 +504,12 @@ fn task_events(prefs: &NotifyPrefs, task: &ReminderRow) -> Vec<ReminderEvent> {
                         kind: "travel_prepare",
                         task_id: task_id.to_string(),
                         due: prep,
-                        title: "Пора собираться",
-                        body: format!("«{title}» — выезд в {:02}:{:02}{extra}", dep / 60, dep % 60),
+                        title: app_lang::prepare_title(),
+                        body: app_lang::prepare_body(
+                            title,
+                            &format!("{:02}:{:02}", dep / 60, dep % 60),
+                            extra,
+                        ),
                     });
                 }
             }
@@ -518,8 +526,8 @@ fn task_events(prefs: &NotifyPrefs, task: &ReminderRow) -> Vec<ReminderEvent> {
             kind: "remind",
             task_id: task_id.to_string(),
             due,
-            title: "Напоминание",
-            body: format!("«{title}» — {}", format_interval(rm)),
+            title: app_lang::remind_title(),
+            body: app_lang::remind_body(title, &app_lang::format_interval(rm)),
         });
     }
     out
@@ -544,8 +552,8 @@ fn ensure_tasks_channel(app: &tauri::AppHandle) {
     DONE.call_once(|| {
         use tauri_plugin_notification::{Channel, Importance};
         let _ = app.notification().create_channel(
-            Channel::builder(TASKS_CHANNEL_ID, "Напоминания и задачи")
-                .description("Напоминания о задачах и утренний список дел")
+            Channel::builder(TASKS_CHANNEL_ID, app_lang::channel_name())
+                .description(app_lang::channel_desc())
                 .importance(Importance::High)
                 .vibration(true)
                 .lights(true)
@@ -791,21 +799,6 @@ fn schedule_at(
     }
 }
 
-/// «1 задача», «2 задачи», «5 задач» — русская плюрализация для заголовков.
-#[cfg(target_os = "android")]
-fn plural_tasks(n: usize) -> String {
-    let n10 = n % 10;
-    let n100 = n % 100;
-    let word = if n10 == 1 && n100 != 11 {
-        "задача"
-    } else if n10 >= 2 && n10 <= 4 && (n100 < 12 || n100 > 14) {
-        "задачи"
-    } else {
-        "задач"
-    };
-    format!("{n} {word}")
-}
-
 /// Дайджест «План на день»: InboxStyle-уведомление — каждая задача строкой.
 /// Задачи с временем — «09:00  Название» (сортировка по времени), без времени —
 /// пунктиром «• Название» в конце (сначала по расписанию, потом «в течение дня»).
@@ -828,11 +821,11 @@ fn schedule_digest(app: &tauri::AppHandle, hour: u8, rows: &[(String, Option<i64
             None => format!("• {title}"),
         })
         .collect();
-    let title = format!("План на сегодня: {}", plural_tasks(n));
+    let title = app_lang::plan_title(n);
     let summary = if timed == 0 {
-        "в течение дня".to_string()
+        app_lang::all_day().to_string()
     } else {
-        format!("{} со временем", plural_tasks(timed))
+        app_lang::timed_summary(timed)
     };
     let mut b = app
         .notification()
@@ -1096,7 +1089,7 @@ fn check_digest(app: &tauri::AppHandle, prefs: &NotifyPrefs, now: NaiveDateTime)
     let _ = app
         .notification()
         .builder()
-        .title(format!("Задачи на сегодня ({})", tasks.len()))
+        .title(app_lang::digest_title(tasks.len()))
         .body(body)
         .show();
 
@@ -1166,32 +1159,6 @@ fn task_start(minutes: i64, date_epoch: i64) -> Option<NaiveDateTime> {
     let m = (minutes % 60) as u32;
     let task_date = crate::commands::epoch_to_date(date_epoch)?;
     task_date.and_hms_opt(h, m, 0)
-}
-
-/// Человеческое «за сколько» для тела напоминания: 1440 → «за 1 дн».
-/// Как показать интервал напоминания в тексте уведомления. Предлог «за» — как
-/// в настройках (fmtRemindInterval на фронте): напоминание объявляется за N до
-/// начала, а не «через N» от текущего момента.
-fn format_interval(rm: i64) -> String {
-    if rm >= 1440 {
-        let (d, h, m) = (rm / 1440, (rm % 1440) / 60, rm % 60);
-        match (h, m) {
-            (0, 0) => format!("за {d} дн"),
-            (0, m) => format!("за {d} дн {m} мин"),
-            (h, 0) => format!("за {d} дн {h} ч"),
-            (h, m) => format!("за {d} дн {h} ч {m} мин"),
-        }
-    } else if rm >= 60 {
-        // Минуты не обрезаем: 90 мин раньше показывались как «через 1 ч».
-        let (h, m) = (rm / 60, rm % 60);
-        if m == 0 {
-            format!("за {h} ч")
-        } else {
-            format!("за {h} ч {m} мин")
-        }
-    } else {
-        format!("за {rm} мин")
-    }
 }
 
 /// Момент «за N минут до start» с учётом часового пояса. Наивная арифметика
