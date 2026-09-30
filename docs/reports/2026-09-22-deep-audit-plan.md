@@ -368,3 +368,42 @@ launch re-schedules it.
 
 Guards added in this batch: `persisted_json_matches_plugin_fields`, `js_date_is_plugin_format`,
 `digest_action_reschedules_on_content_change`, `task_columns_match_schema` — 24 tests total.
+
+## 30.09.2026 — digest went silent in the field (v0.1.17)
+
+User report: no digest at 08:00 (and generally no notifications arriving).
+The phone was not reachable, so the diagnosis is static — from the plugin's
+sources (registry + decompiled `classes.jar` of the built AAR + GitHub tag
+`notification-v2.3.3`):
+
+1. **Exact alarms were already enabled** — `SCHEDULE_EXACT_ALARM` +
+   `USE_EXACT_ALARM` sit in the app manifest since 0.1.4, and
+   `USE_EXACT_ALARM` is granted at install, so `setExactIfPossible` uses
+   `setExactAndAllowWhileIdle(RTC_WAKEUP)`. Doze was NOT the cause.
+2. **The one-shot `At` digest dies with its fire.** `TimedNotificationPublisher`
+   posts, then deletes the store entry and the alarm (verified in bytecode:
+   `deleteNotification` + no `CRON_KEY` for `At`). The next day's alarm is
+   armed only by a `sync_scheduled` tick — i.e. only while the app process
+   lives. A killed process plus days without opening the app (widget-only
+   usage) breaks the chain for good: nothing at 08:00 until the next launch.
+3. **A failed `show()` was swallowed** (`let _ = b.show()`), while the store
+   entry was written unconditionally afterwards — the sync then sees
+   `scheduled.contains(DIGEST_ID)` and `armed == target` and never retries.
+   A phantom "armed" digest with no alarm behind it.
+
+Fix (0.1.17): the digest is a REPEATING `Schedule::Interval` alarm ("every
+day at the configured hour"). Verified from the plugin sources: the Interval
+branch arms via `nextTrigger` (past "today H:00" is postponed by one day —
+`unit` ends as `HOUR_OF_DAY` because fields set it coarsest-first), stamps
+`CRON_KEY` into the PendingIntent, and the publisher re-arms the next day
+after every fire (`fromMatchString` → `nextTrigger(now)`), keeping the store
+entry. The BOOT restore receiver re-schedules Interval entries as-is (it only
+shifts past `At` dates). The Rust→Kotlin JSON needs the DOUBLE-nested shape
+`schedule.interval.interval` (variant key → `DateMatch`), pinned by the
+updated `persisted_json_matches_plugin_fields` test. `show()` failures are
+now logged and skip the store write, so the sync retries instead of
+believing a phantom.
+
+Device verification was still pending at build time (phone away): after
+install, `dumpsys alarm` must show the digest's next trigger at tomorrow
+08:00 and logcat the plugin's "notification 1000000 will next fire at" line.

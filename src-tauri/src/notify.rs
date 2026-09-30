@@ -8,13 +8,19 @@
 //
 // Реализация зависит от платформы:
 //  - Android: уведомления планируются на уровне ОС (AlarmManager) через мост
-//    «widget» — WidgetPushPlugin.scheduleBatch (эквивалент команды batch
-//    плагина уведомлений): будильник + запись в persisted-хранилище плагина.
-//    Без записи в хранилище pending() пуст, а BOOT-restore после перезагрузки
-//    терял все напоминания (show() плагина 2.3.3 в хранилище не пишет —
-//    пишет только batch). ОС доставляет уведомления и при убитом процессе.
-//    Каждый тик (60 с) сверяем отложенные с ожидаемыми: недостающие ставим,
-//    лишние отменяем (модель «sync», а не окно отправки).
+//    «widget» — WidgetPushPlugin.persistScheduled: будильник + запись в
+//    persisted-хранилище плагина. Без записи в хранилище pending() пуст, а
+//    BOOT-restore после перезагрузки терял все напоминания (show() плагина
+//    2.3.3 в хранилище не пишет — пишет только batch). ОС доставляет
+//    уведомления и при убитом процессе.
+//    Напоминания — одноразовые At-алармы. Дайджест — ПОВТОРЯЮЩИЙСЯ Interval-
+//    аларм («каждый день в настроенный час»): ОС сама ставит следующий после
+//    каждого срабатывания (TimedNotificationPublisher по CRON_KEY) и
+//    восстанавливает после перезагрузки. Прежний одноразовый At умирал: после
+//    срабатывания или смерти процесса никто не ставил следующий, и дайджест
+//    замолкал до очередного запуска приложения (симптом: «в 8 утра не
+//    приходят»). Каждый тик (60 с) обновляем контент дня, лишние отменяем
+//    (модель «sync», а не окно отправки).
 //  - Десктоп (macOS): плагин не умеет планировать на будущее — поллинг
 //    каждые 60 секунд с окном отправки до 15 минут после due (см.
 //    check_reminders; процесс на десктопе жив).
@@ -35,7 +41,7 @@ use serde::Deserialize as _;
 use tauri::Manager;
 use tauri_plugin_notification::NotificationExt;
 #[cfg(target_os = "android")]
-use tauri_plugin_notification::Schedule;
+use tauri_plugin_notification::{Schedule, ScheduleInterval};
 
 use crate::db::Db;
 
@@ -621,15 +627,13 @@ fn scheduled_json(
     large_body: Option<&str>,
     inbox_lines: Option<&[String]>,
     summary: Option<&str>,
-    date: &str,
+    schedule: serde_json::Value,
 ) -> serde_json::Value {
     let mut n = serde_json::json!({
         "id": id,
         "channelId": TASKS_CHANNEL_ID,
         "title": title,
-        "schedule": { "at": {
-            "date": date, "repeating": false, "allowWhileIdle": true,
-        }},
+        "schedule": schedule,
     });
     if let Some(v) = body {
         n["body"] = serde_json::json!(v);
@@ -644,6 +648,34 @@ fn scheduled_json(
         n["summary"] = serde_json::json!(v);
     }
     n
+}
+
+/// Расписание одноразового напоминания (At): точный момент в формате плагина.
+#[cfg(any(target_os = "android", test))]
+fn at_schedule(date: &str) -> serde_json::Value {
+    serde_json::json!({ "at": {
+        "date": date, "repeating": false, "allowWhileIdle": true,
+    }})
+}
+
+/// Расписание утреннего дайджеста (Interval): «каждый день в hour:00».
+/// Двойная вложенность interval.interval — контракт Kotlin-десериализатора
+/// плагина 2.3.3: внешний ключ выбирает вариант At/Interval/Every, внутренний —
+/// это DateMatch (поля hour/minute; Timezone — локальная, Calendar). После
+/// каждого срабатывания publisher перепланирует его сам (CRON_KEY →
+/// nextTrigger: если «сегодня hour:00» уже прошло — сдвиг на сутки).
+#[cfg(any(target_os = "android", test))]
+fn interval_schedule(hour: u8) -> serde_json::Value {
+    // Поля перечислены ВСЕ (с null), как их сериализует печатный
+    // ScheduleInterval, — тест interval_schedule_matches_typed_enum держит
+    // обе формы равными байт-в-байт.
+    serde_json::json!({ "interval": {
+        "interval": {
+            "year": null, "month": null, "day": null, "weekday": null,
+            "hour": hour, "minute": 0, "second": null,
+        },
+        "allowWhileIdle": true,
+    }})
 }
 
 /// Id уведомлений, лежащих в persisted-хранилище плагина, — это и есть
@@ -708,7 +740,11 @@ fn schedule_at(
             repeating: false,
             allow_while_idle: true,
         })
-        .show();
+        .show()
+        .inspect_err(|e| eprintln!("[notify] напоминание {id} не спланировано: {e}"));
+    // Запись в хранилище — только после успешного show(): при сбое будильника
+    // запись сделала бы sync считать напоминание поставленным навсегда
+    // (симптом «уведомления молча не приходят»); следующий тик повторит.
     if let Some(date) = js_date_utc(ts) {
         // taskId (extra) в запись не кладём — см. scheduled_json: после
         // перезагрузки напоминание восстановится без deep-link, а id задачи
@@ -716,7 +752,15 @@ fn schedule_at(
         persist_scheduled(
             app,
             id,
-            scheduled_json(id, title, Some(body), Some(body), None, None, &date),
+            scheduled_json(
+                id,
+                title,
+                Some(body),
+                Some(body),
+                None,
+                None,
+                at_schedule(&date),
+            ),
         );
     }
 }
@@ -740,11 +784,15 @@ fn plural_tasks(n: usize) -> String {
 /// Задачи с временем — «09:00  Название» (сортировка по времени), без времени —
 /// пунктиром «• Название» в конце (сначала по расписанию, потом «в течение дня»).
 /// В развёрнутом виде — весь список, в сводке — сколько задач со временем.
+///
+/// Планируется как Interval («каждый день в hour:00»), а не одноразовый At:
+/// ОС перепланирует следующий день сама после каждого срабатывания и после
+/// перезагрузки, поэтому дайджест больше не зависит от того, запускалось ли
+/// приложение. Контент дня обновляет sync-цикл (см. sync_scheduled).
+/// Возвращает успех: false — будильник НЕ поставлен (запись в хранилище
+/// не пишем, чтобы sync не считал дайджест активным).
 #[cfg(target_os = "android")]
-fn schedule_digest(app: &tauri::AppHandle, ts: NaiveDateTime, rows: &[(String, Option<i64>)]) {
-    let Ok(at) = time::OffsetDateTime::from_unix_timestamp(to_local(&ts).timestamp()) else {
-        return;
-    };
+fn schedule_digest(app: &tauri::AppHandle, hour: u8, rows: &[(String, Option<i64>)]) -> bool {
     let n = rows.len();
     let timed = rows.iter().filter(|(_, t)| t.is_some()).count();
     let lines: Vec<String> = rows
@@ -767,32 +815,38 @@ fn schedule_digest(app: &tauri::AppHandle, ts: NaiveDateTime, rows: &[(String, O
         .title(title.clone())
         .summary(summary.clone())
         .channel_id(TASKS_CHANNEL_ID)
-        .schedule(Schedule::At {
-            date: at,
-            repeating: false,
+        .schedule(Schedule::Interval {
+            interval: ScheduleInterval {
+                hour: Some(hour),
+                minute: Some(0),
+                ..Default::default()
+            },
             allow_while_idle: true,
         });
     for line in &lines {
         b = b.inbox_line(line.clone());
     }
-    let _ = b.show();
-    // Запись в persisted-хранилище плагина (см. persist_scheduled) — без неё
-    // дайджест не переживёт перезагрузку и не будет отменён при выключении.
-    if let Some(date) = js_date_utc(to_local(&ts).timestamp()) {
-        persist_scheduled(
-            app,
-            DIGEST_NOTIFICATION_ID,
-            scheduled_json(
-                DIGEST_NOTIFICATION_ID,
-                &title,
-                None,
-                None,
-                Some(&lines),
-                Some(&summary),
-                &date,
-            ),
-        );
+    if let Err(e) = b.show() {
+        // Проглоченная ошибка здесь = дайджест молча не приходит, а sync
+        // считает его поставленным (запись в хранилище есть). Лог + отказ
+        // от записи: следующий тик повторит попытку.
+        eprintln!("[notify] дайджест не спланирован: {e}");
+        return false;
     }
+    persist_scheduled(
+        app,
+        DIGEST_NOTIFICATION_ID,
+        scheduled_json(
+            DIGEST_NOTIFICATION_ID,
+            &title,
+            None,
+            None,
+            Some(&lines),
+            Some(&summary),
+            interval_schedule(hour),
+        ),
+    );
+    true
 }
 
 /// Что делать с алармом дайджеста в этом тике. Чистая логика (живёт под
@@ -876,27 +930,25 @@ fn sync_scheduled(app: &tauri::AppHandle, prefs: &NotifyPrefs) {
     let mut expected: HashSet<i32> = HashSet::new();
     let now = Local::now().naive_local();
 
-    // 1. Утренний дайджест: одноразовое At на сегодняшний час (если не наступил)
-    // ИЛИ на завтра (если сегодня уже прошло). Завтрашний дайджест планируется
-    // заранее, чтобы AlarmManager сработал утром даже если устройство спало всю ночь.
+    // 1. Утренний дайджест — повторяющийся Interval-аларм «каждый день в
+    // настроенный час»: ОС перепланирует его сама после каждого срабатывания
+    // и после перезагрузки, поэтому он не зависит от запусков приложения.
+    // Наша роль — держать КОНТЕНТ дня свежим: отпечаток дня пересчитывается
+    // каждый тик, при изменении задач аларм перезаписывается (show() снимает
+    // старый), при пустом дне — снимается. Запрос дня дешёвый (индекс
+    // idx_tasks_date_active), JNI-вызов + запись хранилища — только при
+    // реальном изменении.
     if prefs.day_summary {
         let now_date = Local::now().date_naive();
         let today_ts = now_date.and_hms_opt(prefs.day_summary_hour as u32, 0, 0);
-        let target = if today_ts.is_some_and(|ts| ts > now) {
-            today_ts.map(|ts| (ts, crate::commands::today_epoch_day()))
+        let target_epoch = if today_ts.is_some_and(|ts| ts > now) {
+            Some(crate::commands::today_epoch_day())
         } else {
             now_date
                 .checked_add_days(chrono::Days::new(1))
-                .and_then(|d| d.and_hms_opt(prefs.day_summary_hour as u32, 0, 0))
-                .map(|ts| (ts, crate::commands::date_to_epoch(ts.date())))
+                .map(crate::commands::date_to_epoch)
         };
-        if let Some((ts, target_epoch)) = target {
-            // Перепланируем не только когда аларма нет, но и когда сменился
-            // КОНТЕНТ дня: поставленный вечером дайджест на завтра иначе
-            // застывал — задачи, добавленные после планирования, в него уже
-            // не попадали. Запрос дня дешёвый (индекс idx_tasks_date_active),
-            // поэтому отпечаток считаем каждый тик, а JNI-вызов (show +
-            // запись хранилища) делаем только при реальном изменении.
+        if let Some(target_epoch) = target_epoch {
             let tasks = day_task_rows(app, target_epoch);
             let fp = digest_fingerprint(target_epoch, &tasks);
             let action = digest_action(
@@ -907,9 +959,14 @@ fn sync_scheduled(app: &tauri::AppHandle, prefs: &NotifyPrefs) {
             );
             match action {
                 DigestAction::Schedule => {
-                    expected.insert(DIGEST_NOTIFICATION_ID);
-                    schedule_digest(app, ts, &tasks);
-                    set_digest_armed(Some((target_epoch, fp)));
+                    let hour = u8::try_from(prefs.day_summary_hour).unwrap_or(8);
+                    if schedule_digest(app, hour, &tasks) {
+                        expected.insert(DIGEST_NOTIFICATION_ID);
+                        set_digest_armed(Some((target_epoch, fp)));
+                    }
+                    // При отказе планирования НЕ добавляем в expected и не
+                    // ставим armed: cancel-шаг снимет протухшую запись,
+                    // следующий тик повторит попытку.
                 }
                 DigestAction::Keep => {
                     expected.insert(DIGEST_NOTIFICATION_ID);
@@ -1237,6 +1294,8 @@ mod tests {
     /// Запись для persisted-хранилища плагина: только поля его Kotlin-класса
     /// Notification и никакого `extra` (JSObject jackson не разбирает, и вся
     /// запись пропускается — так хранилище осталось пустым на устройстве).
+    /// Формы расписания: At (напоминание, точная дата) и Interval (дайджест,
+    /// «каждый день в час:00») — обе обязанны разбираться jackson-ом плагина.
     #[test]
     fn persisted_json_matches_plugin_fields() {
         let fields = [
@@ -1264,6 +1323,9 @@ mod tests {
             "number",
         ];
         let lines = vec!["09:00  Задача".to_string()];
+        // Дайджест: Interval с ДВОЙНОЙ вложенностью interval.interval —
+        // внешний ключ выбирает вариант расписания в NotificationSchedule-
+        // десериализаторе, внутренний — это DateMatch (hour/minute).
         let v = scheduled_json(
             1,
             "План на сегодня: 1 задача",
@@ -1271,7 +1333,7 @@ mod tests {
             None,
             Some(&lines),
             Some("в течение дня"),
-            "2026-09-24T19:00:00.000Z",
+            interval_schedule(8),
         );
         for key in v.as_object().expect("object").keys() {
             assert!(
@@ -1286,12 +1348,24 @@ mod tests {
         assert_eq!(v["id"], 1);
         assert_eq!(v["channelId"], TASKS_CHANNEL_ID);
         assert_eq!(v["inboxLines"][0], "09:00  Задача");
-        assert_eq!(v["schedule"]["at"]["allowWhileIdle"], true);
-        assert_eq!(v["schedule"]["at"]["date"], "2026-09-24T19:00:00.000Z");
-        // Минимальный набор (напоминание) тоже валиден.
-        let r = scheduled_json(2, "Напоминание", Some("B"), Some("B"), None, None, "x");
+        assert_eq!(v["schedule"]["interval"]["allowWhileIdle"], true);
+        assert_eq!(v["schedule"]["interval"]["interval"]["hour"], 8);
+        assert_eq!(v["schedule"]["interval"]["interval"]["minute"], 0);
+        // Минимальный набор (напоминание, At) тоже валиден.
+        let r = scheduled_json(
+            2,
+            "Напоминание",
+            Some("B"),
+            Some("B"),
+            None,
+            None,
+            at_schedule("2026-09-24T19:00:00.000Z"),
+        );
         assert_eq!(r["largeBody"], "B");
         assert!(r.get("summary").is_none());
+        assert_eq!(r["schedule"]["at"]["date"], "2026-09-24T19:00:00.000Z");
+        assert_eq!(r["schedule"]["at"]["repeating"], false);
+        assert_eq!(r["schedule"]["at"]["allowWhileIdle"], true);
     }
 
     /// Дата для persisted-хранилища плагина: UTC, миллисекунды, суффикс Z —
@@ -1309,6 +1383,39 @@ mod tests {
             Some("2026-09-23T19:00:00.000Z")
         );
         assert_eq!(js_date_utc(i64::MAX), None);
+    }
+
+    /// JSON печатного Schedule::Interval (этим путём ставится будильник) и
+    /// рука собранная запись interval_schedule (этим путём пишется хранилище)
+    /// обязаны совпадать байт-в-байт: расхождение форм = будильник одного
+    /// вида, а запись другого (после перезагрузки restore восстановит не то).
+    /// Двойная вложенность interval.interval — контракт Kotlin-десериализатора
+    /// (внешний ключ = вариант At/Interval/Every, внутренний = DateMatch).
+    #[test]
+    fn interval_schedule_matches_typed_enum() {
+        use tauri_plugin_notification::{Schedule, ScheduleInterval};
+        let typed = serde_json::to_value(Schedule::Interval {
+            interval: ScheduleInterval {
+                hour: Some(8),
+                minute: Some(0),
+                ..Default::default()
+            },
+            allow_while_idle: true,
+        })
+        .expect("serialize");
+        assert_eq!(typed, interval_schedule(8));
+        // Нулевой час не должен потеряться (0:00 — валидное время дайджеста).
+        let midnight = serde_json::to_value(Schedule::Interval {
+            interval: ScheduleInterval {
+                hour: Some(0),
+                minute: Some(0),
+                ..Default::default()
+            },
+            allow_while_idle: true,
+        })
+        .expect("serialize");
+        assert_eq!(midnight, interval_schedule(0));
+        assert_eq!(midnight["interval"]["interval"]["hour"], 0);
     }
 
     /// Решение по аларму дайджеста: без аларма — ставим; с тем же контентом —
