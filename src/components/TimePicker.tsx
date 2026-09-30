@@ -4,6 +4,7 @@ import { formatMinutes } from "../date";
 import { useStore } from "../store";
 import { useMediaQuery } from "../useMediaQuery";
 import { Icon } from "./Icon";
+import { useI18n, t } from "../i18n";
 
 interface Props {
   /** Текущее время в минутах, или null = «в течение дня». */
@@ -47,6 +48,7 @@ export function TimePicker({
   onChangeDuration,
   conflict = false,
 }: Props) {
+  const { t } = useI18n();
   const [editing, setEditing] = useState(false);
   const timePresets = useStore((s) => s.timePresets);
   // Общий listener на запрос (см. useMediaQuery) — тач-раскладка селектов.
@@ -76,9 +78,9 @@ export function TimePicker({
         type="button"
         style={presetBtn(value === null)}
         onClick={() => { onChange(null); setEditing(false); }}
-        title="Без привязки ко времени"
+        title={t("task.noTime")}
       >
-        в течение дня
+        {t("task.withinDay")}
       </button>
       {timePresets.length > 0 && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-2)", margin: "var(--sp-2) 0" }}>
@@ -96,7 +98,7 @@ export function TimePicker({
       )}
       {/* Нативное системное окно выбора времени (Android — системные часы). */}
       <div style={{ marginTop: "var(--sp-2)" }}>
-        <div style={labelStyle}>Своё время</div>
+        <div style={labelStyle}>{t("time.ownTime")}</div>
         <input
           type="time"
           value={value !== null ? formatMinutes(value) ?? "" : ""}
@@ -106,14 +108,14 @@ export function TimePicker({
           // пикера — ловим и blur (применение идемпотентно, повтор не вредит).
           onBlur={(e) => pickTime(e.currentTarget.value)}
           style={timeInputStyle}
-          title="Выбрать время системными часами"
+          title={t("time.pickSystem")}
         />
       </div>
       {/* Выезд заранее (время в пути): пресеты + своё значение часами и
           минутами (системные селекты — количество, не время суток). */}
       {onChangeTravel && (
         <div style={{ marginTop: "var(--sp-3)" }}>
-          <div style={labelStyle}>Выехать заранее</div>
+          <div style={labelStyle}>{t("time.leaveEarly")}</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-1)", alignItems: "center" }}>
             {[null, 15, 30, 45, 60, 90].map((v) => (
               <button
@@ -122,7 +124,7 @@ export function TimePicker({
                 onClick={() => onChangeTravel(v)}
                 style={presetBtn(travelTime === v)}
               >
-                {v === null ? "—" : `${v} мин`}
+                {v === null ? "—" : t("unit.minutesN", { n: v })}
               </button>
             ))}
             {onChangeTravel && <DurationSelect value={travelTime ?? null} onChange={onChangeTravel} />}
@@ -132,7 +134,7 @@ export function TimePicker({
       {/* Длительность выполнения: пресеты + своё значение часами/минутами. */}
       {onChangeDuration && (
         <div style={{ marginTop: "var(--sp-3)" }}>
-          <div style={labelStyle}>Длительность</div>
+          <div style={labelStyle}>{t("time.duration")}</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-1)", alignItems: "center" }}>
             {[null, 30, 60, 90, 120, 180].map((v) => (
               <button
@@ -153,9 +155,9 @@ export function TimePicker({
           type="button"
           onClick={() => setEditing(false)}
           style={submitStyle}
-          title="Закрыть"
+          title={t("common.close")}
         >
-          Готово
+          {t("common.done")}
         </button>
       )}
     </>
@@ -173,14 +175,14 @@ export function TimePicker({
           alignItems: "center",
           gap: "var(--sp-3)",
         }}
-        title={conflict ? "Время пересекается с другой задачей" : "Изменить время"}
+        title={conflict ? t("task.timeConflict") : t("time.changeTime")}
       >
         {!compact && <Icon name="clock" size={large ? 16 : 13} />}
         {value !== null
           ? formatMinutes(value)
           : compact
-            ? "в теч. дня"
-            : "в течение дня"}
+            ? t("task.withinDayShort")
+            : t("task.withinDay")}
       </button>
 
       {editing && (
@@ -214,6 +216,7 @@ export function DurationSelect({
   onChange: (m: number | null) => void;
   maxHours?: number;
 }) {
+  const { t } = useI18n();
   // Локальные строки полей: пока пользователь печатает, поле не «прыгает»
   // (контролируемое число с onChange-коммитом затирало бы ввод).
   const [hStr, setHStr] = useState<string>(() =>
@@ -255,9 +258,9 @@ export function DurationSelect({
         onChange={(e) => setHStr(e.target.value)}
         onKeyDown={onKey}
         style={numStyle}
-        title={`Часы (до ${maxHours})`}
+        title={t("time.hoursMax", { n: maxHours })}
       />
-      <span style={unitStyle}>ч</span>
+      <span style={unitStyle}>{t("unit.hour")}</span>
       <input
         type="number"
         inputMode="numeric"
@@ -267,16 +270,16 @@ export function DurationSelect({
         onChange={(e) => setMStr(e.target.value)}
         onKeyDown={onKey}
         style={numStyle}
-        title="Минуты"
+        title={t("time.minutes")}
       />
-      <span style={unitStyle}>мин</span>
+      <span style={unitStyle}>{t("unit.min")}</span>
       <button
         type="button"
         onClick={commit}
         style={okBtnStyle}
-        title="Применить значение"
+        title={t("time.applyValue")}
       >
-        ОК
+        {t("common.ok")}
       </button>
     </div>
   );
@@ -284,10 +287,10 @@ export function DurationSelect({
 
 /** Подпись длительности: 30 мин / 1 ч / 1 ч 15 мин / 2 ч. */
 function fmtDur(v: number): string {
-  if (v < 60) return `${v} мин`;
+  if (v < 60) return t("unit.minutesN", { n: v });
   const h = Math.floor(v / 60);
   const m = v % 60;
-  return m === 0 ? `${h} ч` : `${h} ч ${m} мин`;
+  return m === 0 ? t("unit.hoursN", { n: h }) : t("unit.hoursMinN", { n: h, m });
 }
 
 const pickerStyle: React.CSSProperties = { position: "relative", display: "inline-flex" };

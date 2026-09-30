@@ -14,6 +14,7 @@ import { useMediaQuery } from "../useMediaQuery";
 import { useStore, type TaskPattern } from "../store";
 import { showToast } from "../toast";
 import { createTaskFromPattern } from "../api";
+import { useI18n } from "../i18n";
 
 interface Props {
   day: Date;
@@ -29,6 +30,7 @@ interface Props {
  * (◀ вчера / завтра ▶) и на любой день в мини-календаре.
  */
 export function DayView({ day, tasks, archivedTasks, onChange }: Props) {
+  const { t } = useI18n();
   const [newTitle, setNewTitle] = useState("");
   const newInputRef = useRef<HTMLInputElement>(null);
 
@@ -47,14 +49,14 @@ export function DayView({ day, tasks, archivedTasks, onChange }: Props) {
   const dayKey = `${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`;
 
   const addTask = async () => {
-    const t = newTitle.trim();
-    if (!t) return;
+    const title = newTitle.trim();
+    if (!title) return;
     try {
-      await api.upsertTask({ title: t, date: epochDay });
+      await api.upsertTask({ title, date: epochDay });
       setNewTitle("");
     } catch (e) {
       // Текст не стираем — после сбоя можно повторить сохранение.
-      showToast(`Не удалось сохранить задачу: ${e}`);
+      showToast(t("err.saveTask", { error: String(e) }));
     }
     onChange();
     requestAnimationFrame(() => newInputRef.current?.focus());
@@ -66,7 +68,7 @@ export function DayView({ day, tasks, archivedTasks, onChange }: Props) {
     try {
       await api.upsertTask({ title: "", date: epochDay, sortOrder: sort });
     } catch (e) {
-      showToast(`Не удалось создать задачу: ${e}`);
+      showToast(t("err.createTask", { error: String(e) }));
       return;
     }
     onChange();
@@ -106,13 +108,14 @@ export function DayView({ day, tasks, archivedTasks, onChange }: Props) {
       />
       {/* Боковая зона «завтра» — перенос задачи/подзадачи на завтра;
           в узком окне (tiny) скрыта, чтобы не красть ширину у задач */}
-      {!tiny && <SideDayZone day={nextDay} label="завтра ▶" />}
+      {!tiny && <SideDayZone day={nextDay} label={t("day.tomorrow")} />}
     </div>
   );
 }
 
 /** Боковая узкая зона для переноса задачи на соседний день. */
 function SideDayZone({ day, label }: { day: Date; label: string }) {
+  const { t, lang } = useI18n();
   const ed = toEpochDay(day);
   const { setNodeRef, isOver } = useDroppable({ id: dayId(ed) });
   return (
@@ -134,7 +137,7 @@ function SideDayZone({ day, label }: { day: Date; label: string }) {
         margin: "var(--sp-2)",
         userSelect: "none",
       }}
-      title={`Перетащите на ${day.toLocaleDateString("ru", { day: "numeric", month: "long" })}`}
+      title={t("day.dragToDate", { date: day.toLocaleDateString(lang, { day: "numeric", month: "long" }) })}
     >
       {label}
     </div>
@@ -167,6 +170,7 @@ function DayTasksArea({
   addTask: () => void;
   newInputRef: React.RefObject<HTMLInputElement | null>;
 }) {
+  const { t, lang } = useI18n();
   // В DayView droppable-дни на десктопе обслуживает MiniCalendar (ячейки)
   // и SideDayZone (завтра). Но на узких экранах (panelNarrow) календарь скрыт —
   // поэтому здесь включаем droppable для dayId(epochDay) только при panelNarrow.
@@ -214,7 +218,7 @@ function DayTasksArea({
             textTransform: "capitalize",
           }}
         >
-          {day.toLocaleDateString("ru", {
+          {day.toLocaleDateString(lang, {
             day: "numeric",
             month: "long",
             weekday: "long",
@@ -226,7 +230,7 @@ function DayTasksArea({
       <div>
         {dayTasks.length === 0 && (
           <p style={{ color: COLORS.muted, fontSize: "var(--fs-base)" }}>
-            Нет задач. Напишите ниже, чтобы добавить.
+            {t("day.noTasks")}
           </p>
         )}
         {dayTasks.map((t) => (
@@ -267,7 +271,7 @@ function DayTasksArea({
             value={newTitle}
             onChange={(e) => setNewTitle(e.target.value)}
             enterKeyHint="done"
-            placeholder="+ добавить задачу"
+            placeholder={t("day.addTaskPh")}
             style={{
               width: "100%",
               border: "none",
@@ -282,7 +286,7 @@ function DayTasksArea({
         <button
           className="chip-btn-sm"
           onClick={() => setAddOpen(true)}
-          title="Настроить задачу: время, приоритет, длительность, категория"
+          title={t("task.configure")}
           style={{ flexShrink: 0 }}
         >
           <Icon name="gear" size={12} />
@@ -301,7 +305,7 @@ function DayTasksArea({
       {taskPatterns.length > 0 && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-2)", padding: "var(--sp-1) var(--sp-2)" }}>
           <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted, alignSelf: "center" }}>
-            + Шаблон
+            {t("task.template")}
           </span>
           {taskPatterns.map((p) => (
             <button
@@ -310,8 +314,8 @@ function DayTasksArea({
               onClick={() => addPattern(p)}
               title={
                 p.timeMinutes != null
-                  ? `${formatMinutes(p.timeMinutes)} · ${p.durationMinutes ? `${p.durationMinutes} мин` : "без длительности"}`
-                  : "в течение дня"
+                  ? `${formatMinutes(p.timeMinutes)} · ${p.durationMinutes ? t("unit.minutesN", { n: p.durationMinutes }) : t("unit.noDuration")}`
+                  : t("task.withinDay")
               }
             >
               {p.title}
@@ -344,9 +348,9 @@ function DayTasksArea({
               className="text-chip"
               onClick={() => setArchiveOpen(true)}
               style={{ margin: "var(--sp-3) var(--sp-1)" }}
-              title="Архив задач"
+              title={t("task.archiveTitle")}
             >
-              Архив ({archivedTasks.length})
+              {t("task.archiveCount", { n: archivedTasks.length })}
             </button>
           )}
         </div>

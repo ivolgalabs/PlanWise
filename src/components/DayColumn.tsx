@@ -6,6 +6,7 @@ import { isToday, isPast, dayWeight, toEpochDay } from "../date";
 import { TaskCard } from "./TaskCard";
 import { COLORS, accentTint } from "../theme";
 import { dayId } from "../drag";
+import { useI18n } from "../i18n";
 
 interface Props {
   day: Date;
@@ -23,12 +24,13 @@ export function DayColumn({
   tasks,
   onChange,
 }: Props) {
+  const { t, lang } = useI18n();
   const [newTitle, setNewTitle] = useState("");
   const newInputRef = useRef<HTMLInputElement>(null);
   const today = isToday(day);
   const past = isPast(day);
   const weight = dayWeight(day);
-  const weekday = day.toLocaleDateString("ru", { weekday: "short" });
+  const weekday = day.toLocaleDateString(lang, { weekday: "short" });
   const dayNum = day.getDate();
   // Иерархия по весу дня: past — бледный/компактный, today/tomorrow — крупные,
   // остальные будущие — одинаково нормальные (иначе пятница яркая, а суббота
@@ -51,9 +53,9 @@ export function DayColumn({
   const { setNodeRef, isOver } = useDroppable({ id: dayId(epochDay) });
 
   const addTask = async () => {
-    const t = newTitle.trim();
-    if (!t) return;
-    await api.upsertTask({ title: t, date: epochDay });
+    const title = newTitle.trim();
+    if (!title) return;
+    await api.upsertTask({ title, date: epochDay });
     setNewTitle("");
     onChange();
     // Вернуть фокус на поле ввода для непрерывного набора.
@@ -159,7 +161,7 @@ export function DayColumn({
           value={newTitle}
           onChange={(e) => setNewTitle(e.target.value)}
           enterKeyHint="done"
-          placeholder="+ добавить"
+          placeholder={t("day.addPh")}
           style={{
             width: "100%",
             border: "none",

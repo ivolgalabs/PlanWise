@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import type { Task, Subtask, ColorSet } from "../api";
 import { api } from "../api";
@@ -11,6 +11,7 @@ import { useSubtasks } from "../useSubtasks";
 import { TaskFormFields } from "../components/AddTaskModal";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Icon } from "../components/Icon";
+import { useI18n } from "../i18n";
 
 interface Props {
   tasks: Task[];
@@ -30,6 +31,7 @@ interface Props {
  * Drag задач между днями — через @dnd-kit.
  */
 export function MonthView({ tasks, onSelectDay, onSelectWeek, onChange }: Props) {
+  const { t, lang } = useI18n();
   const selectedDate = useStore((s) => s.selectedDate);
   const monthDate = useStore((s) => s.monthDate);
   const setMonthDate = useStore((s) => s.setMonthDate);
@@ -80,9 +82,19 @@ export function MonthView({ tasks, onSelectDay, onSelectWeek, onChange }: Props)
     wk.some((d) => isToday(d)),
   );
 
-  const weekdays = mondayFirst
-    ? ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
-    : ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
+  // Короткие имена дней недели — из Intl по текущему языку (порядок: от начала
+  // недели; 2024-01-01 — понедельник как точка отсчёта Пн…Вс).
+  const weekdays = useMemo(() => {
+    const fmt = new Intl.DateTimeFormat(lang, { weekday: "short" });
+    const base = new Date(2024, 0, 1);
+    const monFirst = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(base);
+      d.setDate(base.getDate() + i);
+      const s = fmt.format(d);
+      return s.charAt(0).toUpperCase() + s.slice(1);
+    });
+    return mondayFirst ? monFirst : [monFirst[6]!, ...monFirst.slice(0, 6)];
+  }, [lang, mondayFirst]);
 
   const openDay = (d: Date) => {
     setMenuDay(null);
@@ -95,7 +107,7 @@ export function MonthView({ tasks, onSelectDay, onSelectWeek, onChange }: Props)
     <>
       {dayList.length === 0 && (
         <p style={{ margin: 0, padding: "var(--sp-1) 0", fontSize: "var(--fs-sm)", color: COLORS.muted }}>
-          Нет задач на этот день
+          {t("month.noTasks")}
         </p>
       )}
       {dayList.map((t) => (
@@ -125,9 +137,9 @@ export function MonthView({ tasks, onSelectDay, onSelectWeek, onChange }: Props)
     <>
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, padding: "var(--sp-4)" }}>
       <div style={{ display: "flex" }}>
-        {weekdays.map((w) => (
+        {weekdays.map((w, i) => (
           <div
-            key={w}
+            key={i}
             style={{
               flex: 1,
               textAlign: "center",
@@ -206,7 +218,7 @@ export function MonthView({ tasks, onSelectDay, onSelectWeek, onChange }: Props)
             }}
           >
             <div style={{ fontSize: "var(--fs-lg)", fontWeight: 700, color: COLORS.text, marginBottom: "var(--sp-5)", textTransform: "capitalize", flexShrink: 0 }}>
-              {menuDay.toLocaleDateString("ru", { day: "numeric", month: "long", weekday: "long" })}
+              {menuDay.toLocaleDateString(lang, { day: "numeric", month: "long", weekday: "long" })}
             </div>
 
             {wide ? (
@@ -235,7 +247,7 @@ export function MonthView({ tasks, onSelectDay, onSelectWeek, onChange }: Props)
                       onClick={() => openDay(menuDay)}
                       style={{ flex: 1 }}
                     >
-                      К дню
+                      {t("month.toDay")}
                     </button>
                     <button
                       className="modal-action-btn"
@@ -245,7 +257,7 @@ export function MonthView({ tasks, onSelectDay, onSelectWeek, onChange }: Props)
                       }}
                       style={{ flex: 1 }}
                     >
-                      К неделе
+                      {t("month.toWeek")}
                     </button>
                   </div>
                 </div>
@@ -273,7 +285,7 @@ export function MonthView({ tasks, onSelectDay, onSelectWeek, onChange }: Props)
                       onClick={() => openDay(menuDay)}
                       style={{ flex: 1 }}
                     >
-                      К дню
+                      {t("month.toDay")}
                     </button>
                     <button
                       className="modal-action-btn"
@@ -283,7 +295,7 @@ export function MonthView({ tasks, onSelectDay, onSelectWeek, onChange }: Props)
                       }}
                       style={{ flex: 1 }}
                     >
-                      К неделе
+                      {t("month.toWeek")}
                     </button>
                   </div>
                 </div>
@@ -296,12 +308,12 @@ export function MonthView({ tasks, onSelectDay, onSelectWeek, onChange }: Props)
       {/* Подтверждение удаления задачи (как в карточке задачи). */}
       {confirmDel && (
         <ConfirmDialog
-          title={`Удалить задачу «${confirmDel.title.trim() || "без названия"}»?`}
-          confirmLabel="Удалить"
+          title={t("form.confirmDelete", { title: confirmDel.title.trim() || t("common.unnamed") })}
+          confirmLabel={t("common.delete")}
           onConfirm={async () => {
-            const t = confirmDel;
+            const task = confirmDel;
             setConfirmDel(null);
-            await api.deleteTask(t.id);
+            await api.deleteTask(task.id);
             onChange();
           }}
           onCancel={() => setConfirmDel(null)}
@@ -324,6 +336,7 @@ function MonthCell({
   dayTasks: Task[];
   onClickDay: () => void;
 }) {
+  const { lang } = useI18n();
   const isTd = isToday(day);
   const past = isPast(day);
   const ed = toEpochDay(day);
@@ -334,7 +347,7 @@ function MonthCell({
       ref={setNodeRef}
       role="button"
       tabIndex={0}
-      aria-label={day.toLocaleDateString("ru", { day: "numeric", month: "long" })}
+      aria-label={day.toLocaleDateString(lang, { day: "numeric", month: "long" })}
       onClick={onClickDay}
       onKeyDown={(e) => {
         // Клавиатура: Enter/пробел открывают меню дня (как клик).
@@ -450,6 +463,7 @@ function MonthTaskRow({
   onRename: (title: string) => Promise<void>;
   onDelete: () => void;
 }) {
+  const { t } = useI18n();
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(task.title);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -461,9 +475,9 @@ function MonthTaskRow({
   }, [editing]);
 
   const commit = async () => {
-    const t = value.trim();
+    const nextTitle = value.trim();
     setEditing(false);
-    if (t && t !== task.title) await onRename(t);
+    if (nextTitle && nextTitle !== task.title) await onRename(nextTitle);
   };
 
   // Время: при длительности показываем ТОЛЬКО диапазон «09:00–10:30» (бейдж),
@@ -476,7 +490,7 @@ function MonthTaskRow({
   const timeBadge = hasTime ? (
     <span
       className={`task-time has${conflict ? " conflict" : ""}`}
-      title={conflict ? "Время пересекается с другой задачей" : undefined}
+      title={conflict ? t("task.timeConflict") : undefined}
     >
       {timeText}
     </span>
@@ -610,7 +624,7 @@ function MonthTaskRow({
           e.stopPropagation();
           onDelete();
         }}
-        title="Удалить задачу"
+        title={t("form.deleteTaskTitle")}
         style={{ flexShrink: 0 }}
       >
         <Icon name="close" size={11} />
@@ -657,6 +671,7 @@ function MonthSubRow({
   /** Перечитать список подзадач после переименования/удаления. */
   onChanged: () => void;
 }) {
+  const { t } = useI18n();
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(sub.title);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -668,10 +683,10 @@ function MonthSubRow({
   }, [editing]);
 
   const commit = () => {
-    const t = value.trim();
+    const nextTitle = value.trim();
     setEditing(false);
-    if (t && t !== sub.title) {
-      api.upsertSubtask({ ...sub, title: t }).then(onChanged);
+    if (nextTitle && nextTitle !== sub.title) {
+      api.upsertSubtask({ ...sub, title: nextTitle }).then(onChanged);
     }
   };
 
@@ -754,7 +769,7 @@ function MonthSubRow({
           await api.deleteSubtask(sub.id);
           onChanged();
         }}
-        title="Удалить подзадачу"
+        title={t("month.deleteSubtask")}
         style={{ flexShrink: 0 }}
       >
         <Icon name="close" size={10} />

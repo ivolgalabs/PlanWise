@@ -19,6 +19,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useStore } from "./store";
 import { showToast } from "./toast";
+import { t } from "./i18n";
 
 const IMPORT_CHECK_MS = 60_000;
 const EXPORT_DEBOUNCE_MS = 2_000;
@@ -114,7 +115,7 @@ export async function checkForImport(onImported: () => void): Promise<void> {
   } catch (e) {
     // НЕ «файла нет»: папка отозвана/перемещена/недоступна — сообщаем.
     console.error("Автосинхронизация: файл не читается:", e);
-    toastOnce("Не удалось прочитать файл синхронизации — проверьте папку в настройках");
+    toastOnce(t("err.syncRead"));
     return;
   }
   if (!raw) return; // файла ещё нет — норма

@@ -4,6 +4,7 @@ import { COLORS, argbToHex, accentTint } from "../theme";
 import { useStore } from "../store";
 import { Icon } from "./Icon";
 import type { PeriodFilter, StatusFilter, SortKey } from "../views/SearchResults";
+import { useI18n } from "../i18n";
 
 interface Props {
   query: string;
@@ -106,6 +107,7 @@ function FilterSelect<T extends string>({ label, value, options, open, onToggle,
 /** Полоса поиска: текст, категории (чипы с именами), период/статус/сортировка
  *  — компактные выпадающие фильтры в один ряд. */
 export function SearchBar({ query, onQuery, color, onColor, period, status, sort, onPeriod, onStatus, onSort, from, to, onFrom, onTo, onClose }: Props) {
+  const { t } = useI18n();
   const colorSets = useStore((s) => s.colorSets);
   const sets = colorSets.filter((s) => s.id !== "cs-none");
   // Какой фильтр раскрыт (один на панель); null — все свёрнуты.
@@ -129,13 +131,13 @@ export function SearchBar({ query, onQuery, color, onColor, period, status, sort
     <div ref={barRef} style={{ padding: "var(--sp-1) var(--sp-4)", borderBottom: `1px solid var(--border-color)`, display: "flex", flexDirection: "column", gap: "var(--sp-1)" }}>
       {/* Ряд 1: инпут (заметно выше — текст не липнет к краям) + закрыть */}
       <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)" }}>
-        <input autoFocus value={query} onChange={(e) => onQuery(e.target.value)} placeholder="Поиск задач…" className="inline-input" style={{ flex: 1, minWidth: 0, border: `1px solid var(--border-color)`, borderRadius: "var(--radius-md)", padding: "8px 12px", fontSize: "var(--fs-md)", background: "transparent", color: COLORS.text, outline: "none" }} />
-        <button className="icon-btn" onClick={onClose} title="Закрыть поиск"><Icon name="close" size={14} /></button>
+        <input autoFocus value={query} onChange={(e) => onQuery(e.target.value)} placeholder={t("search.placeholder")} className="inline-input" style={{ flex: 1, minWidth: 0, border: `1px solid var(--border-color)`, borderRadius: "var(--radius-md)", padding: "8px 12px", fontSize: "var(--fs-md)", background: "transparent", color: COLORS.text, outline: "none" }} />
+        <button className="icon-btn" onClick={onClose} title={t("topBar.closeSearch")}><Icon name="close" size={14} /></button>
       </div>
       {/* Ряд 2: категории + период/статус/сортировка — один компактный ряд
           с переносом, чтобы не занимать лишнюю высоту */}
       <div style={{ display: "flex", gap: "var(--sp-2)", flexWrap: "wrap", alignItems: "center", paddingBottom: 2 }}>
-        <button className="text-chip" onClick={() => onColor(null)} style={{ border: `1px solid ${color === null ? COLORS.accent : "transparent"}`, background: color === null ? accentTint(0.1) : "transparent" }}>Все</button>
+        <button className="text-chip" onClick={() => onColor(null)} style={{ border: `1px solid ${color === null ? COLORS.accent : "transparent"}`, background: color === null ? accentTint(0.1) : "transparent" }}>{t("common.all")}</button>
         {sets.map((c) => (
           <button key={c.id} className="text-chip" onClick={() => onColor(c.id)} title={c.name}
             style={{ border: `1px solid ${color === c.id ? COLORS.accent : "transparent"}`, background: color === c.id ? accentTint(0.1) : "transparent" }}>
@@ -143,24 +145,24 @@ export function SearchBar({ query, onQuery, color, onColor, period, status, sort
             {c.name}
           </button>
         ))}
-        <FilterSelect label="Период" value={period} options={[["all", "Все"], ["today", "Сегодня"], ["overdue", "Просроч."], ["7days", "7 дней"], ["month", "Месяц"], ["custom", "Произвольный…"]] as const}
+        <FilterSelect label={t("search.period")} value={period} options={[["all", t("common.all")], ["today", t("common.today")], ["overdue", t("search.overdue")], ["7days", t("search.days7")], ["month", t("search.month")], ["custom", t("search.custom")]] as const}
           open={openKey === "period"} onToggle={() => toggle("period")} onChange={onPeriod} />
-        <FilterSelect label="Статус" value={status} options={[["all", "Все"], ["active", "Активные"], ["done", "Выполн."]] as const}
+        <FilterSelect label={t("search.status")} value={status} options={[["all", t("common.all")], ["active", t("search.active")], ["done", t("common.doneFilter")]] as const}
           open={openKey === "status"} onToggle={() => toggle("status")} onChange={onStatus} />
-        <FilterSelect label="Сортировка" value={sort} options={[["dateAsc", "По дате ↑"], ["dateDesc", "По дате ↓"], ["alpha", "А-Я"], ["alphaDesc", "Я-А"], ["category", "Категория"]] as const}
+        <FilterSelect label={t("search.sort")} value={sort} options={[["dateAsc", t("search.dateAsc")], ["dateDesc", t("search.dateDesc")], ["alpha", t("search.alphaAsc")], ["alphaDesc", t("search.alphaDesc")], ["category", t("search.category")]] as const}
           open={openKey === "sort"} onToggle={() => toggle("sort")} onChange={onSort} />
       </div>
       {/* Строка диапазона произвольного периода «с/по» */}
       {period === "custom" && (
         <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)", fontSize: "var(--fs-xs)", color: COLORS.muted }}>
-          <span>с</span>
+          <span>{t("search.from")}</span>
           <input
             type="date"
             value={from ? toISODate(from) : ""}
             onChange={(e) => onFrom(e.target.value ? fromISODate(e.target.value) : null)}
             style={{ border: `1px solid var(--border-color)`, borderRadius: "var(--radius-sm)", padding: "2px 6px", background: "transparent", color: COLORS.text, outline: "none" }}
           />
-          <span>по</span>
+          <span>{t("search.to")}</span>
           <input
             type="date"
             value={to ? toISODate(to) : ""}

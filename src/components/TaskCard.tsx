@@ -11,6 +11,7 @@ import { SubtaskList } from "./SubtaskList";
 import { AddTaskModal } from "./AddTaskModal";
 import { Icon } from "./Icon";
 import { taskIdZone } from "../drag";
+import { useI18n } from "../i18n";
 
 interface Props {
   task: Task;
@@ -70,6 +71,7 @@ export const TaskCard = memo(function TaskCard({
   showTime = true,
   compact = false,
 }: Props) {
+  const { t } = useI18n();
   const [title, setTitle] = useState(task.title);
   const [editing, editingSetter] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -256,13 +258,13 @@ export const TaskCard = memo(function TaskCard({
   }, [compact, visibility.taskTime, task.timeMinutes, task.difficulty]);
 
   const save = async (): Promise<Task> => {
-    const t = title.trim();
+    const nextTitle = title.trim();
     // Enter+blur дублируют вызов в течение <300мс — пропускаем повтор.
     const now = Date.now();
     if (now - savedRef.current < 300) return task;
     // Авто-удаление при пустом тексте — ТОЛЬКО если задача изначально была
     // пустой (создана Enter-ом и забыта).
-    if (!t) {
+    if (!nextTitle) {
       if (!task.title) {
         try {
           const subs = await api.getSubtasks(task.id);
@@ -277,9 +279,9 @@ export const TaskCard = memo(function TaskCard({
       }
       return task;
     }
-    if (t !== task.title) {
+    if (nextTitle !== task.title) {
       try {
-        const updated = await api.upsertTask({ ...task, title: t });
+        const updated = await api.upsertTask({ ...task, title: nextTitle });
         // Дедупликацию включаем только после РЕАЛЬНОЙ записи: blur без
         // изменений не должен съедать быстрое сохранение следующим Enter-ом.
         savedRef.current = now;
@@ -290,7 +292,7 @@ export const TaskCard = memo(function TaskCard({
         // чтобы строка вернулась к сохранённому в БД тексту (иначе правка
         // «выглядит» сохранённой, но теряется).
         console.error("Не удалось сохранить задачу:", err);
-        showToast("Не удалось сохранить задачу — проверьте данные приложения");
+        showToast(t("err.saveTaskCheck"));
         onChange();
         return task;
       }
@@ -304,7 +306,7 @@ export const TaskCard = memo(function TaskCard({
       onChange();
     } catch (err) {
       console.error("Не удалось сохранить отметку задачи:", err);
-      showToast("Не удалось сохранить задачу — проверьте данные приложения");
+      showToast(t("err.saveTaskCheck"));
       onChange();
     }
   };
@@ -353,9 +355,9 @@ export const TaskCard = memo(function TaskCard({
   // меняется в карточке). Цвета — глобальные CSS-переменные приоритета
   // (themes.css), адаптируются к теме как остальная палитра.
   const PRIO_META: Record<number, { label: string; color: string }> = {
-    1: { label: "низкий", color: "var(--prio-low)" },
-    2: { label: "средний", color: "var(--prio-med)" },
-    3: { label: "высокий", color: "var(--prio-high)" },
+    1: { label: t("task.low"), color: "var(--prio-low)" },
+    2: { label: t("task.medium"), color: "var(--prio-med)" },
+    3: { label: t("task.high"), color: "var(--prio-high)" },
   };
   const prioMeta = PRIO_META[task.difficulty ?? 0];
 
@@ -386,15 +388,15 @@ export const TaskCard = memo(function TaskCard({
   const timeBadge = (
     <span
       className={`task-time${task.timeMinutes != null ? " has" : ""}${timeConflict ? " conflict" : ""}`}
-      title={timeConflict ? "Время пересекается с другой задачей" : task.timeMinutes != null ? "Нажмите, чтобы настроить время" : "Без привязки ко времени"}
+      title={timeConflict ? t("task.timeConflict") : task.timeMinutes != null ? t("task.configureTime") : t("task.noTime")}
     >
-      {timeText ?? (compact ? "в теч. дня" : "в течение дня")}
+      {timeText ?? (compact ? t("task.withinDayShort") : t("task.withinDay"))}
     </span>
   );
 
   // Чип мягкого срока «Когда-нибудь»: просрочено / в течение недели/месяца / до даты.
   const dueBadge = due != null ? (
-    <span className="task-time has" title="Мягкий срок задачи «Когда-нибудь»">
+    <span className="task-time has" title={t("task.dueSoft")}>
       {dueEpochLabel(due)}
     </span>
   ) : null;
@@ -403,7 +405,7 @@ export const TaskCard = memo(function TaskCard({
   // бейджем); в остальных видах — в ряду задачи, по центру.
   const prioDot = prioMeta ? (
     <span
-      title={`Приоритет: ${prioMeta.label}`}
+      title={t("task.priority", { label: prioMeta.label })}
       style={{
         width: 8,
         height: 8,
@@ -502,7 +504,7 @@ export const TaskCard = memo(function TaskCard({
         background: timeConflict ? "color-mix(in srgb, var(--danger) 9%, transparent)" : "transparent",
         borderRadius: "var(--radius-sm)",
       }}
-      title={timeConflict ? "Время пересекается с другой задачей" : undefined}
+      title={timeConflict ? t("task.timeConflict") : undefined}
       onClick={(e) => {
         // Клик по элементам управления (чекбокс, ручка, поле текста, кнопка
         // «Редактировать») — их собственные обработчики. Любой другой клик
@@ -521,7 +523,7 @@ export const TaskCard = memo(function TaskCard({
           чекбоксу внутри строки работали. */}
       <span
         className="task-drag-hint"
-        title="Зажмите и тяните на другой день"
+        title={t("task.dragHint")}
         ref={handleRef}
         {...listeners}
         style={{
@@ -546,7 +548,7 @@ export const TaskCard = memo(function TaskCard({
       <label
         className="checkbox-hit"
         ref={checkRef}
-        title={task.isDone ? "Отметить невыполненной" : "Отметить выполненной"}
+        title={task.isDone ? t("task.markUndone") : t("task.markDone")}
         style={{
           // Сдвигается САМ label (26px), а не input внутри: центр чекбокса
           // попадает в центр первой строки текста. Сдвиг input внутри label
@@ -688,7 +690,7 @@ export const TaskCard = memo(function TaskCard({
         className="icon-btn"
         ref={editRef}
         onClick={() => setCardOpen(true)}
-        title="Редактировать задачу (время, категория, заметка…)"
+        title={t("task.edit")}
         style={{
           flexShrink: 0,
           marginLeft: "var(--sp-1)",
@@ -707,7 +709,7 @@ export const TaskCard = memo(function TaskCard({
         (flex-row) она сжималась к правому краю и терялась, теперь видно, что
         это заметка. compact (сетка недели) — остаётся под текстом (выше). */}
     {visibility.notes && task.notes && !compact && (
-      <div className="task-note" title="Заметка">
+      <div className="task-note" title={t("task.note")}>
         <Icon name="note" size={13} />
         <span>{task.notes}</span>
       </div>

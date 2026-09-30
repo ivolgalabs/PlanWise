@@ -23,6 +23,7 @@ import { Icon, type IconName } from "./Icon";
 import { DurationSelect } from "./TimePicker";
 import { TaskFormFields } from "./AddTaskModal";
 import type { Task } from "../api";
+import { useI18n, t, LANGS, type Lang, type TKey } from "../i18n";
 import "./SettingsPanel.css";
 
 /** Быстрая палитра цветов категории + свой цвет системным пикером. */
@@ -35,15 +36,17 @@ const CAT_PALETTE = [
 /** Человекочитаемая подпись интервала напоминания: 90 → «1 ч 30 мин»,
  *  10080 → «за 7 дн». Используется в чипах своих интервалов напоминаний. */
 function fmtRemindInterval(m: number): string {
-  if (m < 60) return `${m} мин`;
+  if (m < 60) return t("unit.minutesN", { n: m });
   const h = Math.floor(m / 60);
   const mm = m % 60;
   if (m >= 1440) {
     const d = Math.floor(m / 1440);
     const restH = Math.floor((m % 1440) / 60);
-    return d >= 1 && restH === 0 ? `за ${d} дн` : `за ${d} дн ${restH} ч`;
+    return d >= 1 && restH === 0
+      ? t("unit.daysN", { n: d })
+      : t("unit.daysHoursN", { n: d, m: restH });
   }
-  return mm === 0 ? `${h} ч` : `${h} ч ${mm} мин`;
+  return mm === 0 ? t("unit.hoursN", { n: h }) : t("unit.hoursMinN", { n: h, m: mm });
 }
 
 // Кодирование TMT-кода (канон UUI): TMT-<тема с _ вместо ->-<accent>-<bgType L/O/D/T>-<bgHex>-<slot L/D/N>
@@ -184,6 +187,7 @@ interface SetDraft {
  * OLED + масштаб ползунком), Неделя и Категории (цвет-сеты).
  */
 export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetUI }: Props) {
+  const { t, lang, setLang } = useI18n();
   const {
     view,
     mondayFirst,
@@ -353,7 +357,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
     if (!patternModal) return;
     const pat: TaskPattern = {
       id: patternModal.id || crypto.randomUUID(),
-      title: data.title.trim() || "Без названия",
+      title: data.title.trim() || t("common.untitled"),
       timeMinutes: data.timeMinutes,
       difficulty: data.difficulty,
       durationMinutes: data.durationMinutes,
@@ -422,14 +426,14 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
   };
 
   // ── Вкладки: контент одной секции вместо длинного скролла всех сразу. ──
-  const TABS: [string, string][] = [
-    ["appearance", "Оформление"],
-    ["tasks", "Задачи"],
-    ["time", "Время"],
-    ["notify", "Уведомления"],
-    ["interface", "Интерфейс"],
-    ["categories", "Категории"],
-    ["data", "Данные"],
+  const TABS: [string, TKey][] = [
+    ["appearance", "settings.tabAppearance"],
+    ["tasks", "settings.tabTasks"],
+    ["time", "settings.tabTime"],
+    ["notify", "settings.tabNotify"],
+    ["interface", "settings.tabInterface"],
+    ["categories", "settings.tabCategories"],
+    ["data", "settings.tabData"],
   ];
   const [settingsTab, setSettingsTab] = useState("appearance");
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -467,7 +471,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
   const addDraft = () =>
     setDrafts((ds) => [
       ...ds,
-      { id: "", clientKey: crypto.randomUUID(), name: "Новая категория", color: hexToArgb("#7eb8c4") },
+      { id: "", clientKey: crypto.randomUUID(), name: t("settings.newCategory"), color: hexToArgb("#7eb8c4") },
     ]);
 
   const saveDraft = async (d: SetDraft) => {
@@ -475,7 +479,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
     try {
       saved = await api.upsertColorSet({
         id: d.id || undefined,
-        name: d.name.trim() || "Без названия",
+        name: d.name.trim() || t("common.untitled"),
         color: d.color,
       });
     } catch (e) {
@@ -519,14 +523,14 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
   // автосинк не включаем (подсказка в UI).
   const onPickSyncFolder = async () => {
     if (!isTauri()) {
-      setSyncMsg("Доступно в приложении");
+      setSyncMsg(t("err.appOnly"));
       return;
     }
     try {
       const dir = await open({ directory: true });
       if (typeof dir === "string" && dir) {
         setAutoSyncPath(dir);
-        setSyncMsg(`Папка: ${dir}`);
+        setSyncMsg(t("settings.folder", { path: dir }));
       }
     } catch (e) {
       setSyncMsg(String(e));
@@ -536,7 +540,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
     // В браузере диалог сохранения недоступен — только в Tauri-приложении.
     if (!isTauri()) {
       setDataError(false);
-      setDataMsg("Доступно в приложении");
+      setDataMsg(t("err.appOnly"));
       return;
     }
     if (!isAndroid()) {
@@ -546,7 +550,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
       try {
         const path = await invoke<string>("export_backup");
         setDataError(false);
-        setDataMsg(path ? "Экспортировано ✓" : "Экспорт отменён");
+        setDataMsg(path ? t("settings.exported") : t("settings.exportCancelled"));
       } catch (e) {
         setDataError(true);
         setDataMsg(String(e));
@@ -565,22 +569,22 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
       // fs (std::fs его не понимает); данные отдаёт Rust (export_json).
       const json = await invoke<string>("export_json");
       await writeTextFile(path, json);
-      setDataError(false); setDataMsg("Экспортировано ✓");
+      setDataError(false); setDataMsg(t("settings.exported"));
     } catch (e) { setDataError(true); setDataMsg(String(e)); }
   };
   const onImport = async () => {
     if (!isTauri()) {
       setDataError(false);
-      setDataMsg("Доступно в приложении");
+      setDataMsg(t("err.appOnly"));
       return;
     }
     if (!isAndroid()) {
       // Десктоп: выбор файла, чтение и импорт — на стороне Rust.
-      if (!window.confirm("Данные будут ЗАМЕНЕНЫ данными из файла. Продолжить?")) return;
+      if (!window.confirm(t("settings.confirmReplace"))) return;
       try {
         const n = await invoke<number | null>("import_backup");
-        if (n === null) { setDataError(false); setDataMsg("Импорт отменён"); return; }
-        setDataError(false); setDataMsg(`Импортировано задач: ${n}`);
+        if (n === null) { setDataError(false); setDataMsg(t("settings.importCancelled")); return; }
+        setDataError(false); setDataMsg(t("settings.imported", { n }));
         onSetsChanged();
         onTasksChanged();
       } catch (e) { setDataError(true); setDataMsg(String(e)); }
@@ -591,13 +595,13 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
       path = await open({ filters: [{ name: "JSON", extensions: ["json"] }] });
     } catch (e) { setDataError(true); setDataMsg(String(e)); return; }
     if (!path || Array.isArray(path)) return;
-    if (!window.confirm("Данные будут ЗАМЕНЕНЫ данными из файла. Продолжить?")) return;
+    if (!window.confirm(t("settings.confirmReplace"))) return;
     try {
       // Android: читаем файл плагином fs (content://), замену данных
       // выполняет Rust-команда import_json в транзакции (ошибка — откат).
       const json = await readTextFile(path);
       const n = await invoke<number>("import_json", { json });
-      setDataError(false); setDataMsg(`Импортировано задач: ${n}`);
+      setDataError(false); setDataMsg(t("settings.imported", { n }));
       onSetsChanged();
       onTasksChanged();
     } catch (e) { setDataError(true); setDataMsg(String(e)); }
@@ -643,7 +647,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
     setFontScale(1);
     if (!mondayFirst) toggleMondayFirst();
     onResetUI?.();
-    msg("Настройки интерфейса сброшены к умолчаниям");
+    msg(t("settings.interfaceReset"));
   };
 
   // Применяем черновик (или активный слот) поверх темы вживую.
@@ -682,7 +686,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
   // Конструктор: акцент / фон. (patchDraft — у черновиков категорий выше.)
   const patchSlot = (patch: Partial<CustomSlot>) => {
     setDraft({
-      name: draft?.name || "Мой стиль",
+      name: draft?.name || t("settings.myStyle"),
       accent: draft?.accent ?? null,
       bgType: draft?.bgType ?? "auto",
       bgColor: draft?.bgColor ?? null,
@@ -707,11 +711,11 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
     let name = presetName.trim();
     if (!name) {
       let n = 1;
-      while (presets.some((p) => p.name === `Стиль #${n}`)) n++;
-      name = `Стиль #${n}`;
+      while (presets.some((p) => p.name === t("settings.styleN", { n }))) n++;
+      name = t("settings.styleN", { n });
     }
     if (presets.some((p) => p.name.toLowerCase() === name.toLowerCase())) {
-      msg(`Стиль «${name}» уже есть`, false);
+      msg(t("settings.styleExists", { name }), false);
       return;
     }
     const slot = presetSlotSel === "auto"
@@ -728,7 +732,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
     };
     setPresets([...presets, preset]);
     setPresetName("");
-    msg(slot === "light" ? "Сохранено в слот ☀️" : "Сохранено в слот 🌙");
+    msg(slot === "light" ? t("settings.savedToLight") : t("settings.savedToDark"));
   };
 
   const applyPreset = (p: ThemePreset) => {
@@ -743,25 +747,25 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
     else setCustomDark(slotData);
     setThemeMode(slot === "light" ? "light" : "dark");
     setDraft(null);
-    msg(`Применён стиль «${p.name}»`);
+    msg(t("settings.styleApplied", { name: p.name }));
   };
 
   const copyPresetCode = (p: ThemePreset) => {
     const code = encodePresetCode(p);
     if (navigator.clipboard?.writeText) navigator.clipboard.writeText(code).catch(() => {});
     setImportCode(code);
-    msg(`Код скопирован: ${code}`);
+    msg(t("settings.codeCopied", { code }));
   };
 
   const importPreset = () => {
     const p = decodePresetCode(importCode.trim());
-    if (!p) { msg("Неверный формат кода", false); return; }
+    if (!p) { msg(t("settings.badCode"), false); return; }
     setPresets([
       ...presets,
-      { ...p, id: Math.random().toString(36).slice(2, 9), name: `Импорт ${p.theme}` },
+      { ...p, id: Math.random().toString(36).slice(2, 9), name: t("settings.importedName", { theme: p.theme }) },
     ]);
     setImportCode("");
-    msg("Стиль импортирован");
+    msg(t("settings.styleImported"));
   };
 
   const clearSlot = (kind: "light" | "dark") => {
@@ -771,9 +775,9 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
   };
 
   const modes: { mode: ThemeMode; icon: IconName; label: string }[] = [
-    { mode: "light", icon: "sun", label: "Светлая" },
-    { mode: "dark", icon: "moon", label: "Тёмная" },
-    { mode: "system", icon: "monitor", label: "Системная" },
+    { mode: "light", icon: "sun", label: t("theme.light") },
+    { mode: "dark", icon: "moon", label: t("theme.dark") },
+    { mode: "system", icon: "monitor", label: t("theme.system") },
   ];
 
   return (
@@ -785,7 +789,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
             className="settings-title"
             style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)" }}
           >
-            <Icon name="gear" size={18} /> Настройки
+            <Icon name="gear" size={18} /> {t("settings.title")}
           </h2>
           <button className="icon-btn" onClick={close}>
             <Icon name="close" size={16} />
@@ -802,7 +806,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
                 className={`settings-tab ${settingsTab === id ? "active" : ""}`}
                 onClick={() => setSettingsTab(id)}
               >
-                {label}
+                {t(label)}
               </button>
             ))}
           </div>
@@ -813,8 +817,8 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
           {/* ── Масштаб ── */}
           <ScaleSection
             icon="zoom"
-            title="Масштаб интерфейса"
-            hint="От 70% до 200% — применяется ко всем элементам"
+            title={t("settings.uiScale")}
+            hint={t("settings.uiScaleHint")}
             value={uiScale}
             min={0.7}
             max={2.0}
@@ -825,8 +829,8 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
 
           {/* ── Размер шрифта ── */}
           <ScaleSection
-            title="Размер шрифта"
-            hint="Меняет только текст, без масштабирования всего интерфейса"
+            title={t("settings.fontScale")}
+            hint={t("settings.fontScaleHint")}
             value={fontScale}
             min={0.8}
             max={1.6}
@@ -840,9 +844,9 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
             <div className="theme-status">
               <div className="theme-status-head">
                 <div>
-                  <h3 className="theme-status-title">Оформление</h3>
+                  <h3 className="theme-status-title">{t("settings.appearance")}</h3>
                   <p className="theme-status-subtitle">
-                    Активная тема: <strong>{resolvedTheme}</strong>
+                    {t("settings.activeTheme")} <strong>{resolvedTheme}</strong>
                   </p>
                 </div>
                 <div className="theme-status-modes">
@@ -860,25 +864,25 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
               <div className="theme-status-grid">
                 <div className="theme-status-pref">
                   <div>
-                    <span className="theme-status-pref-label">Светлая:</span>
+                    <span className="theme-status-pref-label">{t("settings.light")}</span>
                     <span className="theme-status-pref-value">
                       {customLight ? customLight.name : preferredLightTheme}
                     </span>
                   </div>
                   <span className={`theme-status-tag ${curDark ? "saved" : "active"}`}>
-                    {curDark ? "сохранена" : "✓ активна"}
+                    {curDark ? t("settings.savedTag") : t("settings.activeTag")}
                   </span>
                 </div>
                 <div className="theme-status-pref">
                   <div>
-                    <span className="theme-status-pref-label">Тёмная:</span>
+                    <span className="theme-status-pref-label">{t("settings.dark")}</span>
                     <span className="theme-status-pref-value">
                       {customDark ? customDark.name : useOledForDarkMode ? preferredDarkTheme.replace(/^(dark|light)-/, "oled-") : preferredDarkTheme}
                       {!customDark && useOledForDarkMode && <span style={{ color: "var(--text-muted)", fontSize: "var(--fs-2xs)" }}> (OLED)</span>}
                     </span>
                   </div>
                   <span className={`theme-status-tag ${curDark ? "active" : "saved"}`}>
-                    {curDark ? "✓ активна" : "сохранена"}
+                    {curDark ? t("settings.activeTag") : t("settings.savedTag")}
                   </span>
                 </div>
               </div>
@@ -887,10 +891,10 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
             {/* Вкладки: Стандартные / Свой выбор */}
             <div className="theme-tabs">
               <button className={`theme-tab-btn ${tab === "standard" ? "active" : ""}`} onClick={() => setTab("standard")}>
-                Стандартные
+                {t("settings.standard")}
               </button>
               <button className={`theme-tab-btn ${tab === "custom" ? "active" : ""}`} onClick={() => setTab("custom")}>
-                Свой выбор
+                {t("settings.custom")}
               </button>
             </div>
 
@@ -901,7 +905,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
                   <div>
                     <h4 className="theme-status-oled-title">OLED (True Black)</h4>
                     <p className="theme-status-oled-desc">
-                      Чистый чёрный фон для тёмного режима
+                      {t("settings.oledDesc")}
                     </p>
                   </div>
                   <label className="switch">
@@ -955,12 +959,11 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
             {tab === "custom" && (
               <div className="theme-tab-panel">
                 <p className="pv-note">
-                  Свой акцент и фон — поверх выбранной темы. Применяется сразу;
-                  сохраните в «Мои стили», чтобы не потерять.
+                  {t("settings.accentNote")}
                 </p>
                 <div className="pv-grid">
                   <div className="pv-card">
-                    <h3>Акцент</h3>
+                    <h3>{t("settings.accent")}</h3>
                     <div className="designer-colors-grid">
                       {ACCENTS.map((c) => (
                         <button
@@ -973,7 +976,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
                       ))}
                     </div>
                     <div className="slider-header-row">
-                      <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-secondary)" }}>Оттенок</span>
+                      <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-secondary)" }}>{t("settings.shade")}</span>
                       <span className="hue-value-indicator">{draft?.accent ? hslToHex(hue, 85, 55) : "—"}</span>
                     </div>
                     <div className="rainbow-slider-container">
@@ -992,18 +995,23 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
                         className="reset-accent-btn"
                         onClick={() => setDraft(draft?.bgColor ? { ...draft, accent: null } : null)}
                       >
-                        Сбросить акцент
+                        {t("settings.resetAccent")}
                       </button>
                       <span className="pv-hint">
-                        {draft?.accent ? `Свой акцент: ${draft.accent}` : "Акцент — из темы"}
+                        {draft?.accent ? t("settings.customAccent", { hex: draft.accent }) : t("settings.accentFromTheme")}
                       </span>
                     </div>
                   </div>
 
                   <div className="pv-card">
-                    <h3>Фон</h3>
+                    <h3>{t("settings.background")}</h3>
                     <div className="pv-bg-row">
-                      {([["theme", "Из темы"], ["light", "Светлый"], ["dark", "Тёмный"], ["oled", "OLED"]] as const).map(([v, label]) => (
+                      {([
+                        ["theme", t("settings.bgTheme")],
+                        ["light", t("settings.bgLight")],
+                        ["dark", t("settings.bgDark")],
+                        ["oled", "OLED"],
+                      ] as ["theme" | "light" | "dark" | "oled", string][]).map(([v, label]) => (
                         <button
                           key={v}
                           className={`pv-bg-btn ${(draft?.bgColor || draft?.accent) && draft?.bgType === v ? "active" : (!draft && v === "theme" ? "active" : "")}`}
@@ -1014,7 +1022,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
                       ))}
                     </div>
                     <div style={{ fontSize: "var(--fs-xs)", color: "var(--text-muted)", display: draft?.bgType === "oled" ? "none" : "" }}>
-                      Оттенки:
+                      {t("settings.shades")}
                     </div>
                     <div className="bg-preset-shades" style={{ display: draft?.bgType === "oled" ? "none" : "" }}>
                       {(draft?.bgType === "light" ? LIGHT_SHADES : DARK_SHADES).map((c) => (
@@ -1028,14 +1036,14 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
                       ))}
                     </div>
                     <p className="pv-note">
-                      {draft?.bgType === "oled" ? "OLED — чистый чёрный, без оттенков." : "Выберите оттенок фона."}
+                      {draft?.bgType === "oled" ? t("settings.oledNote") : t("settings.bgNote")}
                     </p>
                   </div>
                 </div>
 
                 <div className="pv-card">
-                  <h3>Мои стили</h3>
-                  <p className="preset-actions-hint">Слоты ☀️/🌙 заполняются при «Применить» из библиотеки</p>
+                  <h3>{t("settings.myStyles")}</h3>
+                  <p className="preset-actions-hint">{t("settings.slotsHint")}</p>
                   <div className="slot-rows">
                     {(["light", "dark"] as const).map((kind) => {
                       const slot = kind === "light" ? customLight : customDark;
@@ -1050,18 +1058,18 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
                               <span className="preset-preview-dot" style={{ background: slot?.accent || "#4c5699" }} />
                             </span>
                             <span className="preset-item-name">
-                              {kind === "light" ? "☀️ " : "🌙 "}Слот: {slot ? slot.name : "—"}
+                              {kind === "light" ? "☀️ " : "🌙 "}{t("settings.slot")} {slot ? slot.name : "—"}
                             </span>
                           </div>
                           <div className="preset-item-actions">
                             {slot && (
                               <>
                                 <span className={`theme-status-tag ${isCur && slot ? "active" : "saved"}`}>
-                                  {isCur && slot ? "✓ применён" : "сохранён"}
+                                  {isCur && slot ? t("settings.slotApplied") : t("settings.slotSaved")}
                                 </span>
                                 <button
                                   className="preset-action-btn delete"
-                                  title="Очистить слот"
+                                  title={t("settings.clearSlot")}
                                   onClick={() => clearSlot(kind)}
                                 >
                                   <Icon name="close" size={12} />
@@ -1073,14 +1081,14 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
                       );
                     })}
                   </div>
-                  <p className="preset-actions-hint">Библиотека — сохранить, применить, скопировать код</p>
+                  <p className="preset-actions-hint">{t("settings.libraryHint")}</p>
                   <div className="presets-list">
-                    {presets.length === 0 && <p className="no-presets-text">Своих стилей пока нет.</p>}
+                    {presets.length === 0 && <p className="no-presets-text">{t("settings.noStyles")}</p>}
                     {presets.map((p) => {
                       const applied = p.slot && ((p.slot === "light" ? customLight : customDark)?.name === p.name);
                       return (
                         <div className="preset-item-row" key={p.id}>
-                          <div className="preset-item-info" title="Применить" onClick={() => applyPreset(p)}>
+                          <div className="preset-item-info" title={t("settings.apply")} onClick={() => applyPreset(p)}>
                             <span className="preset-preview-circle" style={{ background: p.bgColor || "#f4f0ec" }}>
                               <span className="preset-preview-dot" style={{ background: p.accent || "#4c5699" }} />
                             </span>
@@ -1088,14 +1096,14 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
                           </div>
                           <div className="preset-item-actions">
                             <button className={`preset-action-btn apply ${applied ? "active" : ""}`} onClick={() => applyPreset(p)}>
-                              {applied ? "✓ применён" : "Применить"}
+                              {applied ? t("settings.slotApplied") : t("settings.apply")}
                             </button>
-                            <button className="preset-action-btn" title="Скопировать TMT-код" onClick={() => copyPresetCode(p)}>
+                            <button className="preset-action-btn" title={t("settings.copyCode")} onClick={() => copyPresetCode(p)}>
                               <Icon name="copy" size={12} />
                             </button>
                             <button
                               className="preset-action-btn delete"
-                              title="Удалить"
+                              title={t("common.delete")}
                               onClick={() => setPresets(presets.filter((x) => x.id !== p.id))}
                             >
                               <Icon name="trash" size={12} />
@@ -1110,21 +1118,21 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
                       type="text"
                       className="preset-name-input"
                       value={presetName}
-                      placeholder="Имя стиля"
+                      placeholder={t("settings.styleName")}
                       onChange={(e) => setPresetName(e.target.value)}
                     />
                     <select
                       className="preset-slot-select"
                       value={presetSlotSel}
                       onChange={(e) => setPresetSlotSel(e.target.value as typeof presetSlotSel)}
-                      title="Слот"
+                      title={t("settings.slotLabel")}
                     >
-                      <option value="auto">Авто</option>
-                      <option value="light">☀️ Светлый</option>
-                      <option value="dark">🌙 Тёмный</option>
+                      <option value="auto">{t("settings.auto")}</option>
+                      <option value="light">{t("settings.lightOpt")}</option>
+                      <option value="dark">{t("settings.darkOpt")}</option>
                     </select>
                     <button className="save-preset-btn" onClick={savePreset}>
-                      Сохранить
+                      {t("common.save")}
                     </button>
                   </div>
                   <div className="import-preset-form">
@@ -1133,11 +1141,11 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
                         type="text"
                         className="preset-import-input"
                         value={importCode}
-                        placeholder="TMT-код для импорта"
+                        placeholder={t("settings.importCodePh")}
                         onChange={(e) => setImportCode(e.target.value)}
                       />
                       <button className="import-preset-btn" onClick={importPreset}>
-                        Импорт
+                        {t("common.import")}
                       </button>
                     </div>
                     {flash && (
@@ -1157,28 +1165,28 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
           <>
           {/* ── Неделя ── */}
           <section className="settings-section">
-            <h3 className="section-title">Неделя</h3>
-            <Toggle checked={mondayFirst} onChange={toggleMondayFirst} label="Начинается с понедельника" />
+            <h3 className="section-title">{t("settings.week")}</h3>
+            <Toggle checked={mondayFirst} onChange={toggleMondayFirst} label={t("settings.mondayFirst")} />
             {/* На тач-экранах и в узком окне неделя всегда списком (narrow-режим),
                 поэтому выбор «Списком/Сеткой» показываем только там, где сетка
                 реально доступна. */}
             {!touchUI && !weekNarrow && (
               <>
                 <p className="section-hint" style={{ margin: "var(--sp-2) 0 var(--sp-1)" }}>
-                  Открывать неделю по умолчанию:
+                  {t("settings.weekDefault")}
                 </p>
                 <div className="theme-status-modes">
                   <button
                     className={`theme-status-mode-btn ${weekVertical ? "active" : ""}`}
                     onClick={() => setWeekVertical(true)}
                   >
-                    Списком
+                    {t("settings.asList")}
                   </button>
                   <button
                     className={`theme-status-mode-btn ${!weekVertical ? "active" : ""}`}
                     onClick={() => setWeekVertical(false)}
                   >
-                    Сеткой
+                    {t("settings.asGrid")}
                   </button>
                 </div>
               </>
@@ -1187,27 +1195,25 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
 
           {/* ── Задачи ── */}
           <section className="settings-section">
-            <h3 className="section-title">Задачи</h3>
-            <Toggle checked={archiveEnabled} onChange={setArchiveEnabled} label="Авто-архив просроченных задач" />
-            <Toggle checked={preventOverlaps} onChange={setPrevent} label="Запрещать задачи на одно время" />
+            <h3 className="section-title">{t("settings.tasksSection")}</h3>
+            <Toggle checked={archiveEnabled} onChange={setArchiveEnabled} label={t("settings.autoArchive")} />
+            <Toggle checked={preventOverlaps} onChange={setPrevent} label={t("settings.preventOverlaps")} />
             <p className="section-hint">
-              Не даёт поставить задачу на время, занятое другой (можно добавить
-              как подзадачу). Наложения у старых задач подсвечиваются красным.
+              {t("settings.preventOverlapsHint")}
             </p>
-            <Toggle checked={autoDonePastTime} onChange={setAutoDonePastTime} label="Прошедшее время = задача выполнена" />
+            <Toggle checked={autoDonePastTime} onChange={setAutoDonePastTime} label={t("settings.autoDone")} />
             <p className="section-hint">
-              При установке времени: если оно уже прошло — задача автоматически
-              выполненная; время в будущем — снимает выполнение.
+              {t("settings.autoDoneHint")}
             </p>
             <p className="section-hint" style={{ margin: "var(--sp-2) 0 var(--sp-1)" }}>
-              Сортировка задач в дне/неделе/месяце:
+              {t("settings.sortMode")}
             </p>
             <div className="theme-status-modes">
               {(
                 [
-                  ["time", "По времени"],
-                  ["manual", "Вручную"],
-                  ["priority", "По приоритету"],
+                  ["time", t("settings.sortTime")],
+                  ["manual", t("settings.sortManual")],
+                  ["priority", t("settings.sortPriority")],
                 ] as [SortMode, string][]
               ).map(([m, label]) => (
                 <button
@@ -1219,16 +1225,16 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
                 </button>
               ))}
             </div>
-            <p className="section-hint">«По приоритету» — высокие задачи сначала</p>
+            <p className="section-hint">{t("settings.sortPriorityHint")}</p>
           </section>
 
           {/* ── Шаблоны задач ── */}
           <section className="settings-section">
             <div className="section-head">
               <div>
-                <h3 className="section-title">Шаблоны задач</h3>
+                <h3 className="section-title">{t("settings.taskTemplates")}</h3>
                 <p className="section-hint">
-                  Кнопка «+ Шаблон» в дне/неделе создаёт задачу с этими параметрами
+                  {t("settings.taskTemplatesHint")}
                 </p>
               </div>
               <button
@@ -1236,7 +1242,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
                 onClick={() => openPatternModal()}
                 style={{ display: "inline-flex", alignItems: "center", gap: "var(--sp-3)" }}
               >
-                <Icon name="plus" size={14} /> Добавить
+                <Icon name="plus" size={14} /> {t("common.add")}
               </button>
             </div>
             <div className="set-list">
@@ -1245,7 +1251,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
                   <button
                     className="set-name"
                     onClick={() => openPatternModal(d)}
-                    title="Изменить шаблон"
+                    title={t("settings.editTemplate")}
                     style={{
                       flex: 1,
                       textAlign: "left",
@@ -1258,21 +1264,21 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
                       gap: "var(--sp-2)",
                     }}
                   >
-                    <span style={{ fontWeight: 600 }}>{d.title || "Без названия"}</span>
+                    <span style={{ fontWeight: 600 }}>{d.title || t("common.untitled")}</span>
                     <span style={{ fontSize: "var(--fs-2xs)", color: "var(--text-muted)" }}>
                       {d.timeMinutes != null ? `${formatMinutes(d.timeMinutes)} · ` : ""}
-                      {d.durationMinutes ? `${d.durationMinutes} мин` : "без длительности"}
+                      {d.durationMinutes ? t("unit.minutesN", { n: d.durationMinutes }) : t("unit.noDuration")}
                       {d.travelTime != null && d.timeMinutes != null
                         ? ` · ${travelTimeText(d)}`
                         : ""}
-                      {d.notifyMinutes != null ? ` · напом. за ${d.notifyMinutes} мин` : ""}
-                      {d.subtasks && d.subtasks.length > 0 ? ` · ${d.subtasks.length} подзадач` : ""}
+                      {d.notifyMinutes != null ? t("settings.remindFor", { n: d.notifyMinutes }) : ""}
+                      {d.subtasks && d.subtasks.length > 0 ? t("settings.subtasksCount", { n: d.subtasks.length }) : ""}
                     </span>
                   </button>
                   <button
                     className="preset-btn danger"
                     onClick={() => removePatternDraft(d)}
-                    title="Удалить шаблон"
+                    title={t("settings.deleteTemplate")}
                     style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}
                   >
                     <Icon name="close" size={14} />
@@ -1280,7 +1286,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
                 </div>
               ))}
               {patternDrafts.length === 0 && (
-                <p className="section-hint">Шаблонов пока нет — добавьте первый.</p>
+                <p className="section-hint">{t("settings.noTemplates")}</p>
               )}
             </div>
           </section>
@@ -1293,9 +1299,9 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
           <section className="settings-section">
             <div className="section-head">
               <div>
-                <h3 className="section-title">Быстрое время</h3>
+                <h3 className="section-title">{t("settings.quickTime")}</h3>
                 <p className="section-hint">
-                  Кнопки быстрого выбора времени в карточке задачи (свой список)
+                  {t("settings.quickTimeHint")}
                 </p>
               </div>
             </div>
@@ -1307,7 +1313,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
                     <button
                       className="preset-chip-x"
                       onClick={() => toggleTimePreset(m)}
-                      title="Убрать"
+                      title={t("common.remove")}
                     >
                       ×
                     </button>
@@ -1316,7 +1322,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
               </div>
             )}
             {timePresets.length === 0 && (
-              <p className="section-hint">Список пуст — добавьте свои варианты времени.</p>
+              <p className="section-hint">{t("settings.timeListEmpty")}</p>
             )}
             <div style={{ display: "flex", gap: "var(--sp-2)", alignItems: "center" }}>
               <input
@@ -1331,10 +1337,10 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
                   color: "var(--text-primary)",
                   fontSize: "var(--fs-xs)",
                 }}
-                title="Свое время — системные часы"
+                title={t("settings.ownTime")}
               />
-              <button className="preset-btn" onClick={addPreset} title="Добавить время">
-                Добавить
+              <button className="preset-btn" onClick={addPreset} title={t("settings.addTime")}>
+                {t("common.add")}
               </button>
             </div>
           </section>
@@ -1344,12 +1350,12 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
           {settingsTab === "notify" && (
           <>
           <section className="settings-section">
-            <h3 className="section-title">Уведомления</h3>
-            <p className="section-hint">Приходят, пока приложение работает (в т.ч. в фоне)</p>
-            <Toggle checked={notifyDaySummary} onChange={setNotifyDaySummary} label="Список задач на день — утром" />
+            <h3 className="section-title">{t("settings.notifications")}</h3>
+            <p className="section-hint">{t("settings.notifyHint")}</p>
+            <Toggle checked={notifyDaySummary} onChange={setNotifyDaySummary} label={t("settings.dayDigest")} />
             {notifyDaySummary && (
               <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)", padding: "0 0 var(--sp-2)" }}>
-                <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-muted)" }}>Время:</span>
+                <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-muted)" }}>{t("settings.notifyTime")}</span>
                 {/* Час дайджеста — системными часами (любое время суток). */}
                 <input
                   type="time"
@@ -1369,7 +1375,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
                 />
               </div>
             )}
-            <Toggle checked={notifyReminders} onChange={setNotifyReminders} label="Напоминания перед задачами со временем" />
+            <Toggle checked={notifyReminders} onChange={setNotifyReminders} label={t("settings.reminders")} />
             {notifyReminders && (
               <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-2)", padding: "0 0 var(--sp-2)", alignItems: "center" }}>
                 {/* Мультиселект: можно выбрать несколько интервалов сразу
@@ -1380,9 +1386,9 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
                     key={m}
                     className={`preset-btn ${notifyRemindMinutes.includes(m) ? "active" : ""}`}
                     onClick={() => setNotifyRemindMinutes(m)}
-                    title={notifyRemindMinutes.includes(m) ? "Убрать этот интервал" : "Добавить этот интервал"}
+                    title={notifyRemindMinutes.includes(m) ? t("settings.removeInterval") : t("settings.addInterval")}
                   >
-                    {m < 60 ? `${m} мин` : m === 60 ? "1 час" : m === 120 ? "2 часа" : "за день"}
+                    {m < 60 ? t("unit.minutesN", { n: m }) : m === 60 ? t("settings.hour1") : m === 120 ? t("settings.hours2") : t("settings.perDay")}
                   </button>
                 ))}
                 {/* Свои интервалы — такие же кнопки с ×: видно, что добавлено,
@@ -1395,7 +1401,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
                       key={m}
                       className="preset-btn active"
                       onClick={() => setNotifyRemindMinutes(m)}
-                      title="Убрать этот интервал"
+                      title={t("settings.removeInterval")}
                     >
                       {fmtRemindInterval(m)} ×
                     </button>
@@ -1415,21 +1421,19 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
                   maxHours={168}
                 />
                 <span style={{ fontSize: "var(--fs-2xs)", color: "var(--text-muted)" }}>
-                  введите ч/мин и нажмите «ОК»
+                  {t("settings.enterHm")}
                 </span>
                 {/* Пустой список интервалов = напоминаний не будет вовсе, хотя
                     переключатель включён: раньше это было молча. */}
                 {notifyRemindMinutes.length === 0 && (
                   <span style={{ fontSize: "var(--fs-2xs)", color: "var(--text-muted)" }}>
-                    не выбран ни один интервал — напоминаний не будет
+                    {t("settings.noInterval")}
                   </span>
                 )}
               </div>
             )}
             <p className="section-hint" style={{ marginTop: "var(--sp-2)" }}>
-              Для отдельной задачи можно задать своё напоминание: нажмите на задачу
-              и выберите «Уведомить» (по умолчанию / не уведомлять / за N минут).
-              Подзадачи напоминают вместе со своей задачей.
+              {t("settings.perTaskHint")}
             </p>
           </section>
 
@@ -1437,28 +1441,53 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
           </>)}
           {settingsTab === "interface" && (
           <>
+          {/* Язык интерфейса: смена применяется сразу (i18n-стор). */}
           <section className="settings-section">
-            <h3 className="section-title">Интерфейс</h3>
-            <p className="section-hint">Скрытые элементы можно вернуть здесь же</p>
+            <h3 className="section-title">{t("lang.language")}</h3>
+            <p className="section-hint">{t("lang.hint")}</p>
+            <select
+              value={lang}
+              onChange={(e) => setLang(e.target.value as Lang)}
+              title={t("lang.language")}
+              style={{
+                fontSize: "var(--fs-sm)",
+                padding: "6px 10px",
+                border: "1px solid var(--border-color)",
+                borderRadius: "var(--radius-md)",
+                background: "var(--bg-tertiary)",
+                color: "var(--text-primary)",
+                outline: "none",
+                minWidth: 180,
+              }}
+            >
+              {LANGS.map((l) => (
+                <option key={l.code} value={l.code}>{l.name}</option>
+              ))}
+            </select>
+          </section>
+
+          <section className="settings-section">
+            <h3 className="section-title">{t("settings.interface")}</h3>
+            <p className="section-hint">{t("settings.interfaceHint")}</p>
             {/* Пункты показываем, только если элемент реально есть на экране:
                 кнопка даты скрыта на тач-экранах, правая панель с мини-
                 календарём — в узком окне и в «Месяце»; сетка недели — только
                 на широких экранах. В десктопном виде на телефоне пункты
                 появляются. */}
             {!touchUI && (
-              <Toggle checked={visibility.datePicker} onChange={(v) => setVisibility("datePicker", v)} label="Кнопка даты (заголовок-дата остаётся)" />
+              <Toggle checked={visibility.datePicker} onChange={(v) => setVisibility("datePicker", v)} label={t("settings.visDateBtn")} />
             )}
             {!panelNarrow && view !== "month" && (
-              <Toggle checked={visibility.miniCalendar} onChange={(v) => setVisibility("miniCalendar", v)} label="Мини-календарь справа" />
+              <Toggle checked={visibility.miniCalendar} onChange={(v) => setVisibility("miniCalendar", v)} label={t("settings.visMiniCal")} />
             )}
             {([
-              ["navArrows", "Стрелки навигации ‹ ›"],
-              ["search", "Кнопка поиска"],
-              ["taskTime", "Время задач"],
-              ["subtasks", "Подзадачи"],
-              ["notes", "Заметки"],
-              ["someday", "«Когда-нибудь»"],
-              ["archiveBanner", "Баннер «Архивировано задач»"],
+              ["navArrows", t("settings.visNavArrows")],
+              ["search", t("settings.visSearch")],
+              ["taskTime", t("settings.visTaskTime")],
+              ["subtasks", t("settings.visSubtasks")],
+              ["notes", t("settings.visNotes")],
+              ["someday", t("settings.visSomeday")],
+              ["archiveBanner", t("settings.visArchiveBanner")],
             ] as [keyof VisibilityState, string][]).map(([k, label]) => (
               <Toggle key={k} checked={visibility[k]} onChange={(v) => setVisibility(k, v)} label={label} />
             ))}
@@ -1469,8 +1498,8 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
               <>
                 <div className="section-head" style={{ marginTop: "var(--sp-3)" }}>
                   <div>
-                    <h3 className="section-title">Панель справа</h3>
-                    <p className="section-hint">Расстояние между календарём и «Когда-нибудь»</p>
+                    <h3 className="section-title">{t("settings.rightPanel")}</h3>
+                    <p className="section-hint">{t("settings.rightPanelHint")}</p>
                   </div>
                   <span className="scale-badge">{panelGap}px</span>
                 </div>
@@ -1486,7 +1515,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
               </>
             )}
             <button className="preset-btn danger" onClick={resetInterface} style={{ marginTop: "var(--sp-3)" }}>
-              Сбросить настройки интерфейса
+              {t("settings.resetInterface")}
             </button>
           </section>
 
@@ -1501,16 +1530,16 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
                   className="section-title"
                   style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)" }}
                 >
-                  <Icon name="palette" size={14} /> Категории
+                  <Icon name="palette" size={14} /> {t("settings.categories")}
                 </h3>
-                <p className="section-hint">Свои названия и цвета для задач; применяются в меню цвета, календаре и поиске</p>
+                <p className="section-hint">{t("settings.categoriesHint")}</p>
               </div>
               <button
                 className="preset-btn"
                 onClick={addDraft}
                 style={{ display: "inline-flex", alignItems: "center", gap: "var(--sp-3)" }}
               >
-                <Icon name="plus" size={14} /> Добавить
+                <Icon name="plus" size={14} /> {t("common.add")}
               </button>
             </div>
             <div className="set-list">
@@ -1531,7 +1560,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
                         key={c}
                         type="button"
                         onClick={() => patchDraft(d.clientKey, { color: hexToArgb(c) })}
-                        title="Выбрать цвет"
+                        title={t("settings.pickColor")}
                         style={{
                           width: 20,
                           height: 20,
@@ -1545,7 +1574,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
                       />
                     ))}
                     <label
-                      title="Свой цвет (системный пикер)"
+                      title={t("settings.customColor")}
                       style={{
                         width: 20,
                         height: 20,
@@ -1565,7 +1594,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
                         value={argbToHex(d.color)}
                         onChange={(e) => patchDraft(d.clientKey, { color: hexToArgb(e.target.value) })}
                         style={{ position: "absolute", opacity: 0, width: 0, height: 0 }}
-                        title="Свой цвет"
+                        title={t("settings.customColorTitle")}
                       />
                     </label>
                   </div>
@@ -1573,7 +1602,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
                     type="text"
                     value={d.name}
                     onChange={(e) => patchDraft(d.clientKey, { name: e.target.value })}
-                    placeholder="Название категории"
+                    placeholder={t("settings.categoryNamePh")}
                     className="set-name"
                     onKeyDown={(e) => {
                       if (e.key === "Enter") saveDraft(d);
@@ -1582,7 +1611,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
                   <button
                     className="preset-btn"
                     onClick={() => saveDraft(d)}
-                    title="Сохранить"
+                    title={t("common.save")}
                     style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}
                   >
                     <Icon name="save" size={14} />
@@ -1590,7 +1619,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
                   <button
                     className="preset-btn danger"
                     onClick={() => removeDraft(d)}
-                    title="Удалить категорию"
+                    title={t("settings.deleteCategory")}
                     style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}
                   >
                     <Icon name="close" size={14} />
@@ -1598,7 +1627,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
                 </div>
               ))}
               {drafts.length === 0 && (
-                <p className="section-hint">Категорий пока нет — добавьте первую.</p>
+                <p className="section-hint">{t("settings.noCategories")}</p>
               )}
             </div>
           </section>
@@ -1610,16 +1639,16 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
           <section className="settings-section">
             <div className="section-head">
               <div>
-                <h3 className="section-title">Данные</h3>
-                <p className="section-hint">Экспорт — полный бэкап; импорт заменяет текущие данные</p>
+                <h3 className="section-title">{t("settings.data")}</h3>
+                <p className="section-hint">{t("settings.dataHint")}</p>
               </div>
             </div>
             <div style={{ display: "flex", gap: "var(--sp-2)" }}>
-              <button className="preset-btn" onClick={onExport} title="Сохранить бэкап в файл">
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><Icon name="download" size={14} /> Экспорт…</span>
+              <button className="preset-btn" onClick={onExport} title={t("settings.exportBackup")}>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><Icon name="download" size={14} /> {t("settings.export")}</span>
               </button>
-              <button className="preset-btn" onClick={onImport} title="Загрузить данные из файла">
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><Icon name="upload" size={14} /> Импорт…</span>
+              <button className="preset-btn" onClick={onImport} title={t("settings.importLoad")}>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><Icon name="upload" size={14} /> {t("settings.importBtn")}</span>
               </button>
               {dataMsg && <span style={{ fontSize: "var(--fs-2xs)", color: dataError ? "var(--danger, #c0392b)" : COLORS.muted }}>{dataMsg}</span>}
             </div>
@@ -1631,24 +1660,21 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
                 диалог отдаёт content:// — std::fs не умеет, поэтому автосинк
                 там недоступен (работает ручной экспорт/импорт). */}
             <div style={{ marginTop: "var(--sp-4)", display: "flex", flexDirection: "column", gap: "var(--sp-2)" }}>
-              <Toggle checked={autoSyncEnabled} onChange={setAutoSyncEnabled} label="Автосинхронизация (в заданную папку)" />
+              <Toggle checked={autoSyncEnabled} onChange={setAutoSyncEnabled} label={t("settings.autoSync")} />
               {autoSyncEnabled && (
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-2)", alignItems: "center" }}>
-                  <button className="preset-btn" onClick={onPickSyncFolder} title="Выбрать папку для бэкапа">
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>Папка…</span>
+                  <button className="preset-btn" onClick={onPickSyncFolder} title={t("settings.pickFolder")}>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>{t("settings.folderBtn")}</span>
                   </button>
-                  <button className="preset-btn" onClick={() => { scheduleAutoExport(); setSyncMsg("Бэкап сохраняется…"); }} title="Сохранить бэкап сейчас">
-                    Сохранить сейчас
+                  <button className="preset-btn" onClick={() => { scheduleAutoExport(); setSyncMsg(t("settings.savingBackup")); }} title={t("settings.saveNow")}>
+                    {t("settings.saveNow")}
                   </button>
                   <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted, wordBreak: "break-all" }}>
-                    {autoSyncPath || "папка не выбрана"}
+                    {autoSyncPath || t("settings.noFolder")}
                   </span>
                   {syncMsg && <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted }}>{syncMsg}</span>}
                   <p className="section-hint" style={{ width: "100%" }}>
-                    При изменении данных бэкап пишется в файл daily-planner-sync.json;
-                    раз в минуту приложение проверяет, не появился ли более свежий файл
-                    (с другого устройства) — и заменяет данные. На Android доступен
-                    только ручной экспорт/импорт.
+                    {t("settings.autoSyncHint")}
                   </p>
                 </div>
               )}
@@ -1663,9 +1689,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
                   // Выход — необратимое действие (на Android процесс убивается,
                   // напоминания пропадут до следующего запуска): спрашиваем.
                   if (
-                    !window.confirm(
-                      "Выйти из приложения? Напоминания и дайджест не будут приходить, пока не запустите снова.",
-                    )
+                    !window.confirm(t("settings.quitConfirm"))
                   ) {
                     return;
                   }
@@ -1673,9 +1697,9 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
                     .then(({ invoke }) => invoke("exit_app"))
                     .catch(() => {});
                 }}
-                title="Закрыть приложение (на macOS продолжает работать в фоне, пока не выйдете здесь)"
+                title={t("settings.quitTitle")}
               >
-                Выйти из приложения…
+                {t("settings.quit")}
               </button>
             </div>
           </section>
@@ -1720,7 +1744,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
                 marginBottom: "var(--sp-5)",
               }}
             >
-              {patternModal.id ? "Шаблон задачи" : "Новый шаблон"}
+              {patternModal.id ? t("settings.templateTitle") : t("settings.newTemplate")}
             </div>
             <TaskFormFields
               key={patternModal.clientKey}
@@ -1735,10 +1759,10 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
               <button
                 className="preset-btn danger"
                 onClick={() => removePatternDraft(patternModal)}
-                title="Удалить шаблон"
+                title={t("settings.deleteTemplate")}
                 style={{ marginTop: "var(--sp-3)", display: "inline-flex", alignItems: "center", gap: "var(--sp-2)" }}
               >
-                <Icon name="close" size={14} /> Удалить шаблон
+                <Icon name="close" size={14} /> {t("settings.deleteTemplate")}
               </button>
             )}
           </div>

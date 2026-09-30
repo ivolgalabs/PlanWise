@@ -7,6 +7,7 @@
 import type { Task, ColorSet, Subtask } from "./api";
 import { toEpochDay } from "./date";
 import { showToast } from "./toast";
+import { t } from "./i18n";
 
 const K = { tasks: "fb:tasks", sets: "fb:sets", subs: "fb:subtasks" };
 
@@ -16,10 +17,10 @@ const todayEpochDay = (): number => toEpochDay(new Date());
 // Дефолтные категории — как сид V1 в SQLite (ARGB-int = 0xFFRRGGBB).
 // Пишутся при первом обращении, если ключа ещё нет в localStorage.
 const DEFAULT_SETS: ColorSet[] = [
-  { id: "cs-none", name: "Без категории", color: 4293979362, sortOrder: 0 },
-  { id: "cs-work", name: "Работа", color: 4291405948, sortOrder: 1 },
-  { id: "cs-personal", name: "Личное", color: 4286494916, sortOrder: 2 },
-  { id: "cs-sport", name: "Спорт", color: 4293437564, sortOrder: 3 },
+  { id: "cs-none", name: t("common.noCategory"), color: 4293979362, sortOrder: 0 },
+  { id: "cs-work", name: t("cat.work"), color: 4291405948, sortOrder: 1 },
+  { id: "cs-personal", name: t("cat.personal"), color: 4286494916, sortOrder: 2 },
+  { id: "cs-sport", name: t("cat.sport"), color: 4293437564, sortOrder: 3 },
 ];
 
 const load = <T,>(k: string): T[] => {
@@ -33,7 +34,7 @@ const load = <T,>(k: string): T[] => {
     // сохраняем отдельным ключом, пользователю говорим.
     localStorage.setItem(`${k}:broken`, raw);
     console.error(`Повреждённые локальные данные (${k}), копия в ${k}:broken`, e);
-    showToast("Локальные данные повреждены — сохранена копия, изменения начнутся заново");
+    showToast(t("err.localDataCorrupt"));
     return [];
   }
 };
@@ -71,7 +72,7 @@ export const browserApi = {
    *  в Rust — наложения в браузерном фоллбеке и так не проверяются). */
   async duplicateTask(id: string): Promise<Task> {
     const orig = load<Task>(K.tasks).find((t) => t.id === id);
-    if (!orig) throw new Error("Задача не найдена");
+    if (!orig) throw new Error(t("err.taskNotFound"));
     const copy: Task = {
       ...orig,
       id: crypto.randomUUID(),

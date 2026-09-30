@@ -10,14 +10,16 @@ import { TimePicker, DurationSelect } from "./TimePicker";
 import { Icon } from "./Icon";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { DatePickerModal } from "./DatePickerModal";
+import { useI18n, t, type TKey } from "../i18n";
 
 /** Уровни приоритета: 0 = не задан, 1 = низкий, 2 = средний, 3 = высокий.
- *  Цвета — глобальные CSS-переменные приоритета (themes.css). */
-const PRIO = [
-  { v: 0, label: "—", color: "" },
-  { v: 1, label: "низкий", color: "var(--prio-low)" },
-  { v: 2, label: "средний", color: "var(--prio-med)" },
-  { v: 3, label: "высокий", color: "var(--prio-high)" },
+ *  Цвета — глобальные CSS-переменные приоритета (themes.css).
+ *  Подписи — ключи словаря (собираются при рендере, язык переключается сразу). */
+const PRIO: { v: number; labelKey: TKey | null; color: string }[] = [
+  { v: 0, labelKey: null, color: "" },
+  { v: 1, labelKey: "task.low", color: "var(--prio-low)" },
+  { v: 2, labelKey: "task.medium", color: "var(--prio-med)" },
+  { v: 3, labelKey: "task.high", color: "var(--prio-high)" },
 ];
 
 /** Лимит вложения (совпадает с Rust: 25 МБ на команду) — отсекаем файлы
@@ -27,17 +29,17 @@ const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 /** Варианты «Уведомить»: по умолчанию (глобальные интервалы настроек),
  *  не уведомлять или своё значение — КОЛИЧЕСТВО времени до начала
  *  (селекты «часы»/«минуты», системный барабан). */
-const NOTIFY_OPTS: { v: number; label: string }[] = [
-  { v: -1, label: "По умолчанию (из настроек)" },
-  { v: 0, label: "Не уведомлять" },
-  { v: 5, label: "За 5 минут" },
-  { v: 15, label: "За 15 минут" },
-  { v: 30, label: "За 30 минут" },
-  { v: 60, label: "За 1 час" },
-  { v: 120, label: "За 2 часа" },
-  { v: 180, label: "За 3 часа" },
-  { v: 1440, label: "За 1 день" },
-  { v: -2, label: "Своё значение…" },
+const NOTIFY_OPTS: { v: number; label: TKey }[] = [
+  { v: -1, label: "form.notifyDefault" },
+  { v: 0, label: "form.notifyNone" },
+  { v: 5, label: "form.notify5" },
+  { v: 15, label: "form.notify15" },
+  { v: 30, label: "form.notify30" },
+  { v: 60, label: "form.notify60" },
+  { v: 120, label: "form.notify120" },
+  { v: 180, label: "form.notify180" },
+  { v: 1440, label: "form.notify1440" },
+  { v: -2, label: "form.notifyCustom" },
 ];
 
 interface FieldsProps {
@@ -94,6 +96,7 @@ export function TaskFormFields({
   initialSubs,
   onCollect,
 }: FieldsProps) {
+  const { t } = useI18n();
   // В режиме шаблона это НЕ редактирование задачи: без «Перенести»/«Удалить»,
   // без файлов и авто-выполнения, подзадачи — простые тексты (как при создании).
   const editing = initial !== undefined && !templateMode;
@@ -144,10 +147,10 @@ export function TaskFormFields({
     requestAnimationFrame(() => editSubInputRef.current?.focus());
   };
   const commitEditSub = async (s: Subtask) => {
-    const t = editSubVal.trim();
+    const nextTitle = editSubVal.trim();
     setEditSubId(null);
-    if (!t || t === s.title) return;
-    await api.upsertSubtask({ ...s, title: t });
+    if (!nextTitle || nextTitle === s.title) return;
+    await api.upsertSubtask({ ...s, title: nextTitle });
     setSubItems(await api.getSubtasks(s.taskId));
     // Bump: списки подзадач под задачей перечитаются сразу (а не после
     // перезагрузки), иначе переименование «зависало» до перезапуска.
@@ -218,11 +221,11 @@ export function TaskFormFields({
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const t = title.trim();
-    if (!t) return;
+    const nextTitle = title.trim();
+    if (!nextTitle) return;
     setError("");
     const payload = {
-      title: t,
+      title: nextTitle,
       timeMinutes: time,
       difficulty: priority,
       durationMinutes: duration,
@@ -324,7 +327,7 @@ export function TaskFormFields({
             setError(
               typeof err === "string"
                 ? err
-                : `Не удалось прикрепить «${pf.file.name}»`,
+                : t("err.attachFile", { name: pf.file.name }),
             );
             return;
           }
@@ -334,7 +337,7 @@ export function TaskFormFields({
     } catch (err) {
       // Rust не дал сохранить (время занято другой задачей) — показываем
       // сообщение, форма остаётся открытой.
-      setError(typeof err === "string" ? err : "Не удалось сохранить задачу");
+      setError(typeof err === "string" ? err : t("err.saveTaskShort"));
     }
   };
 
@@ -357,7 +360,7 @@ export function TaskFormFields({
       onChange?.();
       onAdded?.();
     } catch (err) {
-      setError(typeof err === "string" ? err : "Не удалось продублировать задачу");
+      setError(typeof err === "string" ? err : t("err.duplicateTask"));
     }
   };
 
@@ -406,7 +409,7 @@ export function TaskFormFields({
           }
         }}
         enterKeyHint="done"
-        placeholder="Название задачи"
+        placeholder={t("form.titlePh")}
         autoFocus={autoFocus}
         rows={1}
         style={{
@@ -429,7 +432,7 @@ export function TaskFormFields({
           Бейдж — слева, как у остальных полей; само меню пикера открывается
           по центру карточки (см. TimePicker). */}
       <div style={fieldRow}>
-        <span style={labelStyle}>Время</span>
+        <span style={labelStyle}>{t("form.time")}</span>
         <TimePicker
           value={time}
           onChange={setTime}
@@ -443,7 +446,7 @@ export function TaskFormFields({
 
       {/* Приоритет — явные кнопки с подписями. */}
       <div style={fieldRow}>
-        <span style={labelStyle}>Приоритет</span>
+        <span style={labelStyle}>{t("form.priority")}</span>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-2)" }}>
           {PRIO.map((p) => (
             <button
@@ -462,7 +465,7 @@ export function TaskFormFields({
                 background: priority === p.v ? "color-mix(in srgb, var(--text-primary) 6%, transparent)" : "transparent",
                 color: COLORS.text,
               }}
-              title={p.label}
+              title={p.labelKey ? t(p.labelKey) : "—"}
             >
               <span
                 style={{
@@ -473,7 +476,7 @@ export function TaskFormFields({
                   display: "inline-block",
                 }}
               />
-              {p.label}
+              {p.labelKey ? t(p.labelKey) : "—"}
             </button>
           ))}
         </div>
@@ -482,12 +485,12 @@ export function TaskFormFields({
       {/* «Когда-нибудь»: мягкий срок — сделать в течение недели/месяца/к дате. */}
       {editing && initial?.someday && (
         <div style={fieldRow}>
-          <span style={labelStyle}>Срок</span>
+          <span style={labelStyle}>{t("form.due")}</span>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-2)", alignItems: "center" }}>
-            <button type="button" className="text-chip" onClick={() => setDueEpochDay(null)}>Без срока</button>
-            <button type="button" className="text-chip" onClick={() => setDueEpochDay(toEpochDay(new Date()) + 7)}>В течение недели</button>
-            <button type="button" className="text-chip" onClick={() => setDueEpochDay(toEpochDay(new Date()) + 30)}>В течение месяца</button>
-            <button type="button" className="text-chip" onClick={() => setDueDateOpen(true)}>Дата…</button>
+            <button type="button" className="text-chip" onClick={() => setDueEpochDay(null)}>{t("form.noDue")}</button>
+            <button type="button" className="text-chip" onClick={() => setDueEpochDay(toEpochDay(new Date()) + 7)}>{t("someday.week")}</button>
+            <button type="button" className="text-chip" onClick={() => setDueEpochDay(toEpochDay(new Date()) + 30)}>{t("someday.month")}</button>
+            <button type="button" className="text-chip" onClick={() => setDueDateOpen(true)}>{t("form.dueDate")}</button>
             {dueEpochDay != null && (
               <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted }}>
                 {dueEpochLabel(dueEpochDay)}
@@ -510,7 +513,7 @@ export function TaskFormFields({
       {/* Своё уведомление задачи: по умолчанию / не уведомлять / за N минут /
           своё значение системными часами. Подзадачи наследуют уведомление. */}
       <div style={fieldRow}>
-        <span style={labelStyle}>Уведомить</span>
+        <span style={labelStyle}>{t("form.notify")}</span>
         <select
           value={notifySelectValue()}
           onChange={(e) => {
@@ -535,7 +538,7 @@ export function TaskFormFields({
         >
           {NOTIFY_OPTS.map((o) => (
             <option key={o.v} value={o.v}>
-              {o.label}
+              {t(o.label)}
             </option>
           ))}
         </select>
@@ -550,7 +553,7 @@ export function TaskFormFields({
           «Пора выезжать» в сам выезд). Виден только когда задан выезд. */}
       {travel != null && (
         <div style={fieldRow}>
-          <span style={labelStyle}>До выезда</span>
+          <span style={labelStyle}>{t("form.beforeTravel")}</span>
           <select
             value={travelNotify ?? 0}
             onChange={(e) => {
@@ -568,22 +571,22 @@ export function TaskFormFields({
               maxWidth: "100%",
             }}
           >
-            <option value={0}>Не напоминать</option>
-            <option value={5}>За 5 минут до выезда</option>
-            <option value={15}>За 15 минут до выезда</option>
-            <option value={30}>За 30 минут до выезда</option>
-            <option value={60}>За 1 час до выезда</option>
+            <option value={0}>{t("form.travelNone")}</option>
+            <option value={5}>{t("form.travel5")}</option>
+            <option value={15}>{t("form.travel15")}</option>
+            <option value={30}>{t("form.travel30")}</option>
+            <option value={60}>{t("form.travel60")}</option>
           </select>
         </div>
       )}
 
       {/* Категория — свотчи с подписями. */}
       <div style={fieldRow}>
-        <span style={labelStyle}>Цвет</span>
+        <span style={labelStyle}>{t("form.color")}</span>
         <button
           type="button"
           onClick={() => setColor(null)}
-          title="Без категории"
+          title={t("common.noCategory")}
           className="chip-btn"
           style={{
             background: "transparent",
@@ -643,11 +646,11 @@ export function TaskFormFields({
 
       {/* Заметка к задаче. */}
       <div style={fieldRow}>
-        <span style={labelStyle}>Заметка</span>
+        <span style={labelStyle}>{t("task.note")}</span>
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
-          placeholder="Заметка…"
+          placeholder={t("form.notesPh")}
           rows={2}
           style={{
             flex: 1,
@@ -670,17 +673,17 @@ export function TaskFormFields({
           тап по файлу открывает его системным приложением. */}
       {!templateMode && (
         <div style={{ ...fieldRow, alignItems: "flex-start" }}>
-          <span style={labelStyle}>Файлы</span>
+          <span style={labelStyle}>{t("form.files")}</span>
           <div style={{ flex: 1, minWidth: 180, display: "flex", flexDirection: "column", gap: 6 }}>
             {editing
               ? attachments.length === 0 && !attLoading && (
                   <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted }}>
-                    Нет файлов. Добавьте документы, фото, аудио — прикрепятся к задаче.
+                    {t("form.noFilesExisting")}
                   </span>
                 )
               : pendingFiles.length === 0 && (
                   <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted }}>
-                    Нет файлов. Добавьте документы, фото, аудио — прикрепятся при сохранении.
+                    {t("form.noFilesNew")}
                   </span>
                 )}
             {editing &&
@@ -701,7 +704,7 @@ export function TaskFormFields({
                     await api.deleteAttachment(a.id);
                     setAttachments(await api.listAttachments(initial.id));
                   }}
-                  removeTitle="Удалить файл"
+                  removeTitle={t("form.removeFile")}
                 />
               ))}
             {!editing &&
@@ -713,7 +716,7 @@ export function TaskFormFields({
                   onRemove={() =>
                     setPendingFiles((arr) => arr.filter((f) => f.key !== pf.key))
                   }
-                  removeTitle="Убрать файл"
+                  removeTitle={t("form.detachFile")}
                 />
               ))}
             <button
@@ -722,9 +725,9 @@ export function TaskFormFields({
               disabled={attLoading}
               style={{ alignSelf: "flex-start", padding: "4px 12px" }}
               onClick={() => fileInputRef.current?.click()}
-              title="Выбрать файл (системный диалог)"
+              title={t("form.pickFile")}
             >
-              <Icon name="plus" size={12} /> Файл
+              <Icon name="plus" size={12} /> {t("form.file")}
             </button>
             {/* Скрытый input: системный выбор файла на всех платформах. Содержимое
                 читаем FileReader-ом прямо в WebView (без плагинов-диалогов) и
@@ -743,7 +746,7 @@ export function TaskFormFields({
                 // Лимит Rust-команды (25 МБ): отсекаем сразу, чтобы не читать
                 // файл в base64 и не буферизовать заведомо несохраняемый файл.
                 if (file.size > MAX_ATTACHMENT_BYTES) {
-                  setAttError("Файл больше 25 МБ — не прикрепится");
+                  setAttError(t("form.tooBig"));
                   return;
                 }
                 if (!editing || !initial) {
@@ -771,7 +774,7 @@ export function TaskFormFields({
                   setAttError(
                     typeof err === "string"
                       ? err
-                      : `Не удалось прикрепить «${file.name}»`,
+                      : t("err.attachFile", { name: file.name }),
                   );
                 } finally {
                   setAttLoading(false);
@@ -790,7 +793,7 @@ export function TaskFormFields({
       {/* Подзадачи: при создании — добавляются сразу (шестерёнка); в карточке
           существующей задачи — полный список с чекбоксами, удалением и полем. */}
       <div style={{ ...fieldRow, alignItems: "flex-start" }}>
-        <span style={labelStyle}>Подзадачи</span>
+        <span style={labelStyle}>{t("form.subtasks")}</span>
         <div style={{ flex: 1, minWidth: 180 }}>
           {editing
             ? subItems.map((s) => (
@@ -875,7 +878,7 @@ export function TaskFormFields({
                       setSubItems(await api.getSubtasks(s.taskId));
                       useStore.getState().bumpSubtasks();
                     }}
-                    title="Удалить подзадачу"
+                    title={t("month.deleteSubtask")}
                   >
                     <Icon name="close" size={12} />
                   </button>
@@ -902,7 +905,7 @@ export function TaskFormFields({
                     type="button"
                     className="chip-btn"
                     onClick={() => setSubs((arr) => arr.filter((_, j) => j !== i))}
-                    title="Убрать"
+                    title={t("common.remove")}
                   >
                     <Icon name="close" size={12} />
                   </button>
@@ -919,14 +922,14 @@ export function TaskFormFields({
                 marginBottom: "var(--sp-2)",
               }}
             >
-              <span>Не удалось загрузить подзадачи</span>
+              <span>{t("err.loadSubtasks")}</span>
               <button
                 type="button"
                 className="text-chip"
                 onClick={loadSubItems}
                 style={{ fontSize: "var(--fs-2xs)" }}
               >
-                Повторить
+                {t("common.retry")}
               </button>
             </div>
           )}
@@ -941,7 +944,7 @@ export function TaskFormFields({
                   else addSub();
                 }
               }}
-              placeholder="+ подзадача"
+              placeholder={t("subtasks.addPh")}
               style={{
                 flex: 1,
                 minWidth: 0,
@@ -958,7 +961,7 @@ export function TaskFormFields({
               type="button"
               className="modal-action-btn primary compact"
               onClick={() => (editing ? addSubItem() : addSub())}
-              title="Добавить подзадачу"
+              title={t("form.addSubtask")}
             >
               +
             </button>
@@ -985,28 +988,28 @@ export function TaskFormFields({
               type="button"
               className="modal-action-btn"
               onClick={() => setMoveOpen(true)}
-              title="Перенести на другой день"
+              title={t("form.moveTitle")}
               style={{ flexShrink: 0 }}
             >
-              <Icon name="calendarCheck" size={13} /> Перенести
+              <Icon name="calendarCheck" size={13} /> {t("form.move")}
             </button>
             <button
               type="button"
               className="modal-action-btn"
               onClick={duplicate}
-              title="Создать копию с тем же временем (несохранённые правки не копируются)"
+              title={t("form.duplicateTitle")}
               style={{ flexShrink: 0 }}
             >
-              <Icon name="copy" size={13} /> Дублировать
+              <Icon name="copy" size={13} /> {t("form.duplicate")}
             </button>
             <button
               type="button"
               className="modal-action-btn danger"
               onClick={() => setConfirmDel(true)}
-              title="Удалить задачу"
+              title={t("form.deleteTaskTitle")}
               style={{ flexShrink: 0 }}
             >
-              <Icon name="close" size={13} /> Удалить
+              <Icon name="close" size={13} /> {t("common.delete")}
             </button>
           </>
         )}
@@ -1015,7 +1018,7 @@ export function TaskFormFields({
           className="modal-action-btn primary"
           style={{ flex: 1 }}
         >
-          {templateMode ? "Сохранить" : editing ? "Сохранить" : "Добавить"}
+          {templateMode ? t("common.save") : editing ? t("common.save") : t("common.add")}
         </button>
         <button
           type="button"
@@ -1023,14 +1026,14 @@ export function TaskFormFields({
           onClick={onCancel}
           style={{ flex: 1 }}
         >
-          Отмена
+          {t("common.cancel")}
         </button>
       </div>
 
       {confirmDel && (
         <ConfirmDialog
-          title={`Удалить задачу «${title.trim() || "без названия"}»?`}
-          confirmLabel="Удалить"
+          title={t("form.confirmDelete", { title: title.trim() || t("common.unnamed") })}
+          confirmLabel={t("common.delete")}
           onConfirm={del}
           onCancel={() => setConfirmDel(false)}
         />
@@ -1065,6 +1068,7 @@ export function AddTaskModal({
   /** Редактирование существующей задачи (карточка). */
   initial?: Task;
 }) {
+  const { t, lang } = useI18n();
   const editing = initial !== undefined;
   // Защита от «клика-призрака»: карточка открылась по тапу на задачу, а
   // отпускание пальца попало на оверлей (position:fixed) — такой клик не
@@ -1072,8 +1076,8 @@ export function AddTaskModal({
   const openedAt = useRef(Date.now());
   // Задача «Когда-нибудь» не привязана ко дню — заголовок без даты.
   const head = editing && initial?.someday
-    ? "Когда-нибудь"
-    : day.toLocaleDateString("ru", { day: "numeric", month: "long", weekday: "long" });
+    ? t("common.someday")
+    : day.toLocaleDateString(lang, { day: "numeric", month: "long", weekday: "long" });
   // Рендерим в document.body через портал: карточка открывается из задач,
   // лежащих в днях с opacity<1 (прошедшие дни — «серые»). opacity создаёт
   // stacking context, и fixed-оверлей «запирался» внутри него — календарь
@@ -1138,7 +1142,7 @@ export function AddTaskModal({
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onerror = () => reject("Не удалось прочитать файл");
+    reader.onerror = () => reject(t("err.readFile"));
     reader.onload = () => {
       try {
         const bytes = new Uint8Array(reader.result as ArrayBuffer);
@@ -1149,7 +1153,7 @@ function fileToBase64(file: File): Promise<string> {
         }
         resolve(btoa(bin));
       } catch {
-        reject("Не удалось закодировать файл");
+        reject(t("err.encodeFile"));
       }
     };
     reader.readAsArrayBuffer(file);
@@ -1176,9 +1180,9 @@ function mimeOf(name: string): string {
 
 /** Размер файла человекочитаемо: «1.2 МБ», «340 КБ», «900 Б». */
 function formatFileSize(bytes: number): string {
-  if (bytes >= 1_048_576) return `${(bytes / 1_048_576).toFixed(1)} МБ`;
-  if (bytes >= 1024) return `${Math.round(bytes / 1024)} КБ`;
-  return `${bytes} Б`;
+  if (bytes >= 1_048_576) return t("unit.mb", { n: (bytes / 1_048_576).toFixed(1) });
+  if (bytes >= 1024) return t("unit.kb", { n: Math.round(bytes / 1024) });
+  return t("unit.b", { n: bytes });
 }
 
 /** Строка вложения в форме: иконка + имя (сохранённые — кнопка «открыть»,
@@ -1213,7 +1217,7 @@ function AttachmentRow({
           type="button"
           className="file-name-btn"
           onClick={onOpen}
-          title="Открыть файл"
+          title={t("form.openFile")}
           style={{
             flex: 1,
             minWidth: 0,

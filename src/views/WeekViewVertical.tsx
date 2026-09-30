@@ -14,6 +14,7 @@ import { useStore, type TaskPattern } from "../store";
 import { createTaskFromPattern } from "../api";
 import { dayId } from "../drag";
 import { showToast } from "../toast";
+import { useI18n } from "../i18n";
 
 interface Props {
   tasks: Task[];
@@ -37,6 +38,7 @@ interface Props {
  * для перетаскивания задач (@dnd-kit).
  */
 export function WeekViewVertical({ tasks, archivedTasks, mobileSections, anchor, onChange }: Props) {
+  const { t } = useI18n();
   const selectedDate = useStore((s) => s.selectedDate);
   const mondayFirst = useStore((s) => s.mondayFirst);
   const visibility = useStore((s) => s.visibility);
@@ -55,7 +57,7 @@ export function WeekViewVertical({ tasks, archivedTasks, mobileSections, anchor,
       await api.upsertTask({ title, date: toEpochDay(d) });
       setTitlesByDay((m) => ({ ...m, [dayKey(d)]: "" }));
     } catch (e) {
-      showToast(`Не удалось сохранить задачу: ${e}`);
+      showToast(t("err.saveTask", { error: String(e) }));
     }
     onChange();
   };
@@ -67,7 +69,7 @@ export function WeekViewVertical({ tasks, archivedTasks, mobileSections, anchor,
     try {
       await api.upsertTask({ title: "", date: toEpochDay(day), sortOrder: sort });
     } catch (e) {
-      showToast(`Не удалось создать задачу: ${e}`);
+      showToast(t("err.createTask", { error: String(e) }));
       return;
     }
     onChange();
@@ -135,9 +137,9 @@ export function WeekViewVertical({ tasks, archivedTasks, mobileSections, anchor,
                 className="text-chip"
                 onClick={() => setArchiveOpen(true)}
                 style={{ margin: "var(--sp-3) var(--sp-1)" }}
-                title="Архив задач"
+                title={t("task.archiveTitle")}
               >
-                Архив ({archivedTasks.length})
+                {t("task.archiveCount", { n: archivedTasks.length })}
               </button>
             )}
           </>
@@ -168,13 +170,14 @@ function DayRow({
   setTitle: (v: string) => void;
   addTask: () => void;
 }) {
+  const { t, lang } = useI18n();
   const today = isToday(day);
   const past = isPast(day);
   const weight = dayWeight(day);
   const ed = toEpochDay(day);
   const { setNodeRef, isOver } = useDroppable({ id: dayId(ed) });
   const taskPatterns = useStore((s) => s.taskPatterns);
-  const weekday = day.toLocaleDateString("ru", { weekday: "short" });
+  const weekday = day.toLocaleDateString(lang, { weekday: "short" });
   // Расширенное окно добавления задачи на этот день.
   const [addOpen, setAddOpen] = useState(false);
 
@@ -280,7 +283,7 @@ function DayRow({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               enterKeyHint="done"
-              placeholder="+ добавить"
+              placeholder={t("day.addPh")}
               className="inline-input"
               style={{
                 width: "100%",
@@ -296,7 +299,7 @@ function DayRow({
           <button
             className="chip-btn-sm"
             onClick={() => setAddOpen(true)}
-            title="Настроить задачу: время, приоритет, длительность, категория"
+            title={t("task.configure")}
             style={{ flexShrink: 0 }}
           >
             <Icon name="gear" size={12} />
@@ -313,7 +316,7 @@ function DayRow({
           {taskPatterns.length > 0 && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-1)", padding: "var(--sp-1) var(--sp-1) 0" }}>
               <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted, alignSelf: "center" }}>
-                + Шаблон
+                {t("task.template")}
               </span>
               {taskPatterns.map((p) => (
                 <button
@@ -322,8 +325,8 @@ function DayRow({
                   onClick={() => addPattern(p)}
                   title={
                     p.timeMinutes != null
-                      ? `${formatMinutes(p.timeMinutes)} · ${p.durationMinutes ? `${p.durationMinutes} мин` : "без длительности"}`
-                      : "в течение дня"
+                      ? `${formatMinutes(p.timeMinutes)} · ${p.durationMinutes ? t("unit.minutesN", { n: p.durationMinutes }) : t("unit.noDuration")}`
+                      : t("task.withinDay")
                   }
                 >
                   {p.title}

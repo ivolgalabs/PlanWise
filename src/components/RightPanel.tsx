@@ -7,6 +7,7 @@ import { COLORS } from "../theme";
 import { useStore } from "../store";
 import { useMediaQuery } from "../useMediaQuery";
 import { Icon } from "./Icon";
+import { useI18n } from "../i18n";
 
 interface Props {
   tasks: Task[];
@@ -22,6 +23,7 @@ interface Props {
 /** Правая панель: мини-календарь сверху, «Когда-нибудь» под ним, полоска
  *  «Архив · N» внизу. Разворот архива занимает панель целиком. */
 export function RightPanel({ tasks, width, onSelect, onChange, fill = false }: Props) {
+  const { t } = useI18n();
   const visibility = useStore((s) => s.visibility);
   const archivedTasks = useStore((s) => s.archivedTasks);
   const view = useStore((s) => s.view);
@@ -79,7 +81,7 @@ export function RightPanel({ tasks, width, onSelect, onChange, fill = false }: P
               прижата к низу панели (marginTop auto). */}
           <button
             onClick={() => setArchiveOpen(true)}
-            title="Открыть архив"
+            title={t("archive.openTitle")}
             style={{
               display: "flex",
               alignItems: "center",
@@ -96,7 +98,7 @@ export function RightPanel({ tasks, width, onSelect, onChange, fill = false }: P
             }}
           >
             <Icon name="archive" size={14} />
-            Архив
+            {t("common.archive")}
             <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted, fontWeight: 400 }}>
               {archivedTasks.length}
             </span>

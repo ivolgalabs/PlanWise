@@ -32,6 +32,7 @@ import { fromEpochDay, toEpochDay } from "./date";
 import { COLORS, setHex as setHexOf } from "./theme";
 import { showToast } from "./toast";
 import { useStore } from "./store";
+import { useI18n } from "./i18n";
 
 /** id droppable-зоны дня по epoch-day (основные зоны: колонки/строки/ячейки). */
 export const dayId = (epochDay: number): string => `d:${epochDay}`;
@@ -165,6 +166,7 @@ const customCollision: CollisionDetection = (args) => {
  * DragOverlay. Поддерживает перенос задач и подзадач (с подтверждением promote).
  */
 export function TaskDndContext({ children, onChange }: TaskDndContextProps) {
+  const { t, lang } = useI18n();
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [activeSubtask, setActiveSubtask] = useState<Subtask | null>(null);
   const [pending, setPending] = useState<Pending>(null);
@@ -301,7 +303,7 @@ export function TaskDndContext({ children, onChange }: TaskDndContextProps) {
       });
       await api.deleteSubtask(subtask.id);
     } catch (e) {
-      showToast(`Не удалось создать задачу из подзадачи: ${e}`);
+      showToast(t("err.promoteSubtask", { error: String(e) }));
       return;
     }
     // Перечитаем списки подзадач: у старого родителя промоутнутая подзадача
@@ -350,16 +352,16 @@ export function TaskDndContext({ children, onChange }: TaskDndContextProps) {
             }}
           >
             <h3 style={{ margin: "0 0 var(--sp-3)", fontSize: "var(--fs-md)", color: COLORS.text }}>
-              Сделать задачей?
+              {t("drag.promoteTitle")}
             </h3>
             <p style={{ margin: "0 0 var(--sp-4)", fontSize: "var(--fs-sm)", color: COLORS.secondary, lineHeight: 1.4 }}>
-              Подзадача <strong>«{pending.subtask.title}»</strong> станет
-              самостоятельной задачей на{" "}
-              {fromEpochDay(pending.date).toLocaleDateString("ru", {
-                day: "numeric",
-                month: "long",
+              {t("drag.promoteBody", {
+                title: pending.subtask.title,
+                date: fromEpochDay(pending.date).toLocaleDateString(lang, {
+                  day: "numeric",
+                  month: "long",
+                }),
               })}
-              .
             </p>
             <div style={{ display: "flex", gap: "var(--sp-2)" }}>
               <button
@@ -367,14 +369,14 @@ export function TaskDndContext({ children, onChange }: TaskDndContextProps) {
                 onClick={() => setPending(null)}
                 style={{ flex: 1 }}
               >
-                Отмена
+                {t("common.cancel")}
               </button>
               <button
                 className="modal-action-btn primary"
                 onClick={confirmPromote}
                 style={{ flex: 1, fontWeight: 600 }}
               >
-                Сделать задачей
+                {t("drag.promoteConfirm")}
               </button>
             </div>
           </div>
@@ -386,6 +388,7 @@ export function TaskDndContext({ children, onChange }: TaskDndContextProps) {
 
 /** Компактный «призрак» перетаскиваемой задачи. */
 function DragGhost({ task }: { task: Task }) {
+  const { t } = useI18n();
   // Селектор вместо полной подписки: призрак перетаскивания не должен
   // перерисовываться на каждое изменение стора (правки задач, тик автосинка).
   const colorSets = useStore((s) => s.colorSets);
@@ -423,7 +426,7 @@ function DragGhost({ task }: { task: Task }) {
           textOverflow: "ellipsis",
         }}
       >
-        {task.title || "(пустая задача)"}
+        {task.title || t("task.empty")}
       </span>
     </div>
   );

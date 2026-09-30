@@ -15,6 +15,7 @@ import { COLORS, setHex, accentTint, varTint } from "../theme";
 import { useStore } from "../store";
 import { calendarDayId } from "../drag";
 import { Icon } from "./Icon";
+import { useI18n } from "../i18n";
 
 interface Props {
   tasks: Task[];
@@ -43,6 +44,7 @@ const MAX_DOTS = 4;
  * даты, в «Дне» — сам выбранный день.
  */
 export function MiniCalendar({ tasks, large, onSelect, droppable = true, fill = false }: Props) {
+  const { t, lang } = useI18n();
   const selectedDate = useStore((s) => s.selectedDate);
   const weekDate = useStore((s) => s.weekDate);
   const setSelectedDate = useStore((s) => s.setSelectedDate);
@@ -97,9 +99,19 @@ export function MiniCalendar({ tasks, large, onSelect, droppable = true, fill = 
   const monthFs = large ? "var(--fs-md)" : "var(--fs-sm)";
   // Заголовки дней недели — в порядке начала недели, согласованы с сеткой
   // (startOfWeek(first, mondayFirst)), иначе колонки разъезжаются.
-  const weekdays = mondayFirst
-    ? ["П", "В", "С", "Ч", "П", "С", "В"]
-    : ["В", "П", "В", "С", "Ч", "П", "С"];
+  // Имена берём из Intl по текущему языку (narrow: «П», «M», …) — работает
+  // для всех 9 языков без ручных массивов.
+  const weekdays = useMemo(() => {
+    const fmt = new Intl.DateTimeFormat(lang, { weekday: "narrow" });
+    // 2024-01-01 — понедельник: точка отсчёта для порядка Пн…Вс.
+    const base = new Date(2024, 0, 1);
+    const monFirst = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(base);
+      d.setDate(base.getDate() + i);
+      return fmt.format(d);
+    });
+    return mondayFirst ? monFirst : [monFirst[6]!, ...monFirst.slice(0, 6)];
+  }, [lang, mondayFirst]);
 
   return (
     <div
@@ -135,7 +147,7 @@ export function MiniCalendar({ tasks, large, onSelect, droppable = true, fill = 
               new Date(first.getFullYear(), first.getMonth() - 1, 1),
             )
           }
-          title="Предыдущий месяц"
+          title={t("calendar.prevMonth")}
           style={{ padding: "0 4px" }}
         >
           <Icon name="chevronL" size={14} />
@@ -143,9 +155,9 @@ export function MiniCalendar({ tasks, large, onSelect, droppable = true, fill = 
         <span
           style={{ cursor: "pointer", flex: 1, textAlign: "center" }}
           onClick={() => setCollapsed((v) => !v)}
-          title={collapsed ? "Развернуть" : "Свернуть"}
+          title={collapsed ? t("common.expand") : t("common.collapse")}
         >
-          {first.toLocaleDateString("ru", { month: "long", year: "numeric" })}
+          {first.toLocaleDateString(lang, { month: "long", year: "numeric" })}
         </span>
         <button
           className="icon-btn"
@@ -154,7 +166,7 @@ export function MiniCalendar({ tasks, large, onSelect, droppable = true, fill = 
               new Date(first.getFullYear(), first.getMonth() + 1, 1),
             )
           }
-          title="Следующий месяц"
+          title={t("calendar.nextMonth")}
           style={{ padding: "0 4px" }}
         >
           <Icon name="chevronR" size={14} />
@@ -174,9 +186,9 @@ export function MiniCalendar({ tasks, large, onSelect, droppable = true, fill = 
             marginBottom: "var(--sp-2)",
             alignSelf: "flex-start",
           }}
-          title="Перейти к сегодняшнему дню"
+          title={t("calendar.goToday")}
         >
-          Сегодня
+          {t("common.today")}
         </button>
       )}
       {!collapsed && (
@@ -266,6 +278,7 @@ function CalendarDayCell({
   droppable: boolean;
   onPick: (d: Date) => void;
 }) {
+  const { lang } = useI18n();
   const epochDay = toEpochDay(day);
   const { setNodeRef, isOver } = useDroppable({
     // dc: — отдельное пространство имён, чтобы ячейка календаря не конфликтовала
@@ -278,7 +291,7 @@ function CalendarDayCell({
       ref={setNodeRef}
       role="button"
       tabIndex={0}
-      aria-label={day.toLocaleDateString("ru", { day: "numeric", month: "long" })}
+      aria-label={day.toLocaleDateString(lang, { day: "numeric", month: "long" })}
       onClick={() => onPick(day)}
       onKeyDown={(e) => {
         // Клавиатура: Enter/пробел выбирают день (как клик).

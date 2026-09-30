@@ -9,6 +9,7 @@ import { somedayZoneId, planGroupZoneId } from "../drag";
 import { useStore } from "../store";
 import { sortSomedayTasks, toEpochDay } from "../date";
 import { showToast } from "../toast";
+import { useI18n, type TKey } from "../i18n";
 
 interface Props {
   tasks: Task[];
@@ -22,11 +23,13 @@ interface Props {
  *  или свыше месяца — «Когда-нибудь», со сроком в пределах недели — «В течение недели»,
  *  в пределах месяца — «В течение месяца», с истёкшим сроком — «Просроченные». */
 type GroupKey = "overdue" | "week" | "month" | "someday";
-const GROUPS: { key: GroupKey; label: string; placeholder?: string }[] = [
-  { key: "overdue", label: "Просроченные" },
-  { key: "week", label: "В течение недели", placeholder: "+ на неделю" },
-  { key: "month", label: "В течение месяца", placeholder: "+ на месяц" },
-  { key: "someday", label: "Когда-нибудь", placeholder: "+ когда-нибудь" },
+/** Ключи словаря, а не готовые строки: подписи собираются на каждом рендере,
+ *  поэтому смена языка их сразу подхватывает. */
+const GROUPS: { key: GroupKey; label: TKey; placeholder?: TKey }[] = [
+  { key: "overdue", label: "someday.overdue" },
+  { key: "week", label: "someday.week", placeholder: "someday.addWeek" },
+  { key: "month", label: "someday.month", placeholder: "someday.addMonth" },
+  { key: "someday", label: "common.someday", placeholder: "someday.addSomeday" },
 ];
 
 /** К какой группе относится задача по её мягкому сроку. */
@@ -43,6 +46,7 @@ function bucket(t: Task, today: number): GroupKey {
  *  (Просроченные / В течение недели / В течение месяца / Когда-нибудь). Принимает задачи
  *  drag-ом; перенос в день — обычным drag на колонку дня. */
 export function SomedayColumn({ tasks, onChange, stretch = false }: Props) {
+  const { t } = useI18n();
   const { setNodeRef, isOver } = useDroppable({ id: somedayZoneId });
   const sortMode = useStore((s) => s.sortMode);
   // Свёрнутые группы: по умолчанию все развёрнуты.
@@ -85,7 +89,7 @@ export function SomedayColumn({ tasks, onChange, stretch = false }: Props) {
               onClick={() =>
                 setCollapsed((c) => ({ ...c, [g.key]: !c[g.key] }))
               }
-              title={isCollapsed ? "Развернуть" : "Свернуть"}
+              title={isCollapsed ? t("common.expand") : t("common.collapse")}
               style={{
                 background: "transparent",
                 border: "none",
@@ -114,7 +118,7 @@ export function SomedayColumn({ tasks, onChange, stretch = false }: Props) {
               >
                 ▾
               </span>
-              {g.label}
+              {t(g.label)}
               <span style={{ fontSize: "var(--fs-2xs)", color: g.key === "overdue" ? "var(--danger, #e53935)" : COLORS.muted, fontWeight: 400 }}>
                 {g.items.length}
               </span>
@@ -127,7 +131,7 @@ export function SomedayColumn({ tasks, onChange, stretch = false }: Props) {
                   ))}
                   {g.items.length === 0 && (
                     <p style={{ margin: 0, padding: "var(--sp-2) var(--sp-3)", fontSize: "var(--fs-2xs)", color: COLORS.muted }}>
-                      Пусто. Перетащите сюда или напишите ниже.
+                      {t("someday.empty")}
                     </p>
                   )}
                 </div>
@@ -135,7 +139,7 @@ export function SomedayColumn({ tasks, onChange, stretch = false }: Props) {
                     задачу сразу в эту группу (с соответствующим сроком). */}
                 {g.placeholder && (
                   <GroupAdd
-                    placeholder={g.placeholder}
+                    placeholder={t(g.placeholder)}
                     key={g.key}
                     dueEpochDay={g.key === "week" ? today + 7 : g.key === "month" ? today + 30 : null}
                     onChange={onChange}
@@ -189,15 +193,16 @@ function GroupAdd({
   dueEpochDay: number | null;
   onChange: () => void;
 }) {
+  const { t } = useI18n();
   const [value, setValue] = useState("");
   const add = async () => {
-    const t = value.trim();
-    if (!t) return;
+    const title = value.trim();
+    if (!title) return;
     try {
-      await api.upsertTask({ title: t, date: 0, someday: true, dueEpochDay });
+      await api.upsertTask({ title, date: 0, someday: true, dueEpochDay });
       setValue("");
     } catch (e) {
-      showToast(`Не удалось сохранить задачу: ${e}`);
+      showToast(t("err.saveTask", { error: String(e) }));
     }
     onChange();
   };
@@ -231,7 +236,7 @@ function GroupAdd({
       <button
         type="submit"
         className="icon-btn"
-        aria-label="Добавить задачу"
+        aria-label={t("someday.addAria")}
         disabled={!value.trim()}
         style={{ flexShrink: 0, opacity: value.trim() ? 1 : 0.45 }}
       >

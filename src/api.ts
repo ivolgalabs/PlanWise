@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { toEpochDay } from "./date";
 import { browserApi } from "./api-browser-fallback";
+import { t } from "./i18n";
 import type { TaskPattern } from "./store";
 
 export interface Task {
@@ -153,13 +154,13 @@ export const api = {
   addAttachment: (taskId: string, fileName: string, mime: string, dataB64: string) =>
     isTauri()
       ? invoke<Attachment>("add_attachment", { taskId, fileName, mime, dataB64 })
-      : Promise.reject(new Error("Доступно в приложении")),
+      : Promise.reject(new Error(t("err.appOnly"))),
   /** Удалить вложение (строка + файл с диска). */
   deleteAttachment: (id: string) =>
     isTauri() ? invoke<void>("delete_attachment", { id }) : Promise.resolve(),
   /** Абсолютный путь файла вложения — для открытия системным приложением. */
   attachmentPath: (id: string) =>
-    isTauri() ? invoke<string>("attachment_path", { id }) : Promise.reject(new Error("Доступно в приложении")),
+    isTauri() ? invoke<string>("attachment_path", { id }) : Promise.reject(new Error(t("err.appOnly"))),
 };
 
 /** Создать задачу из шаблона на дату: задача получает ВСЕ параметры шаблона

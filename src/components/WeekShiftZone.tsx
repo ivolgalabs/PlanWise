@@ -1,6 +1,7 @@
 import { useDroppable } from "@dnd-kit/core";
 import { COLORS, accentTint } from "../theme";
 import { weekShiftNextId } from "../drag";
+import { useI18n } from "../i18n";
 
 /**
  * Узкая боковая зона переноса задачи на следующую неделю (+7 дней от текущей
@@ -9,11 +10,12 @@ import { weekShiftNextId } from "../drag";
  * Перенос в прошлую неделю убран по желанию пользователя.
  */
 export function WeekShiftZone() {
+  const { t } = useI18n();
   const { setNodeRef, isOver } = useDroppable({ id: weekShiftNextId });
   return (
     <div
       ref={setNodeRef}
-      title="Перенести на следующую неделю (+7 дней)"
+      title={t("weekShift.title")}
       style={{
         width: 30,
         flexShrink: 0,
@@ -30,7 +32,7 @@ export function WeekShiftZone() {
         userSelect: "none",
       }}
     >
-      следующая неделя ▶
+      {t("weekShift.label")}
     </div>
   );
 }

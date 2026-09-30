@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { COLORS } from "../theme";
+import { useI18n } from "../i18n";
 
 interface Props {
   /** Текст вопроса (заголовок диалога). */
@@ -14,7 +15,8 @@ interface Props {
 
 /** Кастомное окно подтверждения (например, «Удалить задачу?»).
  *  Оверлей + карточка, стиль как у DatePickerModal. Esc закрывает. */
-export function ConfirmDialog({ title, confirmLabel = "Удалить", danger = true, onConfirm, onCancel }: Props) {
+export function ConfirmDialog({ title, confirmLabel, danger = true, onConfirm, onCancel }: Props) {
+  const { t } = useI18n();
   // Esc = отмена (как в DatePickerModal/MonthView).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -61,14 +63,14 @@ export function ConfirmDialog({ title, confirmLabel = "Удалить", danger =
             autoFocus
             style={{ flex: 1 }}
           >
-            {confirmLabel}
+            {confirmLabel ?? t("common.delete")}
           </button>
           <button
             className="modal-action-btn"
             onClick={onCancel}
             style={{ flex: 1 }}
           >
-            Отмена
+            {t("common.cancel")}
           </button>
         </div>
       </div>

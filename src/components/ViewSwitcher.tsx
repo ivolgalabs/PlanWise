@@ -1,5 +1,6 @@
 import type { ViewKind } from "../store";
 import { COLORS } from "../theme";
+import { useI18n } from "../i18n";
 
 interface Props {
   view: ViewKind;
@@ -8,10 +9,11 @@ interface Props {
 
 /** Сегментированный переключатель День/Неделя/Месяц. */
 export function ViewSwitcher({ view, onChange }: Props) {
+  const { t } = useI18n();
   const items: { key: ViewKind; label: string }[] = [
-    { key: "day", label: "День" },
-    { key: "week", label: "Неделя" },
-    { key: "month", label: "Месяц" },
+    { key: "day", label: t("view.day") },
+    { key: "week", label: t("view.week") },
+    { key: "month", label: t("view.month") },
   ];
   return (
     <div

@@ -4,6 +4,7 @@ import { COLORS, setHex } from "../theme";
 import { isToday, isPast, isSameMonth, fromEpochDay } from "../date";
 import { useStore } from "../store";
 import { useSubtasks } from "../useSubtasks";
+import { useI18n } from "../i18n";
 
 /** Фильтр по периоду: все / сегодня / просроченные / ближайшие 7 дней /
  *  календарный месяц / произвольный диапазон «с/по». */
@@ -35,12 +36,13 @@ interface Props {
  * Чекбокс отмечает задачу, кнопка с датой переходит к дню задачи.
  */
 export function SearchResults({ tasks, query, color, period, status, sort, from, to, onJumpToDay, onChange, onResetFilters }: Props) {
+  const { t, lang } = useI18n();
   const colorSets = useStore((s) => s.colorSets);
   const q = query.trim().toLowerCase();
 
   /** Имя цвет-сета для сортировки; без категории — в конец ("\uffff" префикс). */
   const colorName = (id: string | null): string => {
-    if (!id) return "\uffffБез категории";
+    if (!id) return "\uffff" + t("common.noCategory");
     return colorSets.find((s) => s.id === id)?.name ?? "\uffff?";
   };
 
@@ -99,11 +101,11 @@ export function SearchResults({ tasks, query, color, period, status, sort, from,
       const ad = a.date, bd = b.date;
       switch (sort) {
         case "dateDesc": return bd - ad || a.sortOrder - b.sortOrder;
-        case "alpha": return a.title.localeCompare(b.title, "ru", { sensitivity: "base" });
-        case "alphaDesc": return b.title.localeCompare(a.title, "ru", { sensitivity: "base" });
+        case "alpha": return a.title.localeCompare(b.title, lang, { sensitivity: "base" });
+        case "alphaDesc": return b.title.localeCompare(a.title, lang, { sensitivity: "base" });
         case "category": {
           const an = colorName(a.colorSetId), bn = colorName(b.colorSetId);
-          return an.localeCompare(bn, "ru") || ad - bd || a.sortOrder - b.sortOrder;
+          return an.localeCompare(bn, lang) || ad - bd || a.sortOrder - b.sortOrder;
         }
         default: return ad - bd || a.sortOrder - b.sortOrder;
       }
@@ -113,8 +115,8 @@ export function SearchResults({ tasks, query, color, period, status, sort, from,
   const anyFilter =
     q !== "" || color !== null || period !== "all" || status !== "all" || sort !== "dateAsc";
 
-  const toggleDone = async (t: Task) => {
-    await api.upsertTask({ ...t, isDone: !t.isDone });
+  const toggleDone = async (task: Task) => {
+    await api.upsertTask({ ...task, isDone: !task.isDone });
     onChange();
   };
 
@@ -141,26 +143,26 @@ export function SearchResults({ tasks, query, color, period, status, sort, from,
       >
         {filtered.length === 0 ? (
           <>
-            Ничего не найдено.{" "}
-            <button className="text-chip" onClick={onResetFilters} style={{ border: `1px solid var(--border-color)` }}>Сбросить фильтры</button>
+            {t("search.nothing")}{" "}
+            <button className="text-chip" onClick={onResetFilters} style={{ border: `1px solid var(--border-color)` }}>{t("search.reset")}</button>
           </>
         ) : (
           <>
-            Найдено задач: {filtered.length}
+            {t("search.found", { n: filtered.length })}
             {anyFilter && (
-              <button className="text-chip" onClick={onResetFilters} style={{ border: `1px solid var(--border-color)` }}>Сбросить фильтры</button>
+              <button className="text-chip" onClick={onResetFilters} style={{ border: `1px solid var(--border-color)` }}>{t("search.reset")}</button>
             )}
           </>
         )}
       </div>
-      {filtered.map((t) => {
-        const d = fromEpochDay(t.date);
+      {filtered.map((task) => {
+        const d = fromEpochDay(task.date);
         // «Когда-нибудь» (date=0 → 1970) просроченной не бывает: «прошлое»
         // берём у мягкого срока, а без него задача всегда актуальна.
-        const past = t.someday ? (t.dueEpochDay != null && isPast(fromEpochDay(t.dueEpochDay))) : isPast(d);
+        const past = task.someday ? (task.dueEpochDay != null && isPast(fromEpochDay(task.dueEpochDay))) : isPast(d);
         return (
           <div
-            key={t.id}
+            key={task.id}
             style={{
               display: "flex",
               flexDirection: "column",
@@ -181,16 +183,16 @@ export function SearchResults({ tasks, query, color, period, status, sort, from,
                   height: 20,
                   borderRadius: 2,
                   flexShrink: 0,
-                  background: setHex(colorSets, t.colorSetId) ?? "transparent",
+                  background: setHex(colorSets, task.colorSetId) ?? "transparent",
                 }}
               />
               <label className="checkbox-hit">
                 <input
                   type="checkbox"
-                  checked={t.isDone}
-                  onChange={() => toggleDone(t)}
+                  checked={task.isDone}
+                  onChange={() => toggleDone(task)}
                   style={{ flexShrink: 0 }}
-                  title={t.isDone ? "Отметить невыполненной" : "Отметить выполненной"}
+                  title={task.isDone ? t("task.markUndone") : t("task.markDone")}
                 />
               </label>
               <span
@@ -200,37 +202,37 @@ export function SearchResults({ tasks, query, color, period, status, sort, from,
                   overflow: "hidden",
                   textOverflow: "ellipsis",
                   whiteSpace: "nowrap",
-                  color: t.isDone || past ? COLORS.muted : COLORS.text,
-                  textDecoration: t.isDone ? "line-through" : "none",
+                  color: task.isDone || past ? COLORS.muted : COLORS.text,
+                  textDecoration: task.isDone ? "line-through" : "none",
                   fontSize: "var(--fs-sm)",
                 }}
               >
-                {t.title || "(без названия)"}
+                {task.title || t("common.noTitle")}
               </span>
-              {t.someday ? (
+              {task.someday ? (
                 // «Когда-нибудь» — нет даты и перехода к дню.
                 <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted }}>
-                  Когда-нибудь
+                  {t("common.someday")}
                 </span>
               ) : (
                 <button
                   className="text-chip"
                   onClick={() => onJumpToDay(d)}
-                  title="Перейти к этому дню"
+                  title={t("search.jumpToDay")}
                   style={{ fontSize: "var(--fs-2xs)", flexShrink: 0 }}
                 >
-                  {d.toLocaleDateString("ru", {
+                  {d.toLocaleDateString(lang, {
                     day: "numeric",
                     month: "short",
                     weekday: "short",
                   })}
-                  {isToday(d) ? " · сегодня" : ""} →
+                  {isToday(d) ? t("search.isToday") : ""} →
                 </button>
               )}
             </div>
             {/* Подзадачи задачи — компактной строкой под заголовком
                 (в поиске их раньше не было вовсе). */}
-            <SearchSubs taskId={t.id} done={t.isDone} />
+            <SearchSubs taskId={task.id} done={task.isDone} />
           </div>
         );
       })}

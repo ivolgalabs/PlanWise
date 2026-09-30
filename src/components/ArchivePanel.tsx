@@ -6,6 +6,7 @@ import { showToast } from "../toast";
 import { COLORS } from "../theme";
 import { Icon } from "./Icon";
 import { DatePickerModal } from "./DatePickerModal";
+import { useI18n } from "../i18n";
 
 interface Props {
   tasks: Task[];
@@ -18,17 +19,18 @@ interface Props {
  *  «Вернуть все на дату…»: все задачи архива возвращаются на выбранный день
  *  (например, на сегодня или любую дату в будущем). */
 export function ArchivePanel({ tasks, onClose, onChange }: Props) {
+  const { t, lang } = useI18n();
   // Задача, для которой открыт выбор даты возврата.
   const [restoring, setRestoring] = useState<Task | null>(null);
   // Режим «вернуть все»: одна дата для всех задач архива.
   const [restoringAll, setRestoringAll] = useState(false);
   // Результат массового возврата (конфликты времени пропускаются, остальные
-  // возвращаются — пользователь видит итог).
-  const [restoreMsg, setRestoreMsg] = useState("");
+  // возвращаются — пользователь видит итог). partial — часть осталась в архиве.
+  const [restoreMsg, setRestoreMsg] = useState<{ text: string; partial: boolean } | null>(null);
 
-  const restore = async (t: Task, d: Date) => {
+  const restore = async (task: Task, d: Date) => {
     try {
-      await api.restoreArchived(t.id, d);
+      await api.restoreArchived(task.id, d);
     } catch (e) {
       // Отказ (наложение по времени) раньше был unhandled rejection: модалка
       // закрывалась без объяснения, задача «оставалась» в архиве.
@@ -42,9 +44,9 @@ export function ArchivePanel({ tasks, onClose, onChange }: Props) {
     setRestoringAll(false);
     let ok = 0;
     let conflicts = 0;
-    for (const t of tasks) {
+    for (const task of tasks) {
       try {
-        await api.restoreArchived(t.id, d);
+        await api.restoreArchived(task.id, d);
         ok += 1;
       } catch {
         conflicts += 1; // наложение по времени — задача осталась в архиве
@@ -52,8 +54,8 @@ export function ArchivePanel({ tasks, onClose, onChange }: Props) {
     }
     setRestoreMsg(
       conflicts === 0
-        ? `Возвращено задач: ${ok}`
-        : `Возвращено ${ok} из ${tasks.length}`,
+        ? { text: t("archive.restored", { n: ok }), partial: false }
+        : { text: t("archive.restoredPartial", { n: ok, total: tasks.length }), partial: true },
     );
     onChange();
   };
@@ -69,11 +71,11 @@ export function ArchivePanel({ tasks, onClose, onChange }: Props) {
           borderBottom: `1px solid var(--border-color)`,
         }}
       >
-        <button className="icon-btn" onClick={onClose} title="Свернуть архив">
+        <button className="icon-btn" onClick={onClose} title={t("archive.collapse")}>
           <Icon name="chevronL" size={14} />
         </button>
         <span style={{ fontSize: "var(--fs-sm)", fontWeight: 700, color: "var(--accent-text)" }}>
-          Архив
+          {t("common.archive")}
         </span>
         <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted }}>
           {tasks.length}
@@ -81,7 +83,7 @@ export function ArchivePanel({ tasks, onClose, onChange }: Props) {
         {tasks.length > 0 && (
           <button
             onClick={() => setRestoringAll(true)}
-            title="Вернуть все задачи архива на выбранную дату"
+            title={t("archive.restoreAllTitle")}
             style={{
               marginLeft: "auto",
               fontSize: "var(--fs-2xs)",
@@ -94,25 +96,25 @@ export function ArchivePanel({ tasks, onClose, onChange }: Props) {
               whiteSpace: "nowrap",
             }}
           >
-            Вернуть все…
+            {t("archive.restoreAll")}
           </button>
         )}
       </div>
       {restoreMsg && (
         <div style={{ padding: "var(--sp-1) var(--sp-3)", fontSize: "var(--fs-2xs)", color: COLORS.muted, borderBottom: `1px solid var(--border-color)` }}>
-          {restoreMsg}
-          {restoreMsg.includes("из") && " — задачи с пересечением по времени остались в архиве"}
+          {restoreMsg.text}
+          {restoreMsg.partial && t("archive.conflicts")}
         </div>
       )}
       <div style={{ flex: 1, overflowY: "auto", minHeight: 0, padding: "var(--sp-2)" }}>
         {tasks.length === 0 && (
           <p style={{ margin: 0, padding: "var(--sp-2) var(--sp-3)", fontSize: "var(--fs-2xs)", color: COLORS.muted }}>
-            Архив пуст.
+            {t("archive.empty")}
           </p>
         )}
-        {tasks.map((t) => (
+        {tasks.map((task) => (
           <div
-            key={t.id}
+            key={task.id}
             style={{
               display: "flex",
               alignItems: "center",
@@ -124,10 +126,10 @@ export function ArchivePanel({ tasks, onClose, onChange }: Props) {
             <label className="checkbox-hit">
               <input
                 type="checkbox"
-                checked={t.isDone}
+                checked={task.isDone}
                 onChange={async () => {
                   try {
-                    await api.upsertTask({ ...t, isDone: !t.isDone });
+                    await api.upsertTask({ ...task, isDone: !task.isDone });
                     onChange();
                   } catch (e) {
                     // Сбой записи иначе оставил бы чекбокс рассинхронизированным
@@ -135,7 +137,7 @@ export function ArchivePanel({ tasks, onClose, onChange }: Props) {
                     showToast(String(e instanceof Error ? e.message : e));
                   }
                 }}
-                title={t.isDone ? "Отметить невыполненной" : "Отметить выполненной"}
+                title={task.isDone ? t("task.markUndone") : t("task.markDone")}
                 style={{ flexShrink: 0 }}
               />
             </label>
@@ -147,18 +149,18 @@ export function ArchivePanel({ tasks, onClose, onChange }: Props) {
                 textOverflow: "ellipsis",
                 whiteSpace: "nowrap",
                 fontSize: "var(--fs-sm)",
-                color: t.isDone ? COLORS.muted : COLORS.text,
-                textDecoration: t.isDone ? "line-through" : "none",
+                color: task.isDone ? COLORS.muted : COLORS.text,
+                textDecoration: task.isDone ? "line-through" : "none",
               }}
             >
-              {t.title || "(без названия)"}
+              {task.title || t("common.noTitle")}
             </span>
             <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted, flexShrink: 0 }}>
-              {fromEpochDay(t.date).toLocaleDateString("ru", { day: "numeric", month: "short" })}
+              {fromEpochDay(task.date).toLocaleDateString(lang, { day: "numeric", month: "short" })}
             </span>
             <button
-              onClick={() => setRestoring(t)}
-              title="Вернуть на выбранную дату"
+              onClick={() => setRestoring(task)}
+              title={t("archive.restoreTitle")}
               style={{
                 fontSize: "var(--fs-2xs)",
                 flexShrink: 0,
@@ -171,7 +173,7 @@ export function ArchivePanel({ tasks, onClose, onChange }: Props) {
                 whiteSpace: "nowrap",
               }}
             >
-              Вернуть…
+              {t("archive.restore")}
             </button>
           </div>
         ))}

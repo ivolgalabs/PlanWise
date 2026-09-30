@@ -31,6 +31,7 @@ import { RightPanel } from "./components/RightPanel";
 import { TaskDndContext } from "./drag";
 import { clearToastListener, setToastListener } from "./toast";
 import { scheduleAutoExport, startAutoSync } from "./autoSync";
+import { useI18n } from "./i18n";
 import "./App.css";
 
 /** Ширина правой панели (общая для «Недели» и «Дня»): resize-ручка в неделе,
@@ -79,6 +80,7 @@ const scheduleWidgetWrite = (dark: boolean) => {
 };
 
 function App() {
+  const { t } = useI18n();
   // useShallow: подписка только на перечисленные поля (а не на весь стор) —
   // иначе любой bump (subtaskRev, autoSyncLastAt) перерисовывал бы всё дерево.
   const {
@@ -178,8 +180,9 @@ function App() {
   // период, статус и сортировка результатов.
   const [searchOpen, setSearchOpen] = useState(false);
   // Ошибка загрузки данных (сбой БД) — показывается баннером, чтобы приложение
-  // не выглядело «пустым» без объяснения.
-  const [loadError, setLoadError] = useState("");
+  // не выглядело «пустым» без объяснения. Флаг, а не текст: сообщение берётся
+  // из словаря в момент отрисовки (переводится при смене языка).
+  const [loadError, setLoadError] = useState(false);
   // Тост: короткое сообщение об ошибке сохранения и т.п. Автоскрытие — 4.5 с.
   const [toast, setToast] = useState("");
   // Таймер записи данных виджета — модульный: чистим при размонтировании App,
@@ -412,9 +415,9 @@ function App() {
       for (const f of failures) {
         console.error("Не удалось загрузить данные:", (f as PromiseRejectedResult).reason);
       }
-      setLoadError("Не удалось загрузить задачи. Проверьте доступ к данным приложения.");
+      setLoadError(true);
     } else {
-      setLoadError("");
+      setLoadError(false);
     }
     // Метка холодного старта: данные отрисованы (в журнал диагностики
     // пишется один раз за процесс — «не запустилось с первого раза»
@@ -611,12 +614,12 @@ function App() {
             gap: "var(--sp-2)",
           }}
         >
-          <span>{loadError}</span>
+          <span>{t("app.loadError")}</span>
           <button
             className="icon-btn"
             style={{ marginLeft: "auto" }}
-            onClick={() => setLoadError("")}
-            title="Скрыть"
+            onClick={() => setLoadError(false)}
+            title={t("app.hide")}
           >
             <Icon name="close" size={14} />
           </button>
@@ -657,14 +660,13 @@ function App() {
           }}
         >
           <span>
-            Перенесено в архив просроченных задач: {archiveCount} — можно
-            восстановить из раздела «Архив»
+            {t("app.archiveBanner", { n: archiveCount })}
           </span>
           <button
             className="icon-btn"
             style={{ marginLeft: "auto" }}
             onClick={() => setArchiveCount(0)}
-            title="Скрыть"
+            title={t("app.hide")}
           >
             <Icon name="close" size={14} />
           </button>
@@ -715,7 +717,7 @@ function App() {
                       fontSize: "var(--fs-sm)",
                     }}
                   >
-                    Загрузка…
+                    {t("app.loading")}
                   </div>
                 }
               >
@@ -849,6 +851,7 @@ function AppRightPanel({
   onSelect: (d: Date) => void;
   onChange: () => void;
 }) {
+  const { t } = useI18n();
   const draggingRef = useRef(false);
 
   // Resize мышью через drag-handle на левом краю панели.
@@ -903,7 +906,7 @@ function AppRightPanel({
           обрезал внутренний скролл. */}
       <div
         onMouseDown={startResize}
-        title="Тяните, чтобы изменить ширину"
+        title={t("app.resizeHandle")}
         style={{
           position: "absolute",
           left: -3,

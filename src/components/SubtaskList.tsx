@@ -7,6 +7,7 @@ import { Icon } from "./Icon";
 import { subtaskDragId } from "../drag";
 import { useSubtasks } from "../useSubtasks";
 import { showToast } from "../toast";
+import { useI18n } from "../i18n";
 
 interface Props {
   taskId: string;
@@ -21,19 +22,20 @@ interface Props {
  * задачи открывается ТОЛЬКО кнопкой «✎» в строке задачи.
  */
 export function SubtaskList({ taskId }: Props) {
+  const { t } = useI18n();
   const [newTitle, setNewTitle] = useState("");
   // Подзадачи + перезагрузка (общий хук: защита от гонки размонтирования,
   // глобальный subtaskRev после promote/смены родителя).
   const { items, error: loadError, reload } = useSubtasks(taskId);
 
   const add = async () => {
-    const t = newTitle.trim();
-    if (!t) return;
+    const title = newTitle.trim();
+    if (!title) return;
     try {
-      await api.upsertSubtask({ taskId, title: t });
+      await api.upsertSubtask({ taskId, title });
       setNewTitle("");
     } catch (e) {
-      showToast(`Не удалось добавить подзадачу: ${e}`);
+      showToast(t("err.addSubtask", { error: String(e) }));
     }
     reload();
   };
@@ -42,7 +44,7 @@ export function SubtaskList({ taskId }: Props) {
     try {
       await api.upsertSubtask({ ...s, isDone: !s.isDone });
     } catch (e) {
-      showToast(`Не удалось отметить подзадачу: ${e}`);
+      showToast(t("err.toggleSubtask", { error: String(e) }));
     }
     reload();
   };
@@ -63,7 +65,7 @@ export function SubtaskList({ taskId }: Props) {
             userSelect: "none",
           }}
         >
-          Подзадачи ({done}/{items.length})
+          {t("subtasks.title", { done, total: items.length })}
         </div>
       )}
       {items.map((s) => (
@@ -75,7 +77,7 @@ export function SubtaskList({ taskId }: Props) {
             try {
               await api.upsertSubtask({ ...sub, title });
             } catch (e) {
-              showToast(`Не удалось переименовать подзадачу: ${e}`);
+              showToast(t("err.renameSubtask", { error: String(e) }));
             }
             reload();
           }}
@@ -93,9 +95,9 @@ export function SubtaskList({ taskId }: Props) {
             color: "var(--danger)",
           }}
         >
-          <span>Не удалось загрузить подзадачи</span>
+          <span>{t("err.loadSubtasks")}</span>
           <button className="text-chip" onClick={reload} style={{ fontSize: "var(--fs-sm)" }}>
-            Повторить
+            {t("common.retry")}
           </button>
         </div>
       )}
@@ -111,7 +113,7 @@ export function SubtaskList({ taskId }: Props) {
           value={newTitle}
           onChange={(e) => setNewTitle(e.target.value)}
           enterKeyHint="done"
-          placeholder="+ подзадача"
+          placeholder={t("subtasks.addPh")}
           className="inline-input"
           style={{
             width: "100%",
@@ -143,6 +145,7 @@ function SubtaskRow({
   /** Переименовать подзадачу (Enter/blur в режиме редактирования). */
   onRename?: (s: Subtask, title: string) => void;
 }) {
+  const { t } = useI18n();
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: subtaskDragId(subtask.id),
     data: { subtask },
@@ -199,7 +202,7 @@ function SubtaskRow({
           кнопку ✕ можно было кликать. Явная подсказка «тяни тут». */}
       <span
         {...listeners}
-        title="Перетащите на день (→ задача) или на другую задачу"
+        title={t("subtasks.dragHint")}
         style={{
           flexShrink: 0,
           width: 16,

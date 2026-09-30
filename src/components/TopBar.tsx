@@ -4,6 +4,7 @@ import { ViewSwitcher } from "./ViewSwitcher";
 import { Icon } from "./Icon";
 import { COLORS } from "../theme";
 import { weekDays } from "../date";
+import { useI18n } from "../i18n";
 
 interface Props {
   selectedDate: Date;
@@ -45,6 +46,7 @@ export function TopBar({
   weekVertical = false,
   onToggleWeekOrientation,
 }: Props) {
+  const { t, lang } = useI18n();
   const barRef = useRef<HTMLDivElement>(null);
   // Переполнение шапки (крупный масштаб/шрифт): сравниваем сумму ширин
   // детей с шириной шапки (scrollWidth не годится — flex-wrap уже перенёс
@@ -72,15 +74,15 @@ export function TopBar({
   }, [view, visibility.navArrows, visibility.search, visibility.datePicker, showWeekToggle]);
   let label: string;
   if (view === "day") {
-    label = selectedDate.toLocaleDateString("ru", {
+    label = selectedDate.toLocaleDateString(lang, {
       day: "numeric",
       month: "long",
     });
   } else if (view === "week") {
     const days = weekDays(selectedDate, mondayFirst);
-    label = `${days[0].getDate()}–${days[6].getDate()} ${days[6].toLocaleDateString("ru", { month: "long" })}`;
+    label = `${days[0].getDate()}–${days[6].getDate()} ${days[6].toLocaleDateString(lang, { month: "long" })}`;
   } else {
-    label = selectedDate.toLocaleDateString("ru", {
+    label = selectedDate.toLocaleDateString(lang, {
       month: "long",
       year: "numeric",
     });
@@ -91,7 +93,7 @@ export function TopBar({
       {/* Стрелки/кнопка 📅 скрываются по настройкам видимости; заголовок-дата
           и кнопка настроек (gear) остаются всегда. */}
       {visibility.navArrows && (
-        <button className="icon-btn" onClick={onPrev} title="Назад">
+        <button className="icon-btn" onClick={onPrev} title={t("topBar.prev")}>
           <Icon name="chevronL" size={18} />
         </button>
       )}
@@ -113,12 +115,12 @@ export function TopBar({
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",
         }}
-        title="Выбрать дату"
+        title={t("topBar.pickDate")}
       >
         {label}
       </button>
       {visibility.navArrows && (
-        <button className="icon-btn" onClick={onNext} title="Вперёд">
+        <button className="icon-btn" onClick={onNext} title={t("topBar.next")}>
           <Icon name="chevronR" size={18} />
         </button>
       )}
@@ -128,14 +130,14 @@ export function TopBar({
         <button
           className="text-chip week-toggle-btn"
           onClick={onToggleWeekOrientation}
-          title={weekVertical ? "Сетка (горизонтально)" : "Список (вертикально)"}
-          aria-label={weekVertical ? "Показать неделю сеткой" : "Показать неделю списком"}
+          title={weekVertical ? t("topBar.gridTitle") : t("topBar.listTitle")}
+          aria-label={weekVertical ? t("topBar.gridAria") : t("topBar.listAria")}
           style={{ fontSize: "var(--fs-xs)" }}
         >
           {weekVertical ? (
-            <><Icon name="grid" size={14} /> сеткой</>
+            <><Icon name="grid" size={14} /> {t("topBar.gridLabel")}</>
           ) : (
-            <><Icon name="list" size={14} /> списком</>
+            <><Icon name="list" size={14} /> {t("topBar.listLabel")}</>
           )}
         </button>
       )}
@@ -143,7 +145,7 @@ export function TopBar({
         <button
           className="icon-btn search-btn"
           onClick={onToggleSearch}
-          title={searchActive ? "Закрыть поиск" : "Поиск задач"}
+          title={searchActive ? t("topBar.closeSearch") : t("topBar.search")}
           style={searchActive ? { background: COLORS.hover } : undefined}
         >
           <Icon name="search" />
@@ -155,12 +157,12 @@ export function TopBar({
         <button
           className="icon-btn"
           onClick={onOpenDatePicker}
-          title="Дата"
+          title={t("topBar.date")}
         >
           <Icon name="calendar" />
         </button>
       )}
-      <button className="icon-btn" onClick={onOpenSettings} title="Настройки">
+      <button className="icon-btn" onClick={onOpenSettings} title={t("topBar.settings")}>
         <Icon name="gear" />
       </button>
     </div>

@@ -42,6 +42,7 @@ import "./App.css";
 import "universal-ui/mobile.css";
 import App from "./App";
 import { useStore } from "./store";
+import { I18nProvider, t } from "./i18n";
 
 // Deep-link: тап по уведомлению (Android/Mac) → плагин шлёт событие
 // «actionPerformed», в notification.extra.taskId — id задачи. Слушаем на
@@ -94,7 +95,7 @@ class RootErrorBoundary extends React.Component<
             textAlign: "center",
           }}
         >
-          <div style={{ fontSize: 16, fontWeight: 600 }}>Что-то пошло не так</div>
+          <div style={{ fontSize: 16, fontWeight: 600 }}>{t("app.fatalTitle")}</div>
           <pre
             style={{
               fontSize: 12,
@@ -106,7 +107,7 @@ class RootErrorBoundary extends React.Component<
           >
             {String(this.state.error?.message ?? this.state.error)}
           </pre>
-          <button onClick={() => location.reload()}>Перезагрузить</button>
+          <button onClick={() => location.reload()}>{t("app.reload")}</button>
         </div>
       );
     }
@@ -116,8 +117,10 @@ class RootErrorBoundary extends React.Component<
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    <RootErrorBoundary>
-      <App />
-    </RootErrorBoundary>
+    <I18nProvider>
+      <RootErrorBoundary>
+        <App />
+      </RootErrorBoundary>
+    </I18nProvider>
   </React.StrictMode>,
 );

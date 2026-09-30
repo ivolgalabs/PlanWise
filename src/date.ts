@@ -1,5 +1,7 @@
 /** Утилиты дат. Не зависят от Tauri — чистый TS. */
 
+import { getLang, t } from "./i18n";
+
 /** epoch-day <-> Date. Должно совпадать с Rust-логикой хранения. */
 export const toEpochDay = (d: Date): number => {
   const utc = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
@@ -140,14 +142,14 @@ export const sortSomedayTasks = <
 
 /** Подпись мягкого срока «Когда-нибудь»: просрочено / в течение недели /
  *  в течение месяца / до конкретной даты. */
-export const dueEpochLabel = (dueEpochDay: number): string => {
+export const dueEpochLabel = (dueEpochDay: number, lang: string = getLang()): string => {
   const today = toEpochDay(new Date());
   const d = fromEpochDay(dueEpochDay);
-  const dateStr = d.toLocaleDateString("ru", { day: "numeric", month: "short" });
-  if (dueEpochDay < today) return `просрочено · ${dateStr}`;
-  if (dueEpochDay <= today + 7) return "в течение недели";
-  if (dueEpochDay <= today + 30) return "в течение месяца";
-  return `до ${dateStr}`;
+  const dateStr = d.toLocaleDateString(lang, { day: "numeric", month: "short" });
+  if (dueEpochDay < today) return t("date.overdue", { date: dateStr });
+  if (dueEpochDay <= today + 7) return t("date.withinWeek");
+  if (dueEpochDay <= today + 30) return t("date.withinMonth");
+  return t("date.until", { date: dateStr });
 };
 
 /** Задачи конкретного дня: «Когда-нибудь» не дублируется в днях, сортировка —
@@ -271,25 +273,25 @@ export function conflictIdFor(
 
 /** Время задачи для бейджа: «09:00» или «09:00–10:30» (+N дн. при переходе
  *  через полночь); null — время не задано. */
-export const taskTimeRange = (t: {
+export const taskTimeRange = (task: {
   timeMinutes?: number | null;
   durationMinutes?: number | null;
 }): string | null => {
-  if (t.timeMinutes == null) return null;
-  if (!t.durationMinutes) return formatMinutes(t.timeMinutes);
-  const total = t.timeMinutes + t.durationMinutes;
+  if (task.timeMinutes == null) return null;
+  if (!task.durationMinutes) return formatMinutes(task.timeMinutes);
+  const total = task.timeMinutes + task.durationMinutes;
   const days = Math.floor(total / (24 * 60));
-  return `${formatMinutes(t.timeMinutes)}–${formatMinutes(total % (24 * 60))}${days > 0 ? ` (+${days} дн.)` : ""}`;
+  return `${formatMinutes(task.timeMinutes)}–${formatMinutes(total % (24 * 60))}${days > 0 ? t("date.plusDays", { n: days }) : ""}`;
 };
 
 /** «выезд в HH:MM» — за travelTime до начала задачи; null если не задано. */
-export const travelTimeText = (t: {
+export const travelTimeText = (task: {
   timeMinutes?: number | null;
   travelTime?: number | null;
 }): string | null => {
-  if (t.timeMinutes == null || !t.travelTime) return null;
-  const diff = t.timeMinutes - t.travelTime;
+  if (task.timeMinutes == null || !task.travelTime) return null;
+  const diff = task.timeMinutes - task.travelTime;
   const dep = ((diff % 1440) + 1440) % 1440;
-  const note = diff < 0 ? " (накануне)" : "";
-  return `выезд в ${formatMinutes(dep)}${note}`;
+  const note = diff < 0 ? t("date.eve") : "";
+  return `${t("date.departure", { time: formatMinutes(dep) ?? "" })}${note}`;
 };
