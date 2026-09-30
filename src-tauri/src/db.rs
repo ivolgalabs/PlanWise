@@ -89,6 +89,56 @@ mod tests {
     /// Контракт: каждый столбец из TASK_COLUMNS существует в схеме tasks.
     /// Дрейф между миграциями и SELECT-списком (список — один на все команды)
     /// ломает их разом, поэтому проверяем здесь, а не на устройстве.
+    /// Дублирование задачи: поля (время, длительность, напоминание, выезд)
+    /// и подзадачи копируются, выполненность снята, и клон НЕ падает на
+    /// проверке наложений с оригиналом (копия сознательно в тот же слот).
+    #[test]
+    fn duplicate_task_copies_and_allows_overlap() {
+        let mut conn = open(":memory:").expect("open test db");
+        let src = crate::models::Task {
+            id: "src".into(),
+            title: "Дела".into(),
+            date: 20_000,
+            is_done: true,
+            time_minutes: Some(600),
+            duration_minutes: Some(60),
+            travel_time: Some(30),
+            notify_minutes: Some(15),
+            ..Default::default()
+        };
+        crate::commands::write_task(&conn, &src).expect("insert src");
+        conn.execute(
+            "INSERT INTO subtasks (id, task_id, title, is_done, sort_order, created_at)
+             VALUES ('s1', 'src', 'шаг', 0, 0, 0)",
+            [],
+        )
+        .expect("insert subtask");
+
+        let copy = crate::commands::duplicate_task_conn(&mut conn, "src").expect("duplicate");
+        assert_ne!(copy.id, "src");
+        assert!(!copy.is_done);
+        assert_eq!(copy.time_minutes, Some(600));
+        assert_eq!(copy.duration_minutes, Some(60));
+        assert_eq!(copy.travel_time, Some(30));
+        assert_eq!(copy.notify_minutes, Some(15));
+        let subs: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM subtasks WHERE task_id = ?1",
+                [&copy.id],
+                |r| r.get(0),
+            )
+            .expect("count subs");
+        assert_eq!(subs, 1);
+        let undone: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM subtasks WHERE task_id = ?1 AND is_done = 0",
+                [&copy.id],
+                |r| r.get(0),
+            )
+            .expect("sub undone");
+        assert_eq!(undone, 1);
+    }
+
     #[test]
     fn task_columns_match_schema() {
         let conn = open(":memory:").expect("open test db");

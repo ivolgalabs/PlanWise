@@ -100,6 +100,12 @@ export const api = {
     return isTauri() ? invoke<Task>("upsert_task", { task: t }) : browserApi.upsertTask(t);
   },
   deleteTask: (id: string) => (isTauri() ? invoke<void>("delete_task", { id }) : browserApi.deleteTask(id)),
+  /** Дублировать задачу: полная копия (время, длительность, напоминание,
+   *  выезд, приоритет, категория, заметка, подзадачи) с новым id; выполненность
+   *  и архив сняты. Копия сознательно встаёт в тот же слот времени (без
+   *  проверки наложений). Вложения (файлы) не копируются. */
+  duplicateTask: (id: string) =>
+    isTauri() ? invoke<Task>("duplicate_task", { id }) : browserApi.duplicateTask(id),
   moveTask: (id: string, newDate: Date) => {
     const nd = toEpochDay(newDate);
     return isTauri() ? invoke<void>("move_task", { id, newDate: nd }) : browserApi.moveTask(id, nd);

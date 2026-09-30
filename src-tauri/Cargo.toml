@@ -1,6 +1,6 @@
 [package]
 name = "daily-planner"
-version = "0.1.17"
+version = "0.1.18"
 description = "PlanWise — Minimalist high-performance offline task planner on Tauri v2, Rust and SQLite"
 authors = ["Ivolga Labs <support@ivolgalabs.com>"]
 license = "Apache-2.0"

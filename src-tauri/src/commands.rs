@@ -173,6 +173,16 @@ pub fn upsert_task(state: State<'_, Db>, mut task: Task) -> Result<Task, String>
         task.created_at = now_ms();
     }
     task.updated_at = now_ms();
+    write_task(&conn, &task)?;
+    // Пересчёт расписания уведомлений: без этого планировщик до следующего
+    // тика считал бы по устаревшим данным (десктоп — до 30 минут).
+    crate::notify::wake_scheduler();
+    Ok(task)
+}
+
+/// INSERT/UPDATE задачи — единый для upsert_task и duplicate_task (19 колонок
+/// в одном месте; расхождение списка с TASK_COLUMNS ловит тест в db.rs).
+pub(crate) fn write_task(conn: &rusqlite::Connection, task: &Task) -> Result<(), String> {
     conn.execute(
         &format!(
             "INSERT INTO tasks ({TASK_COLUMNS})
@@ -211,10 +221,65 @@ pub fn upsert_task(state: State<'_, Db>, mut task: Task) -> Result<Task, String>
         ],
     )
     .map_err(|e| e.to_string())?;
-    // Пересчёт расписания уведомлений: без этого планировщик до следующего
-    // тика считал бы по устаревшим данным (десктоп — до 30 минут).
+    Ok(())
+}
+
+/// Дублировать задачу: полная копия с новым id — время, длительность,
+/// напоминание, выезд, приоритет, категория, заметка, срок «Когда-нибудь»
+/// и подзадачи (невыполненными). Выполненность и архив у копии сняты.
+///
+/// Проверка наложений ПРОПУЩЕНА сознательно: копия создаётся в тот же слот,
+/// что и оригинал (иначе клон задачи 10:00–11:00 всегда падал бы с «Время
+/// занято задачей …» и фича была бы бесполезна как раз для задач со временем).
+/// Пользователь разнесёт копии сам — либо это и было целью (повтор дела).
+/// Вложения (файлы) не копируются — только подзадачи.
+/// Напоминания копии заводятся сами: wake_scheduler → планировщик увидит
+/// новую задачу со временем и поставит будильники (оповещение дублируется
+/// вместе с задачей).
+#[tauri::command]
+pub fn duplicate_task(state: State<'_, Db>, id: String) -> Result<Task, String> {
+    let mut conn = state.lock();
+    let copy = duplicate_task_conn(&mut conn, &id)?;
     crate::notify::wake_scheduler();
-    Ok(task)
+    Ok(copy)
+}
+
+/// Ядро дублирования (без State — вызывается командой и юнит-тестом).
+/// Транзакция: копия задачи + её подзадачи атомарно — сбой на середине не
+/// оставит задачу без подзадач или подзадачи без задачи.
+pub(crate) fn duplicate_task_conn(
+    conn: &mut rusqlite::Connection,
+    id: &str,
+) -> Result<Task, String> {
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+    let orig = select_task_by_id(&tx, id)?.ok_or("Задача не найдена")?;
+    let subs = select_subtasks(&tx, id)?;
+    let mut copy = orig;
+    copy.id = Uuid::new_v4().to_string();
+    copy.is_done = false;
+    copy.archived = false;
+    copy.created_at = now_ms();
+    copy.updated_at = now_ms();
+    // Сортировка «сейчас» (как Date.now() на фронте у новых задач): копия
+    // встаёт сразу после оригинала в тот же слот времени.
+    copy.sort_order = now_ms() as f64;
+    write_task(&tx, &copy)?;
+    for s in subs {
+        tx.execute(
+            "INSERT INTO subtasks (id, task_id, title, is_done, sort_order, created_at)
+             VALUES (?1, ?2, ?3, 0, ?4, ?5)",
+            rusqlite::params![
+                Uuid::new_v4().to_string(),
+                copy.id,
+                s.title,
+                s.sort_order,
+                now_ms()
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    tx.commit().map_err(|e| e.to_string())?;
+    Ok(copy)
 }
 
 /// Привести поля задачи к допустимым диапазонам. Граница доверия: значения
@@ -532,9 +597,8 @@ pub fn restore_archived(state: State<'_, Db>, id: String, date: i64) -> Result<(
 
 // ── Подзадачи ───────────────────────────────────────────────────────
 
-#[tauri::command]
-pub fn get_subtasks(state: State<'_, Db>, task_id: String) -> Result<Vec<Subtask>, String> {
-    let conn = state.lock();
+/// Подзадачи задачи (общее для get_subtasks и duplicate_task).
+fn select_subtasks(conn: &rusqlite::Connection, task_id: &str) -> Result<Vec<Subtask>, String> {
     let mut stmt = conn
         .prepare(
             "SELECT id, task_id, title, is_done, sort_order, created_at
@@ -558,6 +622,12 @@ pub fn get_subtasks(state: State<'_, Db>, task_id: String) -> Result<Vec<Subtask
         out.push(r.map_err(|e| e.to_string())?);
     }
     Ok(out)
+}
+
+#[tauri::command]
+pub fn get_subtasks(state: State<'_, Db>, task_id: String) -> Result<Vec<Subtask>, String> {
+    let conn = state.lock();
+    select_subtasks(&conn, &task_id)
 }
 
 #[tauri::command]

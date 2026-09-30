@@ -67,6 +67,31 @@ export const browserApi = {
     save(K.tasks, load<Task>(K.tasks).filter((t) => t.id !== id));
     save(K.subs, load<Subtask>(K.subs).filter((s) => s.taskId !== id));
   },
+  /** Дублировать задачу: копия с полями и подзадачами (как duplicate_task
+   *  в Rust — наложения в браузерном фоллбеке и так не проверяются). */
+  async duplicateTask(id: string): Promise<Task> {
+    const orig = load<Task>(K.tasks).find((t) => t.id === id);
+    if (!orig) throw new Error("Задача не найдена");
+    const copy: Task = {
+      ...orig,
+      id: crypto.randomUUID(),
+      isDone: false,
+      archived: false,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      sortOrder: Date.now(),
+    };
+    const all = load<Task>(K.tasks);
+    all.push(copy);
+    save(K.tasks, all);
+    const subs = load<Subtask>(K.subs);
+    const copies = subs
+      .filter((s) => s.taskId === id)
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((s) => ({ ...s, id: crypto.randomUUID(), taskId: copy.id, isDone: false, createdAt: Date.now() }));
+    save(K.subs, [...subs, ...copies]);
+    return copy;
+  },
   async moveTask(id: string, newDay: number): Promise<void> {
     // Перенос в прошлое = задача выполнена; в будущее = снова актуальна.
     const today = todayEpochDay();

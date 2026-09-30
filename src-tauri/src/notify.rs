@@ -439,62 +439,88 @@ struct ReminderEvent {
 /// Все напоминания задач из горизонта load_timed_tasks (без окон доставки).
 fn reminder_events(app: &tauri::AppHandle, prefs: &NotifyPrefs) -> Vec<ReminderEvent> {
     let mut out = Vec::new();
-    for (id, title, minutes, date_epoch, travel_time, notify_minutes, travel_notify) in
-        load_timed_tasks(app)
-    {
-        // Своё «не уведомлять» (0) — пропускаем задачу целиком, включая выезд.
-        if notify_minutes == Some(0) {
-            continue;
-        }
-        let Some(start) = task_start(minutes, date_epoch) else {
-            continue;
-        };
-        // Выбранные интервалы напоминаний — каждому своё уведомление.
-        for rm in task_intervals(notify_minutes, prefs) {
+    for row in load_timed_tasks(app) {
+        out.extend(task_events(prefs, &row));
+    }
+    out
+}
+
+/// События ОДНОЙ задачи: напоминания по выбранным интервалам + «Пора
+/// выезжать»/«Пора собираться». Чистая (без AppHandle) — проверяется тестом.
+///
+/// Дедуп: общее «Напоминание» в ТА ЖЕ минуту, что «Пора выезжать» или «Пора
+/// собираться», не создаётся. Раньше выезд=60 мин при глобальном «за 1 час»
+/// давал ДВА уведомления в одну минуту на одну задачу — воспринималось как
+/// дубль оповещения. Разные минуты (за 90 мин и выезд за 60) остаются оба.
+fn task_events(prefs: &NotifyPrefs, task: &ReminderRow) -> Vec<ReminderEvent> {
+    let (task_id, title, minutes, date_epoch, travel_time, notify_minutes, travel_notify) = task;
+    let task_id = task_id.as_str();
+    let title = title.as_str();
+    let minutes = *minutes;
+    let date_epoch = *date_epoch;
+    let travel_time = *travel_time;
+    let notify_minutes = *notify_minutes;
+    let travel_notify = *travel_notify;
+    let mut out = Vec::new();
+    // Своё «не уведомлять» (0) — задачу целиком, включая выезд.
+    if notify_minutes == Some(0) {
+        return out;
+    }
+    let Some(start) = task_start(minutes, date_epoch) else {
+        return out;
+    };
+    // Выезд/сборы считаем ПЕРВЫМИ: их моменты — точки, где общее напоминание
+    // стало бы дублем.
+    let mut other_dues: Vec<NaiveDateTime> = Vec::new();
+    if let Some(tt) = travel_time {
+        if tt > 0 {
+            let dep = due_at(start, tt);
+            other_dues.push(dep);
             out.push(ReminderEvent {
-                kind: "remind",
-                task_id: id.clone(),
-                due: due_at(start, rm),
-                title: "Напоминание",
-                body: format!("«{title}» — {}", format_interval(rm)),
+                kind: "travel",
+                task_id: task_id.to_string(),
+                due: dep,
+                title: "Пора выезжать",
+                body: format!("«{title}» — в {:02}:{:02}", minutes / 60, minutes % 60),
             });
-        }
-        // «Пора выезжать»: за travel_time до начала задачи (если задано).
-        if let Some(tt) = travel_time {
-            if tt > 0 {
-                out.push(ReminderEvent {
-                    kind: "travel",
-                    task_id: id.clone(),
-                    due: due_at(start, tt),
-                    title: "Пора выезжать",
-                    body: format!("«{title}» — в {:02}:{:02}", minutes / 60, minutes % 60),
-                });
-                // «Пора собираться»: напомнить за travel_notify минут ДО выезда
-                // (выезд = start - tt), т.е. раньше, чем само «пора выезжать».
-                if let Some(tn) = travel_notify {
-                    if tn > 0 {
-                        let total_diff = minutes - tt;
-                        let dep = ((total_diff % 1440) + 1440) % 1440;
-                        let extra = if total_diff < 0 {
-                            " (накануне)"
-                        } else {
-                            ""
-                        };
-                        out.push(ReminderEvent {
-                            kind: "travel_prepare",
-                            task_id: id.clone(),
-                            due: due_at(start, tt + tn),
-                            title: "Пора собираться",
-                            body: format!(
-                                "«{title}» — выезд в {:02}:{:02}{extra}",
-                                dep / 60,
-                                dep % 60
-                            ),
-                        });
-                    }
+            // «Пора собираться»: напомнить за travel_notify минут ДО выезда
+            // (выезд = start - tt), т.е. раньше, чем само «пора выезжать».
+            if let Some(tn) = travel_notify {
+                if tn > 0 {
+                    let total_diff = minutes - tt;
+                    let dep = ((total_diff % 1440) + 1440) % 1440;
+                    let extra = if total_diff < 0 {
+                        " (накануне)"
+                    } else {
+                        ""
+                    };
+                    let prep = due_at(start, tt + tn);
+                    other_dues.push(prep);
+                    out.push(ReminderEvent {
+                        kind: "travel_prepare",
+                        task_id: task_id.to_string(),
+                        due: prep,
+                        title: "Пора собираться",
+                        body: format!("«{title}» — выезд в {:02}:{:02}{extra}", dep / 60, dep % 60),
+                    });
                 }
             }
         }
+    }
+    // Выбранные интервалы напоминаний — каждому своё уведомление, кроме
+    // совпадающих по минуте с выездом/сборами.
+    for rm in task_intervals(notify_minutes, prefs) {
+        let due = due_at(start, rm);
+        if other_dues.contains(&due) {
+            continue;
+        }
+        out.push(ReminderEvent {
+            kind: "remind",
+            task_id: task_id.to_string(),
+            due,
+            title: "Напоминание",
+            body: format!("«{title}» — {}", format_interval(rm)),
+        });
     }
     out
 }
@@ -1503,6 +1529,68 @@ mod tests {
         ];
         let ev = next_event_from(&prefs(true, true, vec![60]), &tasks, now);
         assert_eq!(ev, day.and_hms_opt(10, 0, 0).unwrap());
+    }
+
+    /// Общее «Напоминание» в ту же минуту, что «Пора выезжать»/«Пора
+    /// собираться», не создаётся (два уведомления в одну минуту на одну
+    /// задачу воспринимались как дубль). Другие минуты остаются.
+    #[test]
+    fn remind_at_travel_minute_is_deduped() {
+        let p = prefs(true, true, vec![60]);
+        let day = NaiveDate::from_ymd_opt(2026, 8, 16).unwrap();
+        let date_epoch = crate::commands::date_to_epoch(day);
+        // Выезд за 60 мин = момент общего напоминания «за 1 час» (10:00 - 60).
+        let evs = task_events(
+            &p,
+            &(
+                "t1".into(),
+                "Задача".into(),
+                600,
+                date_epoch,
+                Some(60),
+                None,
+                None,
+            ),
+        );
+        let kinds: Vec<&str> = evs.iter().map(|e| e.kind).collect();
+        assert_eq!(kinds, ["travel"]);
+        assert_eq!(evs[0].due, day.and_hms_opt(9, 0, 0).unwrap());
+        // Другой интервал (90 мин = 08:30) — и напоминание, и выезд остаются.
+        let p90 = prefs(true, true, vec![90]);
+        let evs2 = task_events(
+            &p90,
+            &(
+                "t1".into(),
+                "Задача".into(),
+                600,
+                date_epoch,
+                Some(60),
+                None,
+                None,
+            ),
+        );
+        let mut kinds2: Vec<&str> = evs2.iter().map(|e| e.kind).collect();
+        kinds2.sort_unstable();
+        assert_eq!(kinds2, ["remind", "travel"]);
+        // «Пора собираться» тоже перекрывает напоминание в свою минуту:
+        // выезд за 60, сборы за 15 до выезда = за 75 мин до начала → 08:45;
+        // глобальный интервал 75 мин даёт ровно ту же минуту.
+        let p75 = prefs(true, true, vec![75]);
+        let evs3 = task_events(
+            &p75,
+            &(
+                "t1".into(),
+                "Задача".into(),
+                600,
+                date_epoch,
+                Some(60),
+                None,
+                Some(15),
+            ),
+        );
+        let mut kinds3: Vec<&str> = evs3.iter().map(|e| e.kind).collect();
+        kinds3.sort_unstable();
+        assert_eq!(kinds3, ["travel", "travel_prepare"]);
     }
 
     /// Своё notify_minutes перекрывает глобальные интервалы.

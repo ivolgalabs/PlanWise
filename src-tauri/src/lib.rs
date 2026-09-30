@@ -91,6 +91,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::get_tasks,
             commands::upsert_task,
+            commands::duplicate_task,
             commands::delete_task,
             commands::move_task,
             commands::get_someday_tasks,

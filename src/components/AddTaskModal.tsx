@@ -346,6 +346,21 @@ export function TaskFormFields({
     onAdded?.();
   };
 
+  // Дублирование: копия задачи (включая время/длительность/напоминания —
+  // будильники клона планировщик заведёт сам) + подзадачи. Копируются
+  // СОХРАНЁННЫЕ поля задачи: несохранённые правки формы в копию не идут.
+  // После копии карточка закрывается — обе задачи видны в списке.
+  const duplicate = async () => {
+    if (!initial) return;
+    try {
+      await api.duplicateTask(initial.id);
+      onChange?.();
+      onAdded?.();
+    } catch (err) {
+      setError(typeof err === "string" ? err : "Не удалось продублировать задачу");
+    }
+  };
+
   const addSub = () => {
     const s = newSub.trim();
     if (!s) return;
@@ -974,6 +989,15 @@ export function TaskFormFields({
               style={{ flexShrink: 0 }}
             >
               <Icon name="calendarCheck" size={13} /> Перенести
+            </button>
+            <button
+              type="button"
+              className="modal-action-btn"
+              onClick={duplicate}
+              title="Создать копию с тем же временем (несохранённые правки не копируются)"
+              style={{ flexShrink: 0 }}
+            >
+              <Icon name="copy" size={13} /> Дублировать
             </button>
             <button
               type="button"
