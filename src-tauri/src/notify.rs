@@ -316,6 +316,12 @@ fn next_event_from(
                 continue;
             }
             let Some(start) = task_start(*minutes, *date_epoch) else {
+                // «В течение дня»: планировщик должен проснуться к утреннему
+                // пингу (см. task_events) — когда дайджест выключен, иначе
+                // этот момент никто не рассчитает.
+                if !prefs.day_summary {
+                    consider(morning_of(*date_epoch, prefs.day_summary_hour));
+                }
                 continue;
             };
             for rm in task_intervals(*notify_minutes, prefs) {
@@ -467,7 +473,27 @@ fn task_events(prefs: &NotifyPrefs, task: &ReminderRow) -> Vec<ReminderEvent> {
     if notify_minutes == Some(0) {
         return out;
     }
-    let Some(start) = task_start(minutes, date_epoch) else {
+    let Some(m) = minutes else {
+        // Задача «в течение дня»: «за N минут до начала» не определено, поэтому
+        // единственный осмысленный момент — утро дня задачи (час дайджеста).
+        // При включённом дайджесте он и так объявит задачу в тот же час —
+        // отдельный пинг задваивал бы утро; без дайджеста это единственное
+        // напоминание. Утро уже прошло (задачу добавили днём) — не шлём, как
+        // и для задач со временем в прошлом.
+        if !prefs.day_summary {
+            if let Some(morning) = morning_of(date_epoch, prefs.day_summary_hour) {
+                out.push(ReminderEvent {
+                    kind: "remind",
+                    task_id: task_id.to_string(),
+                    due: morning,
+                    title: app_lang::remind_title(),
+                    body: app_lang::remind_body(title, app_lang::all_day()),
+                });
+            }
+        }
+        return out;
+    };
+    let Some(start) = task_start(Some(m), date_epoch) else {
         return out;
     };
     // Выезд/сборы считаем ПЕРВЫМИ: их моменты — точки, где общее напоминание
@@ -482,16 +508,13 @@ fn task_events(prefs: &NotifyPrefs, task: &ReminderRow) -> Vec<ReminderEvent> {
                 task_id: task_id.to_string(),
                 due: dep,
                 title: app_lang::travel_title(),
-                body: app_lang::travel_body(
-                    title,
-                    &format!("{:02}:{:02}", minutes / 60, minutes % 60),
-                ),
+                body: app_lang::travel_body(title, &format!("{:02}:{:02}", m / 60, m % 60)),
             });
             // «Пора собираться»: напомнить за travel_notify минут ДО выезда
             // (выезд = start - tt), т.е. раньше, чем само «пора выезжать».
             if let Some(tn) = travel_notify {
                 if tn > 0 {
-                    let total_diff = minutes - tt;
+                    let total_diff = m - tt;
                     let dep = ((total_diff % 1440) + 1440) % 1440;
                     let extra = if total_diff < 0 {
                         app_lang::prev_day()
@@ -1100,7 +1123,7 @@ fn check_digest(app: &tauri::AppHandle, prefs: &NotifyPrefs, now: NaiveDateTime)
 type ReminderRow = (
     String,
     String,
-    i64,
+    Option<i64>, // time_minutes: None = «в течение дня»
     i64,
     Option<i64>,
     Option<i64>,
@@ -1116,7 +1139,7 @@ fn load_timed_tasks(app: &tauri::AppHandle) -> Vec<ReminderRow> {
     let db = app.state::<Db>();
     let conn = db.lock();
     let mut stmt = match conn.prepare(
-      "SELECT id, title, time_minutes, date, travel_time, notify_minutes, travel_notify_minutes FROM tasks WHERE date BETWEEN ?1 AND ?2 AND time_minutes IS NOT NULL AND is_done = 0 AND archived = 0 AND someday = 0",
+      "SELECT id, title, time_minutes, date, travel_time, notify_minutes, travel_notify_minutes FROM tasks WHERE date BETWEEN ?1 AND ?2 AND is_done = 0 AND archived = 0 AND someday = 0",
     ) {
       Ok(s) => s,
       Err(e) => {
@@ -1128,7 +1151,7 @@ fn load_timed_tasks(app: &tauri::AppHandle) -> Vec<ReminderRow> {
         Ok((
             r.get::<_, String>(0)?,
             r.get::<_, String>(1)?,
-            r.get::<_, i64>(2)?,
+            r.get::<_, Option<i64>>(2)?,
             r.get::<_, i64>(3)?,
             r.get::<_, Option<i64>>(4)?,
             r.get::<_, Option<i64>>(5)?,
@@ -1154,11 +1177,18 @@ fn task_intervals(notify_minutes: Option<i64>, prefs: &NotifyPrefs) -> Vec<i64> 
 }
 
 /// Начало задачи (локальная дата + время) — Option при некорректных данных.
-fn task_start(minutes: i64, date_epoch: i64) -> Option<NaiveDateTime> {
+fn task_start(minutes: Option<i64>, date_epoch: i64) -> Option<NaiveDateTime> {
+    let minutes = minutes?;
     let h = (minutes / 60) as u32;
     let m = (minutes % 60) as u32;
     let task_date = crate::commands::epoch_to_date(date_epoch)?;
     task_date.and_hms_opt(h, m, 0)
+}
+
+/// Утро дня задачи (локальная дата + час дайджеста) — момент напоминания для
+/// задач «в течение дня». Option при некорректной дате.
+fn morning_of(date_epoch: i64, hour: i64) -> Option<NaiveDateTime> {
+    crate::commands::epoch_to_date(date_epoch)?.and_hms_opt(hour.clamp(0, 23) as u32, 0, 0)
 }
 
 /// Момент «за N минут до start» с учётом часового пояса. Наивная арифметика
@@ -1227,7 +1257,7 @@ mod tests {
         (
             "t1".into(),
             "Задача".into(),
-            minutes,
+            Some(minutes),
             date_epoch,
             None,
             notify,
@@ -1268,7 +1298,7 @@ mod tests {
         let task: ReminderRow = (
             "t1".into(),
             "Задача".into(),
-            600, // 10:00
+            Some(600), // 10:00
             date_epoch,
             Some(30), // travel_time
             None,     // notify_minutes → глобальные
@@ -1282,6 +1312,79 @@ mod tests {
                 .and_hms_opt(9, 15, 0)
                 .unwrap()
         );
+    }
+
+    /// Задача «в течение дня» при выключенном дайджесте: одно напоминание
+    /// утром дня задачи (в час дайджеста). Раньше такие задачи молча не
+    /// напоминали вовсе, хотя карточка обещала «По умолчанию (из настроек)».
+    #[test]
+    fn all_day_task_reminds_in_the_morning() {
+        let p = prefs(false, true, vec![60]);
+        let date_epoch = NaiveDate::from_ymd_opt(2026, 8, 16)
+            .unwrap()
+            .num_days_from_ce() as i64
+            - 719163;
+        let row: ReminderRow = (
+            "t1".into(),
+            "Задача".into(),
+            None, // «в течение дня»
+            date_epoch,
+            None,
+            None,
+            None,
+        );
+        let evs = task_events(&p, &row);
+        assert_eq!(evs.len(), 1, "должен быть один утренний пинг");
+        assert_eq!(evs[0].kind, "remind");
+        assert_eq!(
+            evs[0].due,
+            NaiveDate::from_ymd_opt(2026, 8, 16)
+                .unwrap()
+                .and_hms_opt(8, 0, 0)
+                .unwrap()
+        );
+    }
+
+    /// С включённым дайджестом отдельного пинга нет: дайджест в тот же час и
+    /// так объявляет задачу — два уведомления в одну минуту задваивали утро.
+    #[test]
+    fn all_day_task_skipped_when_digest_on() {
+        let p = prefs(true, true, vec![60]);
+        let date_epoch = NaiveDate::from_ymd_opt(2026, 8, 16)
+            .unwrap()
+            .num_days_from_ce() as i64
+            - 719163;
+        let row: ReminderRow = (
+            "t1".into(),
+            "Задача".into(),
+            None,
+            date_epoch,
+            None,
+            None,
+            None,
+        );
+        assert!(task_events(&p, &row).is_empty());
+    }
+
+    /// «Не уведомлять» (notify_minutes = 0) глушит и утренний пинг задачи
+    /// без времени.
+    #[test]
+    fn all_day_task_notify_off_is_silent() {
+        let p = prefs(false, true, vec![60]);
+        let date_epoch = NaiveDate::from_ymd_opt(2026, 8, 16)
+            .unwrap()
+            .num_days_from_ce() as i64
+            - 719163;
+        let row: ReminderRow = (
+            "t1".into(),
+            "Задача".into(),
+            None,
+            date_epoch,
+            None,
+            Some(0), // «не уведомлять»
+            None,
+        );
+        assert!(task_events(&p, &row).is_empty());
     }
 
     /// Запись для persisted-хранилища плагина: только поля его Kotlin-класса
@@ -1512,7 +1615,7 @@ mod tests {
             &(
                 "t1".into(),
                 "Задача".into(),
-                600,
+                Some(600),
                 date_epoch,
                 Some(60),
                 None,
@@ -1529,7 +1632,7 @@ mod tests {
             &(
                 "t1".into(),
                 "Задача".into(),
-                600,
+                Some(600),
                 date_epoch,
                 Some(60),
                 None,
@@ -1548,7 +1651,7 @@ mod tests {
             &(
                 "t1".into(),
                 "Задача".into(),
-                600,
+                Some(600),
                 date_epoch,
                 Some(60),
                 None,

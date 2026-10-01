@@ -547,6 +547,20 @@ export function TaskFormFields({
              селекты «ч»/«мин»), а не время суток. */
           <DurationSelect value={notify != null && notify > 0 ? notify : null} onChange={setNotify} maxHours={168} />
         )}
+        {time == null && notify !== 0 && (
+          /* Задача без времени: «за N минут до начала» не определено —
+             напомним утром дня задачи (дайджест, а при выключенном —
+             отдельный утренний пинг; см. task_events в notify.rs). */
+          <span
+            style={{
+              flexBasis: "100%",
+              fontSize: "var(--fs-2xs)",
+              color: COLORS.muted,
+            }}
+          >
+            {t("form.allDayHint")}
+          </span>
+        )}
       </div>
 
       {/* «До выезда»: напомнить за N минут ДО момента выезда (раньше, чем
@@ -981,38 +995,40 @@ export function TaskFormFields({
         </div>
       )}
 
+      {/* Кнопки: вторичные (перенос/дубль/удаление) — отдельной линией, иначе
+          на узком экране они выталкивают «Сохранить» за край карточки. */}
+      {editing && (
+        <div style={{ display: "flex", gap: "var(--sp-2)", marginBottom: "var(--sp-2)" }}>
+          <button
+            type="button"
+            className="modal-action-btn"
+            onClick={() => setMoveOpen(true)}
+            title={t("form.moveTitle")}
+            style={{ flex: 1 }}
+          >
+            <Icon name="calendarCheck" size={13} /> {t("form.move")}
+          </button>
+          <button
+            type="button"
+            className="modal-action-btn"
+            onClick={duplicate}
+            title={t("form.duplicateTitle")}
+            style={{ flex: 1 }}
+          >
+            <Icon name="copy" size={13} /> {t("form.duplicate")}
+          </button>
+          <button
+            type="button"
+            className="modal-action-btn danger"
+            onClick={() => setConfirmDel(true)}
+            title={t("form.deleteTaskTitle")}
+            style={{ flex: 1 }}
+          >
+            <Icon name="close" size={13} /> {t("common.delete")}
+          </button>
+        </div>
+      )}
       <div style={{ display: "flex", gap: "var(--sp-2)" }}>
-        {editing && (
-          <>
-            <button
-              type="button"
-              className="modal-action-btn"
-              onClick={() => setMoveOpen(true)}
-              title={t("form.moveTitle")}
-              style={{ flexShrink: 0 }}
-            >
-              <Icon name="calendarCheck" size={13} /> {t("form.move")}
-            </button>
-            <button
-              type="button"
-              className="modal-action-btn"
-              onClick={duplicate}
-              title={t("form.duplicateTitle")}
-              style={{ flexShrink: 0 }}
-            >
-              <Icon name="copy" size={13} /> {t("form.duplicate")}
-            </button>
-            <button
-              type="button"
-              className="modal-action-btn danger"
-              onClick={() => setConfirmDel(true)}
-              title={t("form.deleteTaskTitle")}
-              style={{ flexShrink: 0 }}
-            >
-              <Icon name="close" size={13} /> {t("common.delete")}
-            </button>
-          </>
-        )}
         <button
           type="submit"
           className="modal-action-btn primary"
