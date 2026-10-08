@@ -75,6 +75,9 @@ export const TaskCard = memo(function TaskCard({
   const [title, setTitle] = useState(task.title);
   const [editing, editingSetter] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // Точка начала тапа по строке: по ней отличаем осознанный тап от сдвига
+  // при прокрутке (см. обработчик клика строки ниже).
+  const tapStart = useRef<{ x: number; y: number } | null>(null);
   // Ref на строку задачи: высота «шапки» (время/приоритет над текстом) в
   // компактной сетке измеряется в рантайме, а не константой — в WebKit
   // (WKWebView) высоты бейджей отличаются от Blink, и фиксированный сдвиг
@@ -153,6 +156,8 @@ export const TaskCard = memo(function TaskCard({
   // на десктопе — в ряд с текстом. Один общий listener на запрос — см.
   // useMediaQuery (раньше каждая задача вешала свой matchMedia-listener).
   const isTouch = useMediaQuery("(pointer: coarse), (max-width: 560px)");
+  // Порог «тап или прокрутка» (px): сдвиг больше — это жест, а не тап.
+  const TAP_SLOP_PX = 10;
   // Мобильный компактный ряд (только вне компактной сетки недели).
   const mobileRow = isTouch && !compact;
 
@@ -505,17 +510,34 @@ export const TaskCard = memo(function TaskCard({
         borderRadius: "var(--radius-sm)",
       }}
       title={timeConflict ? t("task.timeConflict") : undefined}
+      onPointerDown={(e) => {
+        // Начало жеста: точку запоминаем, чтобы отличить тап от сдвига.
+        tapStart.current = { x: e.clientX, y: e.clientY };
+      }}
       onClick={(e) => {
         // Клик по элементам управления (чекбокс, ручка, поле текста, кнопка
-        // «Редактировать») — их собственные обработчики. Любой другой клик
-        // по строке (время, пустое место) — редактирование текста: фокус
-        // в поле, на десктопе ещё и выделение всего текста.
+        // «Редактировать») — их собственные обработчики.
         const t = e.target as HTMLElement;
         if (t.closest("input, button, label, select, textarea, .task-drag-hint")) return;
+        // Прокрутка списка на телефоне заканчивается обычным click по строке,
+        // и раньше каждый такой скролл открывал правку текста. Тапом считаем
+        // только отпускание почти в той же точке, где нажали.
+        const start = tapStart.current;
+        tapStart.current = null;
+        if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > TAP_SLOP_PX) return;
+        // Телефон: осознанный тап по строке открывает КАРТОЧКУ — кнопка «✎» тут
+        // всего 20-24px и палец по ней промахивается, а фокус в тексте означает
+        // мгновенно выехавшую клавиатуру. Текст по-прежнему правится тапом по
+        // самому полю (оно и есть видимый заголовок), остальное — в карточке.
+        if (isTouch) {
+          setCardOpen(true);
+          return;
+        }
+        // Десктоп: клик по пустому месту строки — правка текста сразу.
         const el = textareaRef.current;
         if (!el) return;
         el.focus();
-        if (!isTouch) el.select();
+        el.select();
       }}
       {...attributes}
     >
