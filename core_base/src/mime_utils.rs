@@ -51,6 +51,13 @@ pub fn mime_for(ext: &str) -> &'static str {
     }
 }
 
+/// Определение MIME-типа по начальным байтам (магическим числам) буфера.
+/// Возвращает статический срез MIME-типа (напр. "image/png", "application/pdf")
+/// даже если расширение файла отсутствует или было изменено.
+pub fn mime_from_bytes(bytes: &[u8]) -> Option<&'static str> {
+    infer::get(bytes).map(|t| t.mime_type())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -73,5 +80,17 @@ mod tests {
     fn mime_defaults() {
         assert_eq!(mime_for("png"), "image/png");
         assert_eq!(mime_for("xyz"), "image/jpeg");
+    }
+
+    #[test]
+    fn mime_magic_bytes() {
+        let png = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+        assert_eq!(mime_from_bytes(&png), Some("image/png"));
+
+        let jpeg = [0xFF, 0xD8, 0xFF, 0xE0];
+        assert_eq!(mime_from_bytes(&jpeg), Some("image/jpeg"));
+
+        let unknown = [0x00, 0x01, 0x02, 0x03];
+        assert_eq!(mime_from_bytes(&unknown), None);
     }
 }

@@ -154,7 +154,9 @@ mod tests {
                 }
             },
         ));
-        let deadline = tokio::time::Instant::now() + Duration::from_millis(1000);
+        // Запас на глобальный хук паники из diagnostics::tests: при общем прогоне он
+        // символизирует backtrace на каждой панике (секунды в debug). Цикл выходит сразу на 3.
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(15);
         while runs.load(Ordering::SeqCst) < 3 && tokio::time::Instant::now() < deadline {
             tokio::time::sleep(Duration::from_millis(10)).await;
         }

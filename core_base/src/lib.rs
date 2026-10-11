@@ -30,10 +30,12 @@ pub use config::{ConfigError, ConfigManager};
 pub use fs_utils::FsUtils;
 
 #[cfg(feature = "mime")]
-pub use mime_utils::{file_extension, is_image_file, mime_for, mime_for as image_mime_for};
+pub use mime_utils::{
+    file_extension, is_image_file, mime_for, mime_for as image_mime_for, mime_from_bytes,
+};
 
 #[cfg(feature = "net")]
-pub use net_utils::NetClient;
+pub use net_utils::{DownloadError, NetClient};
 
 #[cfg(feature = "licensing")]
 pub use licensing::{is_expired, obfuscate, validate_license, LicenseInfo};

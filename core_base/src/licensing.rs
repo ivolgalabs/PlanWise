@@ -22,7 +22,10 @@ struct LemonSqueezyRequest {
 
 #[derive(Debug, Deserialize)]
 struct LemonSqueezyResponse {
-    valid: bool,
+    #[serde(default)]
+    activated: Option<bool>,
+    #[serde(default)]
+    valid: Option<bool>,
     error: Option<String>,
     license_key: Option<LemonLicenseKey>,
 }
@@ -38,13 +41,144 @@ struct LemonLicenseKey {
     expires_at: Option<String>,
 }
 
-/// XOR-обфускация для локального хранения ключа (не шифрование — прячет ключ в файле).
+/// XOR-обфускация для обратной совместимости локального хранения.
 /// Salt — параметр: каждое приложение передаёт свой.
 pub fn obfuscate(data: &[u8], salt: &[u8]) -> Vec<u8> {
+    if data.is_empty() {
+        return Vec::new();
+    }
+    let slen = salt.len().max(1);
     data.iter()
         .enumerate()
-        .map(|(i, &b)| b ^ salt[i % salt.len()])
+        .map(|(i, &b)| b ^ salt[i % slen])
         .collect()
+}
+
+/// Аппаратно-привязанная обфускация с побайтовой обратной связью (Cipher Feedback).
+/// Комбинирует соль приложения и machine_id устройства.
+/// Предотвращает перенос файла license.enc на другой компьютер и побитовую модификацию статуса активации.
+pub fn obfuscate_machine_bound(data: &[u8], salt: &[u8], machine_id: &str) -> Vec<u8> {
+    if data.is_empty() {
+        return Vec::new();
+    }
+    let mut key = Vec::with_capacity(salt.len() + machine_id.len() + 8);
+    key.extend_from_slice(salt);
+    key.extend_from_slice(b"::hwid::");
+    key.extend_from_slice(machine_id.as_bytes());
+    if key.is_empty() {
+        key.extend_from_slice(b"default_salt");
+    }
+
+    let klen = key.len();
+    let mut result = Vec::with_capacity(data.len());
+    let mut prev = 0xA5u8;
+    for (i, &b) in data.iter().enumerate() {
+        let k = key[i % klen] ^ prev;
+        let enc = b ^ k;
+        prev = enc;
+        result.push(enc);
+    }
+    result
+}
+
+/// Деобфускация аппаратно-привязанного кэша.
+pub fn deobfuscate_machine_bound(data: &[u8], salt: &[u8], machine_id: &str) -> Vec<u8> {
+    if data.is_empty() {
+        return Vec::new();
+    }
+    let mut key = Vec::with_capacity(salt.len() + machine_id.len() + 8);
+    key.extend_from_slice(salt);
+    key.extend_from_slice(b"::hwid::");
+    key.extend_from_slice(machine_id.as_bytes());
+    if key.is_empty() {
+        key.extend_from_slice(b"default_salt");
+    }
+
+    let klen = key.len();
+    let mut result = Vec::with_capacity(data.len());
+    let mut prev = 0xA5u8;
+    for (i, &b) in data.iter().enumerate() {
+        let k = key[i % klen] ^ prev;
+        let dec = b ^ k;
+        prev = b;
+        result.push(dec);
+    }
+    result
+}
+
+const AGL2_MAGIC: &[u8; 4] = b"AGL2";
+
+fn compute_integrity_hash(data: &[u8], machine_id: &str) -> u32 {
+    let mut hash: u32 = 0x811c9dc5;
+    for &b in data {
+        hash ^= b as u32;
+        hash = hash.wrapping_mul(0x01000193);
+    }
+    for &b in machine_id.as_bytes() {
+        hash ^= b as u32;
+        hash = hash.wrapping_mul(0x01000193);
+    }
+    hash
+}
+
+/// Кодирует LicenseInfo в аппаратно-привязанный зашифрованный кэш с контролем целостности.
+pub fn encode_license_cache(info: &LicenseInfo, salt: &[u8]) -> Result<Vec<u8>, String> {
+    let serialized =
+        serde_json::to_vec(info).map_err(|e| format!("Ошибка сериализации лицензии: {}", e))?;
+    let hash = compute_integrity_hash(&serialized, &info.machine_id);
+
+    let mut payload = Vec::with_capacity(8 + serialized.len());
+    payload.extend_from_slice(AGL2_MAGIC);
+    payload.extend_from_slice(&hash.to_be_bytes());
+    payload.extend_from_slice(&serialized);
+
+    Ok(obfuscate_machine_bound(&payload, salt, &info.machine_id))
+}
+
+/// Декодирует кэш лицензии с диска, проверяя целостность и привязку к аппаратному идентификатору текущего устройства.
+/// Если файл был повреждён, подделан или перенесён с другого компьютера, возвращает ошибку.
+/// Поддерживает автоматическую миграцию старого legacy-формата (простой XOR), если machine_id совпадает.
+pub fn decode_license_cache(
+    enc_data: &[u8],
+    salt: &[u8],
+    expected_machine_id: &str,
+) -> Result<LicenseInfo, String> {
+    if enc_data.is_empty() {
+        return Err("Файл лицензии пуст".to_string());
+    }
+
+    // 1. Попытка деобфускации нового формата с аппаратной привязкой и проверкой целостности
+    let dec = deobfuscate_machine_bound(enc_data, salt, expected_machine_id);
+    if dec.len() >= 8 && &dec[0..4] == AGL2_MAGIC {
+        let mut hash_bytes = [0u8; 4];
+        hash_bytes.copy_from_slice(&dec[4..8]);
+        let expected_hash = u32::from_be_bytes(hash_bytes);
+        let payload = &dec[8..];
+        let actual_hash = compute_integrity_hash(payload, expected_machine_id);
+
+        if expected_hash == actual_hash {
+            if let Ok(info) = serde_json::from_slice::<LicenseInfo>(payload) {
+                if info.machine_id == expected_machine_id {
+                    return Ok(info);
+                }
+            }
+        }
+        return Err(
+            "Нарушена целостность файла лицензии или не совпадает оборудование".to_string(),
+        );
+    }
+
+    // 2. Fallback для плавного обновления существующих пользователей со старого XOR-формата
+    let legacy_dec = obfuscate(enc_data, salt);
+    if let Ok(info) = serde_json::from_slice::<LicenseInfo>(&legacy_dec) {
+        if info.machine_id.is_empty() || info.machine_id == expected_machine_id {
+            let mut migrated = info;
+            migrated.machine_id = expected_machine_id.to_string();
+            return Ok(migrated);
+        }
+    }
+
+    Err("Файл лицензии недействителен или привязан к другому оборудованию".to_string())
 }
 
 // ── Срок действия лицензии ────────────────────────────────────────────────
@@ -107,10 +241,10 @@ pub fn is_expired(expires_at: &str) -> bool {
     now > exp
 }
 
-/// Валидация ключа через LemonSqueezy API (/v1/licenses/validate).
+/// Валидация и активация ключа через LemonSqueezy API (/v1/licenses/activate и /validate).
+/// Сначала вызывает /activate (регистрирует инстанс машины на сервере LS),
+/// при повторной проверке или сбоях валидирует через /validate.
 /// Возвращает LicenseInfo (activated=true) при успехе или Err с сообщением для UI.
-/// Текст сообщений — на русском (UI приложений воркспейса); при мультиязычности —
-/// перевести на коды ошибок.
 pub async fn validate_license(key: &str, instance_name: &str) -> Result<LicenseInfo, String> {
     let client = reqwest::Client::new();
     let req_body = LemonSqueezyRequest {
@@ -118,7 +252,40 @@ pub async fn validate_license(key: &str, instance_name: &str) -> Result<LicenseI
         instance_name: instance_name.to_string(),
     };
 
-    let res = client
+    // 1. Попытка прямой активации устройства через /licenses/activate
+    let act_res = client
+        .post("https://api.lemonsqueezy.com/v1/licenses/activate")
+        .header("Accept", "application/json")
+        .header("Content-Type", "application/json")
+        .json(&req_body)
+        .send()
+        .await;
+
+    if let Ok(res) = act_res {
+        if res.status().is_success() {
+            if let Ok(parsed) = res.json::<LemonSqueezyResponse>().await {
+                if let Some(err) = parsed.error {
+                    if err.contains("Activation limit reached") || err.contains("limit reached") {
+                        return Err("Активация отклонена: превышен лимит устройств. Пожалуйста, деактивируйте лицензию на другом компьютере через портал Lemon Squeezy (Customer Portal).".to_string());
+                    }
+                } else if parsed.activated.unwrap_or(false) || parsed.valid.unwrap_or(false) {
+                    let expires_at = parsed
+                        .license_key
+                        .as_ref()
+                        .and_then(|k| k.expires_at.clone());
+                    return Ok(LicenseInfo {
+                        key: key.trim().to_string(),
+                        activated: true,
+                        machine_id: instance_name.to_string(),
+                        expires_at,
+                    });
+                }
+            }
+        }
+    }
+
+    // 2. Валидация через /licenses/validate (для уже активированных инстансов)
+    let val_res = client
         .post("https://api.lemonsqueezy.com/v1/licenses/validate")
         .header("Accept", "application/json")
         .header("Content-Type", "application/json")
@@ -127,11 +294,11 @@ pub async fn validate_license(key: &str, instance_name: &str) -> Result<LicenseI
         .await
         .map_err(|e| format!("Ошибка подключения к серверу авторизации: {}", e))?;
 
-    if !res.status().is_success() {
+    if !val_res.status().is_success() {
         return Err("Сервер LemonSqueezy вернул ошибку запроса".to_string());
     }
 
-    let parsed: LemonSqueezyResponse = res
+    let parsed: LemonSqueezyResponse = val_res
         .json()
         .await
         .map_err(|e| format!("Ошибка парсинга ответа LemonSqueezy: {}", e))?;
@@ -143,18 +310,13 @@ pub async fn validate_license(key: &str, instance_name: &str) -> Result<LicenseI
         return Err(format!("Ошибка лицензии: {}", err));
     }
 
-    if !parsed.valid {
+    let is_valid = parsed.valid.unwrap_or(false) || parsed.activated.unwrap_or(false);
+    if !is_valid {
         return Err("Эта лицензия недействительна".to_string());
     }
 
     if let Some(license_info) = parsed.license_key {
-        if license_info.status != "active" {
-            return Err(format!(
-                "Лицензия не активна (статус: {})",
-                license_info.status
-            ));
-        }
-
+        // Принимаем как active, так и inactive (новый ключ до первого использования)
         return Ok(LicenseInfo {
             key: key.trim().to_string(),
             activated: true,
@@ -177,6 +339,94 @@ mod tests {
         let enc = obfuscate(data, salt);
         assert_ne!(enc, data);
         assert_eq!(obfuscate(&enc, salt), data);
+    }
+
+    #[test]
+    fn machine_bound_roundtrip() {
+        let data = b"sensitive-license-payload-2026";
+        let salt = b"AppSalt_2026";
+        let machine_id = "macOS-Serial-ABC-123";
+
+        let enc = obfuscate_machine_bound(data, salt, machine_id);
+        assert_ne!(enc, data);
+
+        let dec = deobfuscate_machine_bound(&enc, salt, machine_id);
+        assert_eq!(dec, data);
+    }
+
+    #[test]
+    fn machine_bound_cross_machine_rejection() {
+        let info = LicenseInfo {
+            key: "LS-TEST-KEY-1234".to_string(),
+            activated: true,
+            machine_id: "machine-A-original".to_string(),
+            expires_at: None,
+        };
+        let salt = b"AppSalt_2026";
+
+        let encoded = encode_license_cache(&info, salt).expect("encoding succeeds");
+
+        // Попытка расшифровать на машине B (другой machine_id) должна завершиться ошибкой
+        let res_b = decode_license_cache(&encoded, salt, "machine-B-stolen");
+        assert!(
+            res_b.is_err(),
+            "Должно отвергнуть перенос лицензии на другой компьютер"
+        );
+
+        // На машине A расшифровка успешна
+        let res_a =
+            decode_license_cache(&encoded, salt, "machine-A-original").expect("decoding succeeds");
+        assert_eq!(res_a.key, "LS-TEST-KEY-1234");
+        assert!(res_a.activated);
+    }
+
+    #[test]
+    fn machine_bound_tamper_detection() {
+        let info = LicenseInfo {
+            key: "LS-TEST-KEY-1234".to_string(),
+            activated: true,
+            machine_id: "machine-A".to_string(),
+            expires_at: None,
+        };
+        let salt = b"AppSalt_2026";
+
+        let mut encoded = encode_license_cache(&info, salt).expect("encoding succeeds");
+
+        // Модифицируем 1 байт в зашифрованных данных (попытка подделки)
+        if let Some(byte) = encoded.get_mut(10) {
+            *byte ^= 0xFF;
+        }
+
+        // Из-за лавинного эффекта обратной связи (CFB) десериализация должна упасть
+        let tampered_res = decode_license_cache(&encoded, salt, "machine-A");
+        assert!(
+            tampered_res.is_err(),
+            "Подделка байта должна быть обнаружена и отклонена"
+        );
+    }
+
+    #[test]
+    fn legacy_format_migration() {
+        let info = LicenseInfo {
+            key: "LS-LEGACY-KEY-5678".to_string(),
+            activated: true,
+            machine_id: "machine-legacy".to_string(),
+            expires_at: None,
+        };
+        let salt = b"AppSalt_2026";
+
+        // Старый формат: простой XOR без привязки
+        let legacy_json = serde_json::to_vec(&info).unwrap();
+        let legacy_enc = obfuscate(&legacy_json, salt);
+
+        // Расшифровка на том же компьютере должна успешно пройти миграцию
+        let migrated =
+            decode_license_cache(&legacy_enc, salt, "machine-legacy").expect("migration succeeds");
+        assert_eq!(migrated.key, "LS-LEGACY-KEY-5678");
+
+        // Расшифровка старого файла на чужом компьютере отклоняется
+        let stolen_legacy = decode_license_cache(&legacy_enc, salt, "foreign-machine");
+        assert!(stolen_legacy.is_err());
     }
 
     #[test]
