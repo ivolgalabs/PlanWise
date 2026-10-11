@@ -408,7 +408,7 @@ mod tests {
     #[test]
     fn legacy_format_migration() {
         let info = LicenseInfo {
-            key: "LS-LEGACY-KEY-5678".to_string(),
+            key: "LS-LEGACY-KEY-5678".to_string(), // gitleaks:allow (test fixture)
             activated: true,
             machine_id: "machine-legacy".to_string(),
             expires_at: None,
@@ -422,7 +422,7 @@ mod tests {
         // Расшифровка на том же компьютере должна успешно пройти миграцию
         let migrated =
             decode_license_cache(&legacy_enc, salt, "machine-legacy").expect("migration succeeds");
-        assert_eq!(migrated.key, "LS-LEGACY-KEY-5678");
+        assert_eq!(migrated.key, "LS-LEGACY-KEY-5678"); // gitleaks:allow (test fixture)
 
         // Расшифровка старого файла на чужом компьютере отклоняется
         let stolen_legacy = decode_license_cache(&legacy_enc, salt, "foreign-machine");
