@@ -111,7 +111,10 @@ const sortTasksByMode = <T extends { timeMinutes?: number | null; difficulty?: n
     return arr.sort((a, b) => a.sortOrder - b.sortOrder);
   }
   const key = (t: T) => {
-    const time = t.timeMinutes ?? Number.MAX_SAFE_INTEGER;
+    // Без времени — после последней минуты дня (1440), но внутри своего
+    // приоритета: с MAX_SAFE_INTEGER слагаемое времени перевешивало приоритет,
+    // и сложная задача без времени уходила ниже лёгкой со временем.
+    const time = t.timeMinutes ?? 1440;
     const d = t.difficulty ?? 0;
     // Приоритет: 3 (высокий) → 1, 2 → 2, 1 → 3, 0 (не задан) → 4 (вниз).
     const pr = d === 0 ? 4 : 4 - d;

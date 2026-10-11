@@ -75,6 +75,9 @@ struct Texts {
     task_one: &'static str,
     task_few: &'static str,
     task_many: &'static str,
+    /// Короткая дата дня дайджеста (формат chrono): по ней видно, что
+    /// повторившийся без запуска приложения список — не сегодняшний.
+    date_fmt: &'static str,
 }
 
 const RU: Texts = Texts {
@@ -102,6 +105,7 @@ const RU: Texts = Texts {
     task_one: "{n} задача",
     task_few: "{n} задачи",
     task_many: "{n} задач",
+    date_fmt: "%d.%m",
 };
 
 const EN: Texts = Texts {
@@ -129,6 +133,7 @@ const EN: Texts = Texts {
     task_one: "{n} task",
     task_few: "{n} tasks",
     task_many: "{n} tasks",
+    date_fmt: "%b %-d",
 };
 
 const ES: Texts = Texts {
@@ -156,6 +161,7 @@ const ES: Texts = Texts {
     task_one: "{n} tarea",
     task_few: "{n} tareas",
     task_many: "{n} tareas",
+    date_fmt: "%d/%m",
 };
 
 const DE: Texts = Texts {
@@ -183,6 +189,7 @@ const DE: Texts = Texts {
     task_one: "{n} Aufgabe",
     task_few: "{n} Aufgaben",
     task_many: "{n} Aufgaben",
+    date_fmt: "%d.%m.",
 };
 
 const FR: Texts = Texts {
@@ -210,6 +217,7 @@ const FR: Texts = Texts {
     task_one: "{n} tâche",
     task_few: "{n} tâches",
     task_many: "{n} tâches",
+    date_fmt: "%d/%m",
 };
 
 const PT: Texts = Texts {
@@ -237,6 +245,7 @@ const PT: Texts = Texts {
     task_one: "{n} tarefa",
     task_few: "{n} tarefas",
     task_many: "{n} tarefas",
+    date_fmt: "%d/%m",
 };
 
 const ZH: Texts = Texts {
@@ -264,6 +273,7 @@ const ZH: Texts = Texts {
     task_one: "{n} 个任务",
     task_few: "{n} 个任务",
     task_many: "{n} 个任务",
+    date_fmt: "%-m\u{6708}%-d\u{65e5}",
 };
 
 const JA: Texts = Texts {
@@ -291,6 +301,7 @@ const JA: Texts = Texts {
     task_one: "{n} 件のタスク",
     task_few: "{n} 件のタスク",
     task_many: "{n} 件のタスク",
+    date_fmt: "%-m\u{6708}%-d\u{65e5}",
 };
 
 const KO: Texts = Texts {
@@ -318,6 +329,7 @@ const KO: Texts = Texts {
     task_one: "{n}개 작업",
     task_few: "{n}개 작업",
     task_many: "{n}개 작업",
+    date_fmt: "%-m\u{c6d4} %-d\u{c77c}",
 };
 
 /// Таблица текстов для текущего языка; неизвестный код — русский.
@@ -490,6 +502,11 @@ pub fn plural_tasks(n: usize) -> String {
 }
 
 /// Заголовок дайджеста Android: «План на сегодня: 5 задач».
+/// Короткая дата для сводки дайджеста Android: «12.10», «Oct 12».
+pub fn short_date(d: chrono::NaiveDate) -> String {
+    d.format(texts().date_fmt).to_string()
+}
+
 pub fn plan_title(n: usize) -> String {
     fill(texts().plan_title, &[("{p}", plural_tasks(n))])
 }
@@ -516,6 +533,21 @@ mod tests {
 
     fn guard() -> MutexGuard<'static, ()> {
         TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// Дата в сводке дайджеста: числовая там, где день идёт первым, и с
+    /// названием месяца для английского (11/10 читалось бы как 10 ноября).
+    #[test]
+    fn short_date_per_language() {
+        let _g = guard();
+        let d = chrono::NaiveDate::from_ymd_opt(2026, 10, 3).expect("date");
+        set("ru".into());
+        assert_eq!(short_date(d), "03.10");
+        set("en".into());
+        assert_eq!(short_date(d), "Oct 3");
+        set("ja".into());
+        assert_eq!(short_date(d), "10\u{6708}3\u{65e5}");
+        set(String::new());
     }
 
     /// Русский набор обязан совпадать с прежними строками байт-в-байт: иначе

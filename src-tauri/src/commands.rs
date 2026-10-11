@@ -293,7 +293,9 @@ fn sanitize_task(task: &mut Task) {
     task.duration_minutes = task.duration_minutes.map(|d| d.clamp(0, 10_080));
     task.travel_time = task.travel_time.map(|t| t.clamp(0, 10_080));
     task.travel_notify_minutes = task.travel_notify_minutes.map(|t| t.clamp(0, 10_080));
-    task.notify_minutes = task.notify_minutes.map(|n| n.clamp(0, 43_200));
+    // Потолок = максимум UI (168 ч) и горизонт планировщика (7 суток): большее
+    // значение (только из импорта) принималось и никогда не срабатывало.
+    task.notify_minutes = task.notify_minutes.map(|n| n.clamp(0, 10_080));
     task.difficulty = task.difficulty.clamp(0, 3);
     task.due_epoch_day = task.due_epoch_day.map(|d| d.clamp(-719_162, 2_932_896));
 }
@@ -303,6 +305,8 @@ fn sanitize_task(task: &mut Task) {
 /// Интервал задачи — [start, start+duration); без длительности занимает
 /// одну минуту (мгновение) — две задачи «в одно время» конфликтуют,
 /// а «встык» (12:00–13:00 и 13:00–14:00) — нет.
+/// shortcut: задачи прошлого дня, переходящие через полночь (23:00 + 3 ч),
+/// не учитываются (как и в TS intervalsOverlap); учесть — если попросят.
 fn check_time_overlap(conn: &rusqlite::Connection, task: &Task) -> Result<(), String> {
     let Some(start) = task.time_minutes else {
         return Ok(()); // «в течение дня» — конфликтов не бывает
@@ -582,7 +586,9 @@ pub fn restore_archived(state: State<'_, Db>, id: String, date: i64) -> Result<(
     let Some(task) = task else {
         return Ok(());
     };
-    if !task.is_done && task.time_minutes.is_some() {
+    // Возврат на прошедший день закрывает задачу (см. ниже) — наложения
+    // для неё не важны, проверка только мешала вернуть задачу.
+    if !task.is_done && task.time_minutes.is_some() && date >= today_epoch_day() {
         let mut restored = task.clone();
         restored.archived = false; // после возврата задача снова активна
         restored.date = date;
@@ -739,6 +745,15 @@ fn export_to_string(
     conn: &rusqlite::Connection,
     files_dir: &std::path::Path,
 ) -> Result<String, String> {
+    serde_json::to_string_pretty(&export_doc(conn, files_dir)?).map_err(|e| e.to_string())
+}
+
+/// Документ бэкапа (с contentHash и exportedAt) — общий для ручного экспорта
+/// и автосинхронизации.
+fn export_doc(
+    conn: &rusqlite::Connection,
+    files_dir: &std::path::Path,
+) -> Result<serde_json::Value, String> {
     let sets: Vec<ColorSet> = {
         let mut stmt = conn
             .prepare("SELECT id, name, color, sort_order FROM color_sets ORDER BY sort_order ASC")
@@ -828,7 +843,7 @@ fn export_to_string(
     // экспорты пошли бы по кругу (импорт тоже вызывает перезагрузку данных).
     payload["contentHash"] = serde_json::json!(fnv64(payload.to_string().as_bytes()));
     payload["exportedAt"] = serde_json::json!(chrono::Utc::now().timestamp_millis());
-    serde_json::to_string_pretty(&payload).map_err(|e| e.to_string())
+    Ok(payload)
 }
 
 /// FNV-1a 64-bit — быстрый хеш содержимого экспорта (сравнение, не безопасность).
@@ -1001,10 +1016,10 @@ fn prepare_import(json: &str) -> Result<PreparedImport, String> {
     })
 }
 
-/// Записать разобранный бэкап: полная замена в одной транзакции. Файлы
-/// вложений пишем ДО commit (сбой записи откатывает транзакцию целиком), а
-/// написанное в этом импорте удаляем в ветке ошибки — раньше такие файлы
-/// оставались на диске сиротами навсегда.
+/// Записать разобранный бэкап: полная замена в одной транзакции. Новые файлы
+/// вложений пишутся во временные имена ДО commit (сбой записи откатывает
+/// транзакцию) и встают на место только после него; при ошибке удаляются
+/// лишь временные — файлы старых строк, переживших откат, не трогаем.
 fn apply_import(
     conn: &mut rusqlite::Connection,
     files_dir: &std::path::Path,
@@ -1065,20 +1080,28 @@ fn apply_import(
         )
         .map_err(|e| e.to_string())?;
     }
-    // Вложения: файл на диск + строка в БД. Пишем до commit, а при сбое
-    // удаляем написанное в этом импорте (иначе — осиротевшие файлы навсегда).
+    // Вложения: строки в транзакции, файлы — во временные имена, на место
+    // только после commit. Писать сразу поверх нельзя: при автосинке имена
+    // совпадают с живыми файлами старых строк, и откат удалял бы их файлы.
     let new_files: std::collections::HashSet<&str> = p
         .attachments
         .iter()
         .map(|a| a.stored_name.as_str())
         .collect();
     std::fs::create_dir_all(files_dir).map_err(|e| e.to_string())?;
-    let mut written: Vec<&str> = Vec::new();
+    let mut staged: Vec<(std::path::PathBuf, std::path::PathBuf)> = Vec::new();
     let files_result = (|| -> Result<(), String> {
         for a in &p.attachments {
-            std::fs::write(files_dir.join(&a.stored_name), &a.data)
-                .map_err(|e| format!("Не удалось записать вложение: {e}"))?;
-            written.push(a.stored_name.as_str());
+            let dest = files_dir.join(&a.stored_name);
+            // Имя = uuid вложения, содержимое неизменно: тот же размер — тот
+            // же файл, перезапись не нужна (автосинк гонял все файлы заново).
+            let same = std::fs::metadata(&dest).is_ok_and(|m| m.len() == a.data.len() as u64);
+            if !same {
+                let tmp = files_dir.join(format!("{}.import-tmp", a.stored_name));
+                std::fs::write(&tmp, &a.data)
+                    .map_err(|e| format!("Не удалось записать вложение: {e}"))?;
+                staged.push((tmp, dest));
+            }
             tx.execute(
                 "INSERT INTO attachments (id, task_id, file_name, mime, size, stored_name, created_at)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
@@ -1096,13 +1119,27 @@ fn apply_import(
         }
         Ok(())
     })();
-    if let Err(e) = files_result {
-        for f in written {
-            let _ = std::fs::remove_file(files_dir.join(f));
+    let discard = |staged: &[(std::path::PathBuf, std::path::PathBuf)]| {
+        for (tmp, _) in staged {
+            let _ = std::fs::remove_file(tmp);
         }
+    };
+    if let Err(e) = files_result {
+        discard(&staged);
         return Err(e); // транзакция откатится при drop
     }
-    tx.commit().map_err(|e| e.to_string())?;
+    if let Err(e) = tx.commit() {
+        discard(&staged);
+        return Err(e.to_string());
+    }
+    for (tmp, dest) in &staged {
+        if let Err(e) = std::fs::rename(tmp, dest) {
+            eprintln!(
+                "[import] вложение {} не встало на место: {e}",
+                dest.display()
+            );
+        }
+    }
     // Чистка сирот: файлы старых вложений, не вошедшие в новый набор.
     for f in old_files {
         if !new_files.contains(f.as_str()) {
@@ -1175,13 +1212,11 @@ fn write_atomic(path: &std::path::Path, bytes: &[u8]) -> Result<(), String> {
     })
 }
 
-/// Прочитать файл автосинхронизации из папки `dir`. Ok(None) — файла нет
-/// (норма), Ok(Some) — содержимое, Err — файл есть, но не читается (папка
-/// отозвана/перемещена): фронт отличает это от «файла нет» и сообщает
-/// пользователю, а не выключает автоимпорт молча навсегда.
-#[tauri::command]
-pub fn read_sync_file(dir: String) -> Result<Option<String>, String> {
-    let path = sync_file_path(&dir)?;
+/// Прочитать файл автосинхронизации. Ok(None) — файла нет (норма), Err —
+/// файл есть, но не читается (папка отозвана/перемещена): фронт отличает это
+/// от «файла нет» и сообщает, а не выключает автоимпорт молча навсегда.
+fn read_sync_file(dir: &str) -> Result<Option<String>, String> {
+    let path = sync_file_path(dir)?;
     match std::fs::read_to_string(&path) {
         Ok(s) => Ok(Some(s)),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
@@ -1189,12 +1224,72 @@ pub fn read_sync_file(dir: String) -> Result<Option<String>, String> {
     }
 }
 
-/// Записать файл автосинхронизации в папку `dir`. На Android не используется:
-/// content:// из системных диалогов std::fs не понимает (там — ручной экспорт).
+/// Только метка времени файла синхронизации: serde пропускает остальное
+/// (base64 вложений) без декода — минутная проверка не делает лишней работы.
+#[derive(Deserialize)]
+struct SyncHead {
+    #[serde(default, rename = "exportedAt")]
+    exported_at: i64,
+}
+
+/// Автоэкспорт: бэкап пишется в `<dir>/daily-planner-sync.json` целиком на
+/// стороне Rust (раньше multi-МБ JSON дважды гонялся через IPC). Ok(None) —
+/// содержимое не менялось с прошлой записи в эту папку, файл не тронут;
+/// Ok(Some(exportedAt)) — записан. Async — не держит главный поток.
 #[tauri::command]
-pub fn write_sync_file(dir: String, content: String) -> Result<(), String> {
-    let path = sync_file_path(&dir)?;
-    write_atomic(&path, content.as_bytes())
+pub async fn sync_export(
+    app: tauri::AppHandle,
+    state: State<'_, Db>,
+    dir: String,
+) -> Result<Option<i64>, String> {
+    // (папка, contentHash) последней записи: без изменений файл не переписываем
+    // — иначе каждая правка будила бы импорт на другом устройстве впустую.
+    static LAST: std::sync::Mutex<Option<(String, u64)>> = std::sync::Mutex::new(None);
+    let doc = export_doc(&state.lock(), &attachments_dir(&app))?;
+    let hash = doc["contentHash"].as_u64().unwrap_or(0);
+    let exported_at = doc["exportedAt"].as_i64().unwrap_or(0);
+    let mut last = LAST.lock().unwrap_or_else(|e| e.into_inner());
+    if last.as_ref() == Some(&(dir.clone(), hash)) {
+        return Ok(None);
+    }
+    let json = serde_json::to_string_pretty(&doc).map_err(|e| e.to_string())?;
+    // Ошибка записи сбрасывает память: следующая попытка обязана записать файл.
+    *last = None;
+    write_atomic(&sync_file_path(&dir)?, json.as_bytes())?;
+    *last = Some((dir, hash));
+    Ok(Some(exported_at))
+}
+
+/// Автоимпорт: если файл в `dir` новее `last_at` (его писал другой экземпляр)
+/// — полная замена данных, как ручной импорт; Ok(Some(exportedAt)) — данные
+/// заменены. Err — только «файл не читается»; битый/неподходящий бэкап
+/// логируется и даёт Ok(None) (сообщать раз в минуту нечего — файл чужой).
+#[tauri::command]
+pub async fn sync_import(
+    app: tauri::AppHandle,
+    state: State<'_, Db>,
+    dir: String,
+    last_at: i64,
+) -> Result<Option<i64>, String> {
+    let Some(raw) = read_sync_file(&dir)? else {
+        return Ok(None); // файла ещё нет — норма
+    };
+    let exported_at = serde_json::from_str::<SyncHead>(&raw).map_or(0, |h| h.exported_at);
+    if exported_at <= 0 || exported_at <= last_at {
+        return Ok(None);
+    }
+    let res = prepare_import(&raw)
+        .and_then(|p| apply_import(&mut state.lock(), &attachments_dir(&app), &p));
+    match res {
+        Ok(_) => {
+            crate::notify::wake_scheduler();
+            Ok(Some(exported_at))
+        }
+        Err(e) => {
+            eprintln!("Автоимпорт не удался: {e}");
+            Ok(None)
+        }
+    }
 }
 
 /// Сохранить настройки уведомлений (планировщик подхватит сразу: сохранение
@@ -1293,7 +1388,7 @@ fn push_widget_refresh(_app: &tauri::AppHandle) {}
 /// Каталог data-файлов: на Android — app_data_dir/files (там читает Kotlin-
 /// виджет через context.filesDir), на десктопе — сам app_data_dir.
 #[cfg_attr(not(target_os = "android"), allow(unused_mut))]
-fn app_files_dir(app: &tauri::AppHandle) -> std::path::PathBuf {
+pub(crate) fn app_files_dir(app: &tauri::AppHandle) -> std::path::PathBuf {
     let mut dir = match app.path().app_data_dir() {
         Ok(d) => d,
         Err(e) => {
@@ -1467,6 +1562,14 @@ pub fn cleanup_orphan_attachments(app: &tauri::AppHandle, state: &State<'_, Db>)
             continue;
         }
         let path = dir.join(&name);
+        // Свежий файл может принадлежать импорту или добавлению, идущему
+        // параллельно (строка в БД ещё не закоммичена) — не трогаем.
+        let fresh = std::fs::metadata(&path)
+            .and_then(|m| m.modified())
+            .is_ok_and(|t| t.elapsed().is_ok_and(|d| d.as_secs() < 600));
+        if fresh {
+            continue;
+        }
         if let Err(e) = std::fs::remove_file(&path) {
             eprintln!(
                 "[attachments] не удалось удалить сироту {}: {e}",
@@ -1735,6 +1838,10 @@ mod tests {
         let json = export_to_string(&conn, &dir).expect("export");
         let v: serde_json::Value = serde_json::from_str(&json).expect("json");
         assert_eq!(v["version"], 2);
+        // Автоимпорт читает только метку времени — она должна совпасть.
+        let head: SyncHead = serde_json::from_str(&json).expect("head");
+        assert!(head.exported_at > 0);
+        assert_eq!(v["exportedAt"].as_i64(), Some(head.exported_at));
         assert_eq!(v["tasks"][0]["notes"], "заметка");
         assert_eq!(v["tasks"][0]["isDone"], false);
 
@@ -1858,6 +1965,45 @@ mod tests {
         assert_eq!(count, 0, "враждебное вложение не должно попасть в БД");
         let left = std::fs::read_dir(&dir).expect("read dir").count();
         assert_eq!(left, 0, "импорт не должен писать файлы по такому имени");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Сорвавшийся импорт (вложение ссылается на несуществующую задачу → FK)
+    /// откатывается и НЕ трогает живой файл с тем же именем: раньше файл
+    /// перезаписывался до commit и удалялся при откате — старая строка
+    /// оставалась без файла.
+    #[test]
+    fn failed_import_keeps_existing_attachment_file() {
+        let dir = unique_files_dir("rollback");
+        let mut conn = open(":memory:").expect("open test db");
+        let task = Task {
+            id: "t1".into(),
+            title: "T".into(),
+            ..Default::default()
+        };
+        write_task(&conn, &task).expect("insert task");
+        conn.execute(
+            "INSERT INTO attachments (id, task_id, file_name, stored_name) VALUES ('a1', 't1', 'f', 'f.txt')",
+            [],
+        )
+        .expect("insert attachment");
+        std::fs::write(dir.join("f.txt"), b"old").expect("write file");
+        // base64("new data"): другой размер — импорт захочет переписать файл.
+        let json = r#"{"version":2,"tasks":[],"attachments":[{"id":"a2","taskId":"missing","fileName":"f","storedName":"f.txt","base64":"bmV3IGRhdGE="}]}"#;
+        assert!(import_from_string(&mut conn, &dir, json).is_err());
+        assert_eq!(
+            std::fs::read(dir.join("f.txt")).expect("file survives"),
+            b"old"
+        );
+        let rows: i64 = conn
+            .query_row("SELECT COUNT(*) FROM attachments", [], |r| r.get(0))
+            .expect("count");
+        assert_eq!(rows, 1, "откат сохраняет старую строку");
+        assert_eq!(
+            std::fs::read_dir(&dir).expect("read dir").count(),
+            1,
+            "временных файлов не осталось"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 

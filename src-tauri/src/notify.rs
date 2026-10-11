@@ -148,27 +148,26 @@ pub fn save_prefs(app: &tauri::AppHandle, prefs: &NotifyPrefs) -> Result<(), Str
     std::fs::rename(&tmp, &p).map_err(|e| e.to_string())
 }
 
-/// Состояние дайджеста (Android), рядом с настройками в отдельном файле:
+/// Состояние дайджеста, рядом с настройками в отдельном файле:
 /// это состояние планировщика, а пользовательские prefs интерфейс
 /// перезаписывает целиком — поле-маркер в них терялось бы при каждом
-/// сохранении настроек.
-#[cfg(target_os = "android")]
-#[derive(Default, serde::Serialize, serde::Deserialize)]
+/// сохранении настроек. Десктоп использует только sent_day (переживает
+/// перезапуск: иначе дайджест повторялся при каждом запуске в окне +6 ч).
+#[derive(Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 struct DigestState {
     /// День (epoch-day), на который СТОИТ будильник ОС (None — будильника нет).
     #[serde(default)]
     armed_day: Option<i64>,
-    /// День, за который дайджест уже показан «догонкой».
+    /// День, за который дайджест уже показан (догонкой, будильником ОС или
+    /// — на десктопе — поллингом).
     #[serde(default)]
     sent_day: Option<i64>,
 }
 
-#[cfg(target_os = "android")]
 fn digest_state_path(app: &tauri::AppHandle) -> std::path::PathBuf {
     prefs_path(app).with_file_name("notify-digest.json")
 }
 
-#[cfg(target_os = "android")]
 fn load_digest_state(app: &tauri::AppHandle) -> DigestState {
     let raw = std::fs::read_to_string(digest_state_path(app)).unwrap_or_default();
     serde_json::from_str(&raw).unwrap_or_default()
@@ -176,7 +175,6 @@ fn load_digest_state(app: &tauri::AppHandle) -> DigestState {
 
 /// Атомарно (tmp + rename), как и настройки: обрыв записи не должен
 /// превратить маркер в мусор, из-за которого дайджест придёт дважды.
-#[cfg(target_os = "android")]
 fn save_digest_state(app: &tauri::AppHandle, state: &DigestState) {
     let p = digest_state_path(app);
     if let Some(dir) = p.parent() {
@@ -188,6 +186,28 @@ fn save_digest_state(app: &tauri::AppHandle, state: &DigestState) {
     let tmp = p.with_extension("json.tmp");
     if std::fs::write(&tmp, json).is_ok() {
         let _ = std::fs::rename(&tmp, &p);
+    }
+}
+
+/// Новое состояние при перенацеливании будильника на `new_armed`. Если старый
+/// будильник стоял на СЕГОДНЯ, а час уже прошёл (`hour_passed`), ОС его уже
+/// показала — сегодня считаем отправленным. Без этого первый тик после часа
+/// затирал armed_day, и догонка слала второй дайджест (регрессия 0.2.2).
+#[cfg(any(target_os = "android", test))]
+fn retarget_digest(
+    old: &DigestState,
+    new_armed: Option<i64>,
+    today: i64,
+    hour_passed: bool,
+) -> DigestState {
+    let fired_today = hour_passed && old.armed_day == Some(today);
+    DigestState {
+        armed_day: new_armed,
+        sent_day: if fired_today {
+            Some(today)
+        } else {
+            old.sent_day
+        },
     }
 }
 
@@ -239,7 +259,7 @@ fn fired() -> &'static Mutex<HashMap<String, i64>> {
 #[cfg(not(target_os = "android"))]
 fn mark_fired(key: String) {
     let now = chrono::Utc::now().timestamp_millis();
-    let mut map = fired().lock().unwrap();
+    let mut map = fired().lock().unwrap_or_else(|e| e.into_inner());
     if map.len() > 128 {
         // Чистим только при разросшемся кеше — retain на каждый тик лишний.
         map.retain(|_, ts| now - *ts < 86_400_000);
@@ -269,7 +289,7 @@ fn wake_pair() -> &'static (std::sync::Mutex<bool>, std::sync::Condvar) {
 /// там серия чекбоксов означала бы лишний JNI-тик pending() на каждую.
 pub fn wake_scheduler() {
     let (lock, cvar) = wake_pair();
-    let mut woken = lock.lock().unwrap();
+    let mut woken = lock.lock().unwrap_or_else(|e| e.into_inner());
     *woken = true;
     cvar.notify_all();
 }
@@ -284,9 +304,11 @@ pub fn start_scheduler(app: tauri::AppHandle) {
         let fell = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| tick(&app))).is_err();
         let sleep = next_sleep(&app, fell);
         let (lock, cvar) = wake_pair();
-        let mut woken = lock.lock().unwrap();
+        let mut woken = lock.lock().unwrap_or_else(|e| e.into_inner());
         while !*woken {
-            let (guard, timeout) = cvar.wait_timeout(woken, sleep).unwrap();
+            let (guard, timeout) = cvar
+                .wait_timeout(woken, sleep)
+                .unwrap_or_else(|e| e.into_inner());
             woken = guard;
             if timeout.timed_out() {
                 break; // плановое пробуждение
@@ -424,7 +446,7 @@ fn tick(app: &tauri::AppHandle) {
     // изменении задач (write_widget_data), а здесь достаточно поймать смену
     // даты (иначе утром виджет показывал бы вчерашний список).
     let today = crate::commands::today_epoch_day();
-    let last = widget_day().lock().unwrap();
+    let last = widget_day().lock().unwrap_or_else(|e| e.into_inner());
     if *last != today {
         drop(last);
         let state = app.state::<Db>();
@@ -434,21 +456,24 @@ fn tick(app: &tauri::AppHandle) {
         // Штамп дня — только после успешной записи: при сбое виджет покажет
         // вчерашний список, но попытка повторится на следующем тике.
         if crate::commands::refresh_widget(app, &state, dark).is_ok() {
-            *widget_day().lock().unwrap() = today;
+            *widget_day().lock().unwrap_or_else(|e| e.into_inner()) = today;
         }
     }
     let prefs = load_prefs(app);
-    if !prefs.day_summary && !prefs.reminders {
-        return;
-    }
     // Android: OS-планирование (уведомления приходят даже при убитом
-    // процессе). Десктоп: поллинг с окном ±2 мин (процесс жив всегда).
+    // процессе). Сверку гоняем и при обоих выключенных переключателях: только
+    // её шаг отмены снимает уже стоящие будильники (повторяющийся дайджест
+    // сам себя не отменит и приходил бы вечно).
     #[cfg(target_os = "android")]
     {
         sync_scheduled(app, &prefs);
     }
+    // Десктоп: поллинг с окном ±2 мин (процесс жив всегда).
     #[cfg(not(target_os = "android"))]
     {
+        if !prefs.day_summary && !prefs.reminders {
+            return;
+        }
         let now = Local::now().naive_local();
         if prefs.day_summary {
             check_digest(app, &prefs, now);
@@ -895,7 +920,7 @@ fn schedule_at(
 /// Заголовок/сводка/строки дайджеста — общие для постановки будильника
 /// (schedule_digest) и разового показа (show_digest_now).
 #[cfg(target_os = "android")]
-fn digest_parts(rows: &[(String, Option<i64>)]) -> (String, String, Vec<String>) {
+fn digest_parts(day_epoch: i64, rows: &[(String, Option<i64>)]) -> (String, String, Vec<String>) {
     let timed = rows.iter().filter(|(_, t)| t.is_some()).count();
     let lines: Vec<String> = rows
         .iter()
@@ -910,6 +935,12 @@ fn digest_parts(rows: &[(String, Option<i64>)]) -> (String, String, Vec<String>)
     } else {
         app_lang::timed_summary(timed)
     };
+    // Повторяющийся будильник ОС несёт текст момента постановки: без запусков
+    // приложения он показывает тот же список каждый день — дата это выдаёт.
+    let summary = match crate::commands::epoch_to_date(day_epoch) {
+        Some(d) => format!("{} · {summary}", app_lang::short_date(d)),
+        None => summary,
+    };
     (title, summary, lines)
 }
 
@@ -921,8 +952,13 @@ fn digest_parts(rows: &[(String, Option<i64>)]) -> (String, String, Vec<String>)
 /// false — будильник НЕ поставлен (запись в хранилище не пишем, чтобы sync
 /// не считал дайджест активным).
 #[cfg(target_os = "android")]
-fn schedule_digest(app: &tauri::AppHandle, hour: u8, rows: &[(String, Option<i64>)]) -> bool {
-    let (title, summary, lines) = digest_parts(rows);
+fn schedule_digest(
+    app: &tauri::AppHandle,
+    hour: u8,
+    day_epoch: i64,
+    rows: &[(String, Option<i64>)],
+) -> bool {
+    let (title, summary, lines) = digest_parts(day_epoch, rows);
     let mut b = app
         .notification()
         .builder()
@@ -969,8 +1005,8 @@ fn schedule_digest(app: &tauri::AppHandle, hour: u8, rows: &[(String, Option<i64
 /// числом не поставить, а список на день нужен. Настройки/хранилище расписаний
 /// не трогаем: это разовый показ, а не арм-запись.
 #[cfg(target_os = "android")]
-fn show_digest_now(app: &tauri::AppHandle, rows: &[(String, Option<i64>)]) -> bool {
-    let (title, summary, lines) = digest_parts(rows);
+fn show_digest_now(app: &tauri::AppHandle, day_epoch: i64, rows: &[(String, Option<i64>)]) -> bool {
+    let (title, summary, lines) = digest_parts(day_epoch, rows);
     let mut b = app
         .notification()
         .builder()
@@ -1100,17 +1136,19 @@ fn sync_scheduled(app: &tauri::AppHandle, prefs: &NotifyPrefs) {
             match action {
                 DigestAction::Schedule => {
                     let hour = u8::try_from(prefs.day_summary_hour).unwrap_or(8);
-                    if schedule_digest(app, hour, &tasks) {
+                    if schedule_digest(app, hour, target_epoch, &tasks) {
                         expected.insert(DIGEST_NOTIFICATION_ID);
                         set_digest_armed(Some((target_epoch, fp)));
                         // Маркер: будильник на этот день уже стоит — догоняющий
                         // показ в этот день не нужен (иначе второй дайджест).
                         save_digest_state(
                             app,
-                            &DigestState {
-                                armed_day: Some(target_epoch),
-                                sent_day: load_digest_state(app).sent_day,
-                            },
+                            &retarget_digest(
+                                &load_digest_state(app),
+                                Some(target_epoch),
+                                today_epoch,
+                                target_epoch != today_epoch,
+                            ),
                         );
                     }
                     // При отказе планирования НЕ добавляем в expected и не
@@ -1126,10 +1164,12 @@ fn sync_scheduled(app: &tauri::AppHandle, prefs: &NotifyPrefs) {
                     // чтобы «догонка» сработала, когда в дне появятся задачи.
                     save_digest_state(
                         app,
-                        &DigestState {
-                            armed_day: None,
-                            sent_day: load_digest_state(app).sent_day,
-                        },
+                        &retarget_digest(
+                            &load_digest_state(app),
+                            None,
+                            today_epoch,
+                            target_epoch != today_epoch,
+                        ),
                     );
                 }
             }
@@ -1147,7 +1187,7 @@ fn sync_scheduled(app: &tauri::AppHandle, prefs: &NotifyPrefs) {
             state.armed_day,
             state.sent_day,
             !today_rows.is_empty(),
-        ) && show_digest_now(app, &today_rows)
+        ) && show_digest_now(app, today_epoch, &today_rows)
         {
             save_digest_state(
                 app,
@@ -1162,6 +1202,9 @@ fn sync_scheduled(app: &tauri::AppHandle, prefs: &NotifyPrefs) {
     // 2. Напоминания задач (глобальные интервалы / своё notify_minutes /
     // travel_time «Пора выезжать»). Расчёт событий общий с десктопом
     // (reminder_events) — здесь только планирование на уровне ОС.
+    // taskId → id будильников: по этой карте виджет (Kotlin) снимает
+    // напоминания задачи, отмеченной выполненной при убитом процессе.
+    let mut by_task: std::collections::BTreeMap<String, Vec<i32>> = Default::default();
     if prefs.reminders {
         for ev in reminder_events(app, prefs) {
             // Горизонт: строго в будущем и в пределах выборки (+7 дней) —
@@ -1171,11 +1214,14 @@ fn sync_scheduled(app: &tauri::AppHandle, prefs: &NotifyPrefs) {
             }
             let nid = stable_id(ev.kind, &ev.task_id, due_unix_minute(ev.due));
             expected.insert(nid);
+            by_task.entry(ev.task_id.clone()).or_default().push(nid);
             if !scheduled.contains(&nid) {
                 schedule_at(app, nid, &ev.task_id, ev.title, &ev.body, ev.due);
             }
         }
     }
+
+    write_task_alarm_map(app, &by_task);
 
     // 3. Отмена лишних: запланированные, но не ожидаемые — задача выполнена,
     // удалена или её время изменилось (id у нового due другой).
@@ -1183,6 +1229,30 @@ fn sync_scheduled(app: &tauri::AppHandle, prefs: &NotifyPrefs) {
         if !expected.contains(&id) {
             let _ = notif.cancel(vec![id]);
         }
+    }
+}
+
+/// files/notify-tasks.json для виджета: {"<taskId>": [id, …]}. Пишем только при
+/// изменении (тик раз в 60 с), атомарно — Kotlin читает файл без блокировок.
+#[cfg(target_os = "android")]
+fn write_task_alarm_map(
+    app: &tauri::AppHandle,
+    map: &std::collections::BTreeMap<String, Vec<i32>>,
+) {
+    static LAST: Mutex<String> = Mutex::new(String::new());
+    let Ok(json) = serde_json::to_string(map) else {
+        return;
+    };
+    let mut last = LAST.lock().unwrap_or_else(|e| e.into_inner());
+    if *last == json {
+        return;
+    }
+    let dir = crate::commands::app_files_dir(app);
+    let tmp = dir.join("notify-tasks.json.tmp");
+    if std::fs::write(&tmp, &json).is_ok()
+        && std::fs::rename(&tmp, dir.join("notify-tasks.json")).is_ok()
+    {
+        *last = json;
     }
 }
 
@@ -1233,8 +1303,9 @@ fn check_digest(app: &tauri::AppHandle, prefs: &NotifyPrefs, now: NaiveDateTime)
     if now.hour() < target_hour || now.hour() >= window_end {
         return;
     }
-    let key = format!("digest|{}", now.date());
-    if fired().lock().unwrap().contains_key(&key) {
+    let today_epoch = crate::commands::date_to_epoch(now.date());
+    let state = load_digest_state(app);
+    if state.sent_day == Some(today_epoch) {
         return;
     }
 
@@ -1257,7 +1328,13 @@ fn check_digest(app: &tauri::AppHandle, prefs: &NotifyPrefs, now: NaiveDateTime)
         .body(body)
         .show();
 
-    mark_fired(key);
+    save_digest_state(
+        app,
+        &DigestState {
+            sent_day: Some(today_epoch),
+            ..state
+        },
+    );
 }
 
 /// Строка задачи с полями, нужными для расчёта напоминания.
@@ -1356,6 +1433,8 @@ fn check_reminders(app: &tauri::AppHandle, prefs: &NotifyPrefs, now: NaiveDateTi
         if now < ev.due || now > ev.due + chrono::Duration::minutes(REMIND_CATCHUP_MINUTES) {
             continue;
         }
+        // shortcut: дедуп в памяти — перезапуск в пределах REMIND_CATCHUP_MINUTES
+        // повторит напоминание; хранить на диске, если перезапуски станут частыми.
         // Ключ дедупликации: id + момент due достаточны — разные интервалы
         // одной задачи дают разные due (разница ≥ 1 мин), коллизий нет.
         let key = if ev.kind == "travel" {
@@ -1365,7 +1444,11 @@ fn check_reminders(app: &tauri::AppHandle, prefs: &NotifyPrefs, now: NaiveDateTi
         } else {
             format!("remind|{}|{}", ev.task_id, ev.due)
         };
-        if fired().lock().unwrap().contains_key(&key) {
+        if fired()
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .contains_key(&key)
+        {
             continue;
         }
         let _ = app
@@ -1655,9 +1738,55 @@ mod tests {
         assert_eq!(midnight["interval"]["interval"]["hour"], 0);
     }
 
-    /// Решение по аларму дайджеста: без аларма — ставим; с тем же контентом —
-    /// не трогаем; контент дня изменился (задачи добавили вечером) или
-    /// сменился день — переставляем; пустой день — снимаем.
+    /// Переход состояния после часа дайджеста: будильник на сегодня уже
+    /// сработал, тик перенацеливает его на завтра — догонка НЕ должна слать
+    /// второй дайджест. До часа (пустой день → Cancel) сегодня не помечается,
+    /// чтобы задачи, добавленные позже, ещё получили догонку.
+    #[test]
+    fn digest_retarget_marks_fired_day() {
+        let armed_today = DigestState {
+            armed_day: Some(100),
+            sent_day: None,
+        };
+        let s = retarget_digest(&armed_today, Some(101), 100, true);
+        assert_eq!(
+            s,
+            DigestState {
+                armed_day: Some(101),
+                sent_day: Some(100)
+            }
+        );
+        assert!(!digest_catchup_due(
+            9,
+            8,
+            100,
+            s.armed_day,
+            s.sent_day,
+            true
+        ));
+        // Завтра пустое (Cancel) после часа — сегодня тоже показано.
+        let s = retarget_digest(&armed_today, None, 100, true);
+        assert_eq!(s.sent_day, Some(100));
+        // До часа: сегодняшний день опустел → будильник снят, не показан.
+        let s = retarget_digest(&armed_today, None, 100, false);
+        assert_eq!(
+            s,
+            DigestState {
+                armed_day: None,
+                sent_day: None
+            }
+        );
+        assert!(digest_catchup_due(9, 8, 100, s.armed_day, s.sent_day, true));
+        // Будильника на сегодня не было — день не помечается (догонка нужна).
+        let none = DigestState {
+            armed_day: Some(99),
+            sent_day: Some(99),
+        };
+        let s = retarget_digest(&none, Some(101), 100, true);
+        assert_eq!(s.sent_day, Some(99));
+        assert!(digest_catchup_due(9, 8, 100, s.armed_day, s.sent_day, true));
+    }
+
     /// Догоняющий дайджест нужен ровно тогда, когда час прошёл (в пределах
     /// окна +6 ч), в дне есть задачи, а будильника на этот день не стояло и
     /// показа не было. Ошибка здесь = либо молчание (жалоба «не вылезает»),
@@ -1683,6 +1812,9 @@ mod tests {
         assert!(!digest_catchup_due(6, 0, 100, None, None, true));
     }
 
+    /// Решение по аларму дайджеста: без аларма — ставим; с тем же контентом —
+    /// не трогаем; контент дня изменился (задачи добавили вечером) или
+    /// сменился день — переставляем; пустой день — снимаем.
     #[test]
     fn digest_action_reschedules_on_content_change() {
         let target = (20_000i64, 111u64);

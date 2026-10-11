@@ -1,5 +1,7 @@
 # PlanWise 0.2.2 — deep audit and fix plan (11.10.2026)
 
+Status 12.10: #1–#10, #12 fixed in 0.2.3 (#8 cheap variant: date in the digest text; #7 Kotlin cancel on "done"); O1, O2, O6 done. Open: #11 (documented), #13 and O3 (owner decisions), O4, O5.
+
 Scope: the whole repo again, beyond `2026-09-22-deep-audit-plan.md` (N1–N29 there are closed; its
 "refuted" list stays refuted). Gate on `main@4aeca9a`: clippy clean, `cargo test` 33/33, `tsc` clean,
 `vite build` OK (main chunk 550 KB). The Android `cargo check --target aarch64-linux-android` from a plain

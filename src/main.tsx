@@ -7,12 +7,17 @@ window.addEventListener("error", (e) => {
   // дожмёт изменение на следующем кадре), оверлей на нём не нужен.
   if (e.message?.includes("ResizeObserver loop")) return;
   document.title = "ERR: " + e.message;
-  const dark = document.documentElement.style.backgroundColor === "rgb(18, 19, 22)" ||
-    ((localStorage.getItem("todo-settings") ?? "").includes('"themeMode":"dark"'));
+  const dark =
+    document.documentElement.style.backgroundColor === "rgb(18, 19, 22)" ||
+    (localStorage.getItem("todo-settings") ?? "").includes(
+      '"themeMode":"dark"',
+    );
   const div = document.createElement("div");
   div.style.cssText =
     "position:fixed;inset:0;z-index:99999;" +
-    (dark ? "background:#121316;color:#ff8a80;" : "background:#fff;color:#c00;") +
+    (dark
+      ? "background:#121316;color:#ff8a80;"
+      : "background:#fff;color:#c00;") +
     "padding:20px;font:14px monospace;white-space:pre-wrap";
   div.textContent = "JS ERROR: " + e.message + "\n" + (e.error?.stack ?? "");
   document.body.appendChild(div);
@@ -26,7 +31,9 @@ window.addEventListener("unhandledrejection", (e) => {
 // настроек, и по нему нельзя понять, жива ли страница).
 try {
   localStorage.setItem("ezh-diag-start", String(Date.now()));
-} catch { /* не критично */ }
+} catch {
+  /* не критично */
+}
 // Точечные импорты Universal UI: приложение использует только токены,
 // темы, типографику и мобильную базу. Полный all.css тянул бы неиспользуемые
 // слои (кнопки, иконки, тосты и т.д.) и конфликтовал классами .icon-btn
@@ -42,7 +49,7 @@ import "./App.css";
 import "universal-ui/mobile.css";
 import App from "./App";
 import { useStore } from "./store";
-import { I18nProvider, t } from "./i18n";
+import { I18nProvider, getLang, loadLang, t } from "./i18n";
 
 // Deep-link: тап по уведомлению (Android/Mac) → плагин шлёт событие
 // «actionPerformed», в notification.extra.taskId — id задачи. Слушаем на
@@ -54,7 +61,9 @@ try {
   import("@tauri-apps/api/event")
     .then(({ listen }) =>
       listen("actionPerformed", (e) => {
-        const p = e.payload as { notification?: { extra?: { taskId?: string } } };
+        const p = e.payload as {
+          notification?: { extra?: { taskId?: string } };
+        };
         const taskId = p?.notification?.extra?.taskId;
         // Лог для диагностики deep-link (виден в консоли WebView при
         // отладке): помогает понять, дошло ли событие при холодном старте.
@@ -65,7 +74,9 @@ try {
       }),
     )
     .catch(() => {});
-} catch { /* не критично */ }
+} catch {
+  /* не критично */
+}
 
 /** ErrorBoundary вокруг всего приложения: необработанная ошибка рендера React
  *  размонтирует всё дерево — пользователь видит белый экран без объяснения.
@@ -95,7 +106,9 @@ class RootErrorBoundary extends React.Component<
             textAlign: "center",
           }}
         >
-          <div style={{ fontSize: 16, fontWeight: 600 }}>{t("app.fatalTitle")}</div>
+          <div style={{ fontSize: 16, fontWeight: 600 }}>
+            {t("app.fatalTitle")}
+          </div>
           <pre
             style={{
               fontSize: 12,
@@ -115,12 +128,15 @@ class RootErrorBoundary extends React.Component<
   }
 }
 
-ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
-  <React.StrictMode>
-    <I18nProvider>
-      <RootErrorBoundary>
-        <App />
-      </RootErrorBoundary>
-    </I18nProvider>
-  </React.StrictMode>,
+// Словарь стартового языка — до первого рендера, чтобы не мигал английский.
+void loadLang(getLang()).then(() =>
+  ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
+    <React.StrictMode>
+      <I18nProvider>
+        <RootErrorBoundary>
+          <App />
+        </RootErrorBoundary>
+      </I18nProvider>
+    </React.StrictMode>,
+  ),
 );

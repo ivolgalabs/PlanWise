@@ -237,12 +237,12 @@ object WidgetData {
     if (!dbFile.exists()) return DB_MISSING
     return try {
       val db = SQLiteDatabase.openDatabase(dbFile.path, null, SQLiteDatabase.OPEN_READWRITE)
+      // Текущее значение нужно, чтобы переключить 1-is_done (UPDATE с
+      // выражением через ContentValues не сделать).
+      var current = 0
       try {
         db.rawQuery("PRAGMA busy_timeout=5000", null).use { }
         if (!schemaReady(db)) return DB_MISSING
-        // Текущее значение нужно, чтобы переключить 1-is_done (UPDATE с
-        // выражением через ContentValues не сделать).
-        var current = 0
         db.rawQuery("SELECT is_done FROM tasks WHERE id = ?", arrayOf(taskId)).use { c ->
           if (c.moveToFirst()) current = c.getInt(0)
         }
@@ -254,6 +254,7 @@ object WidgetData {
       } finally {
         db.close()
       }
+      if (current == 0) cancelTaskAlarms(context, taskId)
       // Задача могла исчезнуть (удалена в приложении) — всё равно
       // перегенерируем файл, виджет покажет актуальное состояние.
       val payload = generateFromDb(context) ?: return DB_MISSING
@@ -263,6 +264,40 @@ object WidgetData {
     } catch (e: Exception) {
       e.printStackTrace()
       "Не удалось обновить задачу"
+    }
+  }
+
+  /**
+   * Снять будильники напоминаний задачи, отмеченной выполненной с виджета:
+   * при убитом процессе Rust-сверка (sync_scheduled) не запустится, и
+   * напоминание пришло бы по уже сделанной задаче. Карту taskId → id пишет
+   * Rust (files/notify-tasks.json); снятие повторяет
+   * TauriNotificationManager.cancel плагина: PendingIntent публикатора с тем
+   * же request code + запись в NOTIFICATION_STORE.
+   * shortcut: снятие «выполнено» обратно будильники не возвращает — их
+   * поставит следующая сверка при запуске приложения.
+   */
+  private fun cancelTaskAlarms(context: Context, taskId: String) {
+    try {
+      val f = File(context.filesDir, "notify-tasks.json")
+      if (!f.exists()) return
+      val ids = JSONObject(f.readText()).optJSONArray(taskId) ?: return
+      val am = context.getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
+      val store = context.getSharedPreferences("NOTIFICATION_STORE", Context.MODE_PRIVATE).edit()
+      val flags = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+        android.app.PendingIntent.FLAG_MUTABLE
+      } else {
+        0
+      }
+      for (i in 0 until ids.length()) {
+        val id = ids.getInt(i)
+        val intent = android.content.Intent(context, app.tauri.notification.TimedNotificationPublisher::class.java)
+        am.cancel(android.app.PendingIntent.getBroadcast(context, id, intent, flags))
+        store.remove(id.toString())
+      }
+      store.apply()
+    } catch (e: Exception) {
+      e.printStackTrace()
     }
   }
 

@@ -124,8 +124,8 @@ pub fn run() {
             // Автосинхронизация: запись/чтение JSON-файла в заданной папке
             // (десктоп; на Android content:// не понимает std::fs — там
             // ручной экспорт через плагин fs).
-            commands::read_sync_file,
-            commands::write_sync_file,
+            commands::sync_export,
+            commands::sync_import,
             // Настройки уведомлений + ручное перепланирование.
             commands::set_notification_prefs,
             commands::write_widget_data,
