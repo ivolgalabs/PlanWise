@@ -158,6 +158,11 @@ export const TaskCard = memo(function TaskCard({
   const isTouch = useMediaQuery("(pointer: coarse), (max-width: 560px)");
   // Порог «тап или прокрутка» (px): сдвиг больше — это жест, а не тап.
   const TAP_SLOP_PX = 10;
+  // Палец (не узкое окно десктопа): текст задачи только для чтения — тап по
+  // нему открывает карточку, а не клавиатуру (промахи мимо чекбокса/ручки
+  // попадали в текст, который занимает почти всю строку). Название правится
+  // в карточке.
+  const fingerOnly = useMediaQuery("(pointer: coarse)");
   // Мобильный компактный ряд (только вне компактной сетки недели).
   const mobileRow = isTouch && !compact;
 
@@ -518,7 +523,7 @@ export const TaskCard = memo(function TaskCard({
         // Клик по элементам управления (чекбокс, ручка, поле текста, кнопка
         // «Редактировать») — их собственные обработчики.
         const t = e.target as HTMLElement;
-        if (t.closest("input, button, label, select, textarea, .task-drag-hint")) return;
+        if (t.closest("input, button, label, select, textarea:not([readonly]), .task-drag-hint")) return;
         // Прокрутка списка на телефоне заканчивается обычным click по строке,
         // и раньше каждый такой скролл открывал правку текста. Тапом считаем
         // только отпускание почти в той же точке, где нажали.
@@ -527,8 +532,8 @@ export const TaskCard = memo(function TaskCard({
         if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > TAP_SLOP_PX) return;
         // Телефон: осознанный тап по строке открывает КАРТОЧКУ — кнопка «✎» тут
         // всего 20-24px и палец по ней промахивается, а фокус в тексте означает
-        // мгновенно выехавшую клавиатуру. Текст по-прежнему правится тапом по
-        // самому полю (оно и есть видимый заголовок), остальное — в карточке.
+        // мгновенно выехавшую клавиатуру. На таче поле текста readOnly (fingerOnly),
+        // так что тап по самому тексту тоже ведёт сюда — правка в карточке.
         if (isTouch) {
           setCardOpen(true);
           return;
@@ -609,7 +614,10 @@ export const TaskCard = memo(function TaskCard({
           ref={textareaRef}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          onFocus={() => setEditing(true)}
+          readOnly={fingerOnly}
+          onFocus={() => {
+            if (!fingerOnly) setEditing(true);
+          }}
           onBlur={() => {
             setEditing(false);
             save();

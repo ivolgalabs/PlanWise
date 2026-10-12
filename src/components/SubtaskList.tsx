@@ -9,6 +9,9 @@ import { useSubtasks } from "../useSubtasks";
 import { showToast } from "../toast";
 import { useI18n } from "../i18n";
 
+/** Порог «тап или прокрутка» (px), как у TaskCard. */
+const TAP_SLOP_PX = 10;
+
 interface Props {
   taskId: string;
 }
@@ -164,13 +167,29 @@ function SubtaskRow({
   // Вход в редактирование: клик/тап по тексту подзадачи — фокус + выделение
   // (как у задач). preventDefault только для мыши, чтобы не выделять текст
   // на span; на таче нативный фокус ставит курсор в место тапа.
-  const startEdit = (e: React.PointerEvent) => {
-    if (e.pointerType === "mouse") e.preventDefault();
+  const tapStart = useRef<{ x: number; y: number } | null>(null);
+  const beginEdit = (selectAll: boolean) => {
     setValue(subtask.title);
     setEditing(true);
-    // На десктопе сразу выделяем весь текст (как у задач).
+    if (selectAll) requestAnimationFrame(() => inputRef.current?.select());
+  };
+  // Мышь — правка сразу по нажатию, с выделением всего текста (как у задач).
+  // Палец — только запоминаем точку: pointerdown на таче — это и начало
+  // прокрутки, и раньше каждый скролл, начатый на подзадаче, открывал
+  // клавиатуру. Правка — в onClick, если палец почти не сдвинулся.
+  const startEdit = (e: React.PointerEvent) => {
     if (e.pointerType === "mouse") {
-      requestAnimationFrame(() => inputRef.current?.select());
+      e.preventDefault();
+      beginEdit(true);
+    } else {
+      tapStart.current = { x: e.clientX, y: e.clientY };
+    }
+  };
+  const tapEdit = (e: React.MouseEvent) => {
+    const start = tapStart.current;
+    tapStart.current = null;
+    if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) <= TAP_SLOP_PX) {
+      beginEdit(false);
     }
   };
 
@@ -262,6 +281,7 @@ function SubtaskRow({
       ) : (
         <span
           onPointerDown={startEdit}
+          onClick={tapEdit}
           title={subtask.title || undefined}
           style={{
             flex: 1,
