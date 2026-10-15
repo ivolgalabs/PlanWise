@@ -13,14 +13,12 @@
 //    BOOT-restore после перезагрузки терял все напоминания (show() плагина
 //    2.3.3 в хранилище не пишет — пишет только batch). ОС доставляет
 //    уведомления и при убитом процессе.
-//    Напоминания — одноразовые At-алармы. Дайджест — ПОВТОРЯЮЩИЙСЯ Interval-
-//    аларм («каждый день в настроенный час»): ОС сама ставит следующий после
-//    каждого срабатывания (TimedNotificationPublisher по CRON_KEY) и
-//    восстанавливает после перезагрузки. Прежний одноразовый At умирал: после
-//    срабатывания или смерти процесса никто не ставил следующий, и дайджест
-//    замолкал до очередного запуска приложения (симптом: «в 8 утра не
-//    приходят»). Каждый тик (60 с) обновляем контент дня, лишние отменяем
-//    (модель «sync», а не окно отправки).
+//    И напоминания, и дайджест — одноразовые At-алармы (setExactAndAllowWhileIdle,
+//    будят телефон в Doze). Дайджест — отдельный будильник на каждый из
+//    ближайших DIGEST_DAYS дней со своим списком: повторяющийся Interval плагина
+//    перевзводил себя без пробуждения (утренний список приходил, только когда
+//    телефон брали в руки) и нёс список момента постановки. Каждый тик (60 с)
+//    сверяем ожидаемое с поставленным, лишнее отменяем (модель «sync»).
 //  - Десктоп (macOS): плагин не умеет планировать на будущее — поллинг
 //    каждые 60 секунд с окном отправки до 15 минут после due (см.
 //    check_reminders; процесс на десктопе жив).
@@ -41,7 +39,7 @@ use serde::Deserialize as _;
 use tauri::Manager;
 use tauri_plugin_notification::NotificationExt;
 #[cfg(target_os = "android")]
-use tauri_plugin_notification::{Schedule, ScheduleInterval};
+use tauri_plugin_notification::Schedule;
 
 use crate::app_lang;
 use crate::db::Db;
@@ -155,8 +153,15 @@ pub fn save_prefs(app: &tauri::AppHandle, prefs: &NotifyPrefs) -> Result<(), Str
 /// перезапуск: иначе дайджест повторялся при каждом запуске в окне +6 ч).
 #[derive(Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 struct DigestState {
-    /// День (epoch-day), на который СТОИТ будильник ОС (None — будильника нет).
+    /// Дни (epoch-day), на которые стоит будильник ОС с непустым списком
+    /// (Android). Сегодняшний остаётся в списке и после срабатывания: по нему
+    /// догонка знает, что дайджест уже показала ОС.
     #[serde(default)]
+    armed_days: Vec<i64>,
+    /// Поле ≤0.2.4 (один повторяющийся будильник): только читается и при
+    /// первом тике переносится в armed_days — иначе в день обновления догонка
+    /// повторила бы уже пришедший дайджест.
+    #[serde(default, skip_serializing)]
     armed_day: Option<i64>,
     /// День, за который дайджест уже показан (догонкой, будильником ОС или
     /// — на десктопе — поллингом).
@@ -189,48 +194,40 @@ fn save_digest_state(app: &tauri::AppHandle, state: &DigestState) {
     }
 }
 
-/// Новое состояние при перенацеливании будильника на `new_armed`. Если старый
-/// будильник стоял на СЕГОДНЯ, а час уже прошёл (`hour_passed`), ОС его уже
-/// показала — сегодня считаем отправленным. Без этого первый тик после часа
-/// затирал armed_day, и догонка слала второй дайджест (регрессия 0.2.2).
-#[cfg(any(target_os = "android", test))]
-fn retarget_digest(
-    old: &DigestState,
-    new_armed: Option<i64>,
-    today: i64,
-    hour_passed: bool,
-) -> DigestState {
-    let fired_today = hour_passed && old.armed_day == Some(today);
-    DigestState {
-        armed_day: new_armed,
-        sent_day: if fired_today {
-            Some(today)
-        } else {
-            old.sent_day
-        },
-    }
-}
-
 /// Пора ли показать дайджест «догоняющим» показом. Android-специфика: будильник
 /// ставится заранее и только на НЕПУСТОЙ день, поэтому день, спланированный
 /// после часа дайджеста, иначе молча остаётся без утреннего списка (на десктопе
 /// ту же роль играет окно +6 ч в check_digest). Окно здесь то же — вечером
-/// «утренний» список не шлём; has_tasks — чтобы не слать пустой дайджест.
+/// «утренний» список не шлём; has_tasks — чтобы не слать пустой дайджест;
+/// armed_today — будильник на сегодня стоял, его показала ОС.
 #[cfg(any(target_os = "android", test))]
 fn digest_catchup_due(
     now_hour: u32,
     hour: i64,
     today_epoch: i64,
-    armed_day: Option<i64>,
+    armed_today: bool,
     sent_day: Option<i64>,
     has_tasks: bool,
 ) -> bool {
     let hour = hour.clamp(0, 23) as u32;
     has_tasks
-        && armed_day != Some(today_epoch)
+        && !armed_today
         && sent_day != Some(today_epoch)
         && now_hour >= hour
         && now_hour < (hour + 6).min(24)
+}
+
+/// Дни, на которые ставится будильник дайджеста, с моментом показа: сегодня
+/// (если час ещё впереди) и следующие — всего до DIGEST_DAYS дней.
+#[cfg(any(target_os = "android", test))]
+fn digest_days(now: NaiveDateTime, today_epoch: i64, hour: i64) -> Vec<(i64, NaiveDateTime)> {
+    (today_epoch..today_epoch + DIGEST_DAYS)
+        .filter_map(|d| {
+            morning_of(d, hour)
+                .filter(|due| *due > now)
+                .map(|due| (d, due))
+        })
+        .collect()
 }
 
 /// Отправленные события: ключ → время отправки (epoch-ms), чтобы не показывать
@@ -646,10 +643,25 @@ fn task_events(prefs: &NotifyPrefs, task: &ReminderRow) -> Vec<ReminderEvent> {
     out
 }
 
-/// ID утреннего дайджеста в OS-планировщике: вне диапазона хэшей задач
-/// (stable_id даёт 1..1_000_000), чтобы не пересечься с напоминаниями.
-#[cfg(target_os = "android")]
+/// Базовый id дайджестов в OS-планировщике — вне id напоминаний (stable_id их
+/// обходит). Сам базовый id — повторяющийся будильник ≤0.2.4: новых записей с
+/// ним нет, оставшуюся после обновления снимет шаг «отмена лишних».
+#[cfg(any(target_os = "android", test))]
 const DIGEST_NOTIFICATION_ID: i32 = 1_000_000;
+
+/// На сколько дней вперёд стоят будильники дайджеста (по одному на день). Не
+/// открывали приложение дольше — дайджест молчит, как и напоминания за своим
+/// горизонтом в 7 дней.
+#[cfg(any(target_os = "android", test))]
+const DIGEST_DAYS: i64 = 14;
+
+/// Id дайджеста дня: цикл из 16 (> DIGEST_DAYS — дни горизонта не делят id).
+/// Свой id на день: show() снимает видимое уведомление с тем же id, и при общем
+/// id постановка завтрашнего стирала из шторки сегодняшний дайджест.
+#[cfg(any(target_os = "android", test))]
+fn digest_id(day_epoch: i64) -> i32 {
+    DIGEST_NOTIFICATION_ID + 1 + day_epoch.rem_euclid(16) as i32
+}
 
 /// Канал уведомлений Android. Плагин по умолчанию создаёт канал с
 /// IMPORTANCE_DEFAULT — уведомления приходят тихо в шторку (без звука и
@@ -690,8 +702,8 @@ fn stable_id(salt: &str, task_id: &str, due_minute: i64) -> i32 {
     // 999_999 давал настоящие коллизии (парадокс дней рождения) уже около
     // тысячи запланированных событий, а коллизия = потерянное напоминание.
     let mut id = (h & 0x7fff_ffff) as i32;
-    if id == 0 || id == DIGEST_NOTIFICATION_ID {
-        id += 1;
+    if id == 0 || (DIGEST_NOTIFICATION_ID..=DIGEST_NOTIFICATION_ID + 16).contains(&id) {
+        id += 17;
     }
     id
 }
@@ -802,26 +814,6 @@ fn scheduled_json(
 fn at_schedule(date: &str) -> serde_json::Value {
     serde_json::json!({ "at": {
         "date": date, "repeating": false, "allowWhileIdle": true,
-    }})
-}
-
-/// Расписание утреннего дайджеста (Interval): «каждый день в hour:00».
-/// Двойная вложенность interval.interval — контракт Kotlin-десериализатора
-/// плагина 2.3.3: внешний ключ выбирает вариант At/Interval/Every, внутренний —
-/// это DateMatch (поля hour/minute; Timezone — локальная, Calendar). После
-/// каждого срабатывания publisher перепланирует его сам (CRON_KEY →
-/// nextTrigger: если «сегодня hour:00» уже прошло — сдвиг на сутки).
-#[cfg(any(target_os = "android", test))]
-fn interval_schedule(hour: u8) -> serde_json::Value {
-    // Поля перечислены ВСЕ (с null), как их сериализует печатный
-    // ScheduleInterval, — тест interval_schedule_matches_typed_enum держит
-    // обе формы равными байт-в-байт.
-    serde_json::json!({ "interval": {
-        "interval": {
-            "year": null, "month": null, "day": null, "weekday": null,
-            "hour": hour, "minute": 0, "second": null,
-        },
-        "allowWhileIdle": true,
     }})
 }
 
@@ -944,57 +936,60 @@ fn digest_parts(day_epoch: i64, rows: &[(String, Option<i64>)]) -> (String, Stri
     (title, summary, lines)
 }
 
-/// Планируется как Interval («каждый день в hour:00»), а не одноразовый At:
-/// ОС перепланирует следующий день сама после каждого срабатывания и после
-/// перезагрузки. С 0.2.2 дайджест не зависит от этой цепочки: день, которому
-/// будильник не достался, добирается «догоняющим» показом (digest_catchup_due).
-/// Контент дня обновляет sync-цикл (см. sync_scheduled). Возвращает успех:
-/// false — будильник НЕ поставлен (запись в хранилище не пишем, чтобы sync
-/// не считал дайджест активным).
+/// Будильник дайджеста на один день: одноразовый At на момент `due` со списком
+/// этого дня. Не Interval плагина: после первого срабатывания тот перевзводит
+/// себя через setExact(RTC) — без пробуждения и без allow-while-idle, и ночью в
+/// Doze утренний дайджест ждал, пока телефон возьмут в руки; к тому же текст
+/// нёс список момента постановки и при убитом процессе повторялся каждый день.
+/// At плагин ставит через setExactAndAllowWhileIdle(RTC_WAKEUP) и после
+/// перезагрузки восстанавливает из хранилища. false — будильник не поставлен
+/// (запись в хранилище не пишем, следующий тик повторит).
 #[cfg(target_os = "android")]
 fn schedule_digest(
     app: &tauri::AppHandle,
-    hour: u8,
+    id: i32,
     day_epoch: i64,
+    due: NaiveDateTime,
     rows: &[(String, Option<i64>)],
 ) -> bool {
+    let ts = to_local(&due).timestamp();
+    let (Ok(at), Some(date)) = (
+        time::OffsetDateTime::from_unix_timestamp(ts),
+        js_date_utc(ts),
+    ) else {
+        return false;
+    };
     let (title, summary, lines) = digest_parts(day_epoch, rows);
     let mut b = app
         .notification()
         .builder()
-        .id(DIGEST_NOTIFICATION_ID)
+        .id(id)
         .title(title.clone())
         .summary(summary.clone())
         .channel_id(TASKS_CHANNEL_ID)
-        .schedule(Schedule::Interval {
-            interval: ScheduleInterval {
-                hour: Some(hour),
-                minute: Some(0),
-                ..Default::default()
-            },
+        .schedule(Schedule::At {
+            date: at,
+            repeating: false,
             allow_while_idle: true,
         });
     for line in &lines {
         b = b.inbox_line(line.clone());
     }
     if let Err(e) = b.show() {
-        // Проглоченная ошибка здесь = дайджест молча не приходит, а sync
-        // считает его поставленным (запись в хранилище есть). Лог + отказ
-        // от записи: следующий тик повторит попытку.
-        eprintln!("[notify] дайджест не спланирован: {e}");
+        eprintln!("[notify] дайджест {id} не спланирован: {e}");
         return false;
     }
     persist_scheduled(
         app,
-        DIGEST_NOTIFICATION_ID,
+        id,
         scheduled_json(
-            DIGEST_NOTIFICATION_ID,
+            id,
             &title,
             None,
             None,
             Some(&lines),
             Some(&summary),
-            interval_schedule(hour),
+            at_schedule(&date),
         ),
     );
     true
@@ -1010,7 +1005,7 @@ fn show_digest_now(app: &tauri::AppHandle, day_epoch: i64, rows: &[(String, Opti
     let mut b = app
         .notification()
         .builder()
-        .id(DIGEST_NOTIFICATION_ID)
+        .id(digest_id(day_epoch))
         .title(title)
         .summary(summary)
         .channel_id(TASKS_CHANNEL_ID);
@@ -1054,35 +1049,27 @@ fn digest_action(
     }
 }
 
-/// Отпечаток контента дайджеста (день + строки задач): им отличаем «тот же
-/// дайджест» от «задачи поменялись».
+/// Отпечаток будильника дня: день, час, язык и строки задач. Смена любого —
+/// будильник перезаписывается (раньше смена часа без правки задач оставляла
+/// дайджест на старом часу).
 #[cfg(target_os = "android")]
-fn digest_fingerprint(target_epoch: i64, tasks: &[(String, Option<i64>)]) -> u64 {
+fn digest_fingerprint(target_epoch: i64, hour: i64, tasks: &[(String, Option<i64>)]) -> u64 {
     use std::fmt::Write as _;
-    let mut buf = target_epoch.to_string();
+    let mut buf = format!("{target_epoch}|{hour}|{}", app_lang::current());
     for (title, time) in tasks {
         let _ = write!(buf, "\n{time:?}|{title}");
     }
     crate::commands::fnv64(buf.as_bytes())
 }
 
-/// Ячейка «с каким контентом дайджест ушёл в OS-планировщик». Пусто —
-/// неизвестно (первый тик после запуска процесса): тогда аларм перезапишется
-/// текущим контентом, операция идемпотентна (show() снимает старый аларм).
+/// С каким контентом стоят будильники дней (epoch-day → отпечаток). Пусто после
+/// запуска процесса — будильники перезапишутся текущим контентом (идемпотентно:
+/// show() снимает прежний с тем же id).
 #[cfg(target_os = "android")]
-fn armed_cell() -> &'static Mutex<Option<(i64, u64)>> {
-    static ARMED: std::sync::OnceLock<Mutex<Option<(i64, u64)>>> = std::sync::OnceLock::new();
-    ARMED.get_or_init(|| Mutex::new(None))
-}
-
-#[cfg(target_os = "android")]
-fn digest_armed() -> Option<(i64, u64)> {
-    *armed_cell().lock().unwrap_or_else(|e| e.into_inner())
-}
-
-#[cfg(target_os = "android")]
-fn set_digest_armed(v: Option<(i64, u64)>) {
-    *armed_cell().lock().unwrap_or_else(|e| e.into_inner()) = v;
+fn armed_fps() -> std::sync::MutexGuard<'static, std::collections::BTreeMap<i64, u64>> {
+    static FPS: Mutex<std::collections::BTreeMap<i64, u64>> =
+        Mutex::new(std::collections::BTreeMap::new());
+    FPS.lock().unwrap_or_else(|e| e.into_inner())
 }
 
 /// Android: сверка OS-планировщика с ожидаемыми уведомлениями.
@@ -1105,98 +1092,86 @@ fn sync_scheduled(app: &tauri::AppHandle, prefs: &NotifyPrefs) {
     let mut expected: HashSet<i32> = HashSet::new();
     let now = Local::now().naive_local();
 
-    // 1. Утренний дайджест — повторяющийся Interval-аларм «каждый день в
-    // настроенный час»: ОС перепланирует его сама после каждого срабатывания
-    // и после перезагрузки, поэтому он не зависит от запусков приложения.
-    // Наша роль — держать КОНТЕНТ дня свежим: отпечаток дня пересчитывается
-    // каждый тик, при изменении задач аларм перезаписывается (show() снимает
-    // старый), при пустом дне — снимается. Запрос дня дешёвый (индекс
-    // idx_tasks_date_active), JNI-вызов + запись хранилища — только при
-    // реальном изменении.
+    // 1. Утренний дайджест: одноразовый будильник ОС на каждый из ближайших
+    // DIGEST_DAYS дней со своим списком (см. schedule_digest). Каждый тик
+    // сверяем отпечаток дня: изменились задачи/час/язык — будильник
+    // перезаписывается, день опустел — его снимет шаг «отмена лишних». Запросы
+    // дней дешёвые (индекс idx_tasks_date_active); JNI и запись хранилища —
+    // только при реальном изменении.
+    let today_epoch = crate::commands::today_epoch_day();
+    let mut state = load_digest_state(app);
     if prefs.day_summary {
-        let now_date = Local::now().date_naive();
-        let today_epoch = crate::commands::today_epoch_day();
-        let today_ts = now_date.and_hms_opt(prefs.day_summary_hour as u32, 0, 0);
-        let target_epoch = if today_ts.is_some_and(|ts| ts > now) {
-            Some(today_epoch)
-        } else {
-            now_date
-                .checked_add_days(chrono::Days::new(1))
-                .map(crate::commands::date_to_epoch)
-        };
-        if let Some(target_epoch) = target_epoch {
-            let tasks = day_task_rows(app, target_epoch);
-            let fp = digest_fingerprint(target_epoch, &tasks);
-            let action = digest_action(
-                scheduled.contains(&DIGEST_NOTIFICATION_ID),
-                digest_armed(),
-                (target_epoch, fp),
+        let hour = prefs.day_summary_hour;
+        let mut armed: Vec<i64> = state
+            .armed_days
+            .iter()
+            .copied()
+            .chain(state.armed_day)
+            .filter(|d| *d >= today_epoch)
+            .collect();
+        let mut fps = armed_fps();
+        fps.retain(|d, _| *d >= today_epoch);
+        // Сегодняшний будильник, чей час уже наступил, может сработать на
+        // секунды позже тика — не снимаем его как «лишний».
+        let today_id = digest_id(today_epoch);
+        if morning_of(today_epoch, hour).is_none_or(|d| d <= now) && scheduled.contains(&today_id) {
+            expected.insert(today_id);
+        }
+        for (day, due) in digest_days(now, today_epoch, hour) {
+            let id = digest_id(day);
+            let tasks = day_task_rows(app, day);
+            let fp = digest_fingerprint(day, hour, &tasks);
+            let ok = match digest_action(
+                scheduled.contains(&id),
+                fps.get(&day).map(|f| (day, *f)),
+                (day, fp),
                 !tasks.is_empty(),
-            );
-            match action {
-                DigestAction::Schedule => {
-                    let hour = u8::try_from(prefs.day_summary_hour).unwrap_or(8);
-                    if schedule_digest(app, hour, target_epoch, &tasks) {
-                        expected.insert(DIGEST_NOTIFICATION_ID);
-                        set_digest_armed(Some((target_epoch, fp)));
-                        // Маркер: будильник на этот день уже стоит — догоняющий
-                        // показ в этот день не нужен (иначе второй дайджест).
-                        save_digest_state(
-                            app,
-                            &retarget_digest(
-                                &load_digest_state(app),
-                                Some(target_epoch),
-                                today_epoch,
-                                target_epoch != today_epoch,
-                            ),
-                        );
-                    }
-                    // При отказе планирования НЕ добавляем в expected и не
-                    // ставим armed: cancel-шаг снимет протухшую запись,
-                    // следующий тик повторит попытку.
-                }
-                DigestAction::Keep => {
-                    expected.insert(DIGEST_NOTIFICATION_ID);
-                }
-                DigestAction::Cancel => {
-                    set_digest_armed(None);
-                    // Пустой день: будильника на него нет — снимаем маркер,
-                    // чтобы «догонка» сработала, когда в дне появятся задачи.
-                    save_digest_state(
-                        app,
-                        &retarget_digest(
-                            &load_digest_state(app),
-                            None,
-                            today_epoch,
-                            target_epoch != today_epoch,
-                        ),
-                    );
-                }
+            ) {
+                DigestAction::Keep => true,
+                DigestAction::Schedule => schedule_digest(app, id, day, due, &tasks),
+                DigestAction::Cancel => false,
+            };
+            if ok {
+                expected.insert(id);
+                fps.insert(day, fp);
+                armed.push(day);
+            } else {
+                // Пустой день или сбой постановки: id нет в expected — шаг
+                // отмены снимет прежнюю запись, следующий тик повторит.
+                fps.remove(&day);
+                armed.retain(|d| *d != day);
             }
         }
-        // Догоняющий показ (см. digest_catchup_due): час дайджеста прошёл, у
-        // дня есть задачи, а будильника/показа на этот день не было — день
-        // спланировали уже после часа, и без этой ветки он молча остаётся без
-        // утреннего списка.
+        drop(fps);
+        armed.sort_unstable();
+        armed.dedup();
+        if armed != state.armed_days || state.armed_day.is_some() {
+            state.armed_days = armed;
+            state.armed_day = None;
+            save_digest_state(app, &state);
+        }
+        // Догоняющий показ (см. digest_catchup_due): час прошёл, у дня есть
+        // задачи, а будильника на этот день не было — день спланировали уже
+        // после часа, и без этой ветки он молча остаётся без утреннего списка.
         let today_rows = day_task_rows(app, today_epoch);
-        let state = load_digest_state(app);
         if digest_catchup_due(
             now.hour(),
-            prefs.day_summary_hour,
+            hour,
             today_epoch,
-            state.armed_day,
+            state.armed_days.contains(&today_epoch),
             state.sent_day,
             !today_rows.is_empty(),
         ) && show_digest_now(app, today_epoch, &today_rows)
         {
-            save_digest_state(
-                app,
-                &DigestState {
-                    armed_day: state.armed_day,
-                    sent_day: Some(today_epoch),
-                },
-            );
+            state.sent_day = Some(today_epoch);
+            save_digest_state(app, &state);
         }
+    } else if !state.armed_days.is_empty() {
+        // Дайджест выключен: будильники снимет шаг отмены, а маркеры дней
+        // сбрасываем — иначе после повторного включения догонка считала бы
+        // сегодняшний дайджест уже пришедшим.
+        state.armed_days.clear();
+        save_digest_state(app, &state);
     }
 
     // 2. Напоминания задач (глобальные интервалы / своё notify_minutes /
@@ -1614,8 +1589,7 @@ mod tests {
     /// Запись для persisted-хранилища плагина: только поля его Kotlin-класса
     /// Notification и никакого `extra` (JSObject jackson не разбирает, и вся
     /// запись пропускается — так хранилище осталось пустым на устройстве).
-    /// Формы расписания: At (напоминание, точная дата) и Interval (дайджест,
-    /// «каждый день в час:00») — обе обязанны разбираться jackson-ом плагина.
+    /// Обе формы (дайджест со строками и напоминание) — расписание At.
     #[test]
     fn persisted_json_matches_plugin_fields() {
         let fields = [
@@ -1643,9 +1617,6 @@ mod tests {
             "number",
         ];
         let lines = vec!["09:00  Задача".to_string()];
-        // Дайджест: Interval с ДВОЙНОЙ вложенностью interval.interval —
-        // внешний ключ выбирает вариант расписания в NotificationSchedule-
-        // десериализаторе, внутренний — это DateMatch (hour/minute).
         let v = scheduled_json(
             1,
             "План на сегодня: 1 задача",
@@ -1653,7 +1624,7 @@ mod tests {
             None,
             Some(&lines),
             Some("в течение дня"),
-            interval_schedule(8),
+            at_schedule("2026-10-16T06:00:00.000Z"),
         );
         for key in v.as_object().expect("object").keys() {
             assert!(
@@ -1668,9 +1639,8 @@ mod tests {
         assert_eq!(v["id"], 1);
         assert_eq!(v["channelId"], TASKS_CHANNEL_ID);
         assert_eq!(v["inboxLines"][0], "09:00  Задача");
-        assert_eq!(v["schedule"]["interval"]["allowWhileIdle"], true);
-        assert_eq!(v["schedule"]["interval"]["interval"]["hour"], 8);
-        assert_eq!(v["schedule"]["interval"]["interval"]["minute"], 0);
+        assert_eq!(v["summary"], "в течение дня");
+        assert_eq!(v["schedule"]["at"]["allowWhileIdle"], true);
         // Минимальный набор (напоминание, At) тоже валиден.
         let r = scheduled_json(
             2,
@@ -1705,86 +1675,41 @@ mod tests {
         assert_eq!(js_date_utc(i64::MAX), None);
     }
 
-    /// JSON печатного Schedule::Interval (этим путём ставится будильник) и
-    /// рука собранная запись interval_schedule (этим путём пишется хранилище)
-    /// обязаны совпадать байт-в-байт: расхождение форм = будильник одного
-    /// вида, а запись другого (после перезагрузки restore восстановит не то).
-    /// Двойная вложенность interval.interval — контракт Kotlin-десериализатора
-    /// (внешний ключ = вариант At/Interval/Every, внутренний = DateMatch).
+    /// Будильники дайджеста: до часа — с сегодняшнего дня, после — с завтрашнего;
+    /// у каждого дня горизонта свой id (общий id стирал сегодняшний дайджест из
+    /// шторки при постановке завтрашнего), и ни один не равен id напоминаний.
     #[test]
-    fn interval_schedule_matches_typed_enum() {
-        use tauri_plugin_notification::{Schedule, ScheduleInterval};
-        let typed = serde_json::to_value(Schedule::Interval {
-            interval: ScheduleInterval {
-                hour: Some(8),
-                minute: Some(0),
-                ..Default::default()
-            },
-            allow_while_idle: true,
-        })
-        .expect("serialize");
-        assert_eq!(typed, interval_schedule(8));
-        // Нулевой час не должен потеряться (0:00 — валидное время дайджеста).
-        let midnight = serde_json::to_value(Schedule::Interval {
-            interval: ScheduleInterval {
-                hour: Some(0),
-                minute: Some(0),
-                ..Default::default()
-            },
-            allow_while_idle: true,
-        })
-        .expect("serialize");
-        assert_eq!(midnight, interval_schedule(0));
-        assert_eq!(midnight["interval"]["interval"]["hour"], 0);
+    fn digest_days_cover_horizon_with_distinct_ids() {
+        let date = NaiveDate::from_ymd_opt(2026, 10, 15).unwrap();
+        let today = crate::commands::date_to_epoch(date);
+        let before = date.and_hms_opt(7, 59, 0).unwrap();
+        let days = digest_days(before, today, 8);
+        assert_eq!(days.len(), DIGEST_DAYS as usize);
+        assert_eq!(days[0], (today, date.and_hms_opt(8, 0, 0).unwrap()));
+        let at_hour = date.and_hms_opt(8, 0, 0).unwrap();
+        let days = digest_days(at_hour, today, 8);
+        assert_eq!(days[0].0, today + 1);
+        assert_eq!(days.len(), DIGEST_DAYS as usize - 1);
+        let ids: std::collections::HashSet<i32> =
+            (today..today + DIGEST_DAYS).map(digest_id).collect();
+        assert_eq!(ids.len(), DIGEST_DAYS as usize);
+        assert!(ids
+            .iter()
+            .all(|id| *id > DIGEST_NOTIFICATION_ID && *id <= DIGEST_NOTIFICATION_ID + 16));
     }
 
-    /// Переход состояния после часа дайджеста: будильник на сегодня уже
-    /// сработал, тик перенацеливает его на завтра — догонка НЕ должна слать
-    /// второй дайджест. До часа (пустой день → Cancel) сегодня не помечается,
-    /// чтобы задачи, добавленные позже, ещё получили догонку.
+    /// Состояние ≤0.2.4 (armed_day) читается, а при записи не возвращается.
     #[test]
-    fn digest_retarget_marks_fired_day() {
-        let armed_today = DigestState {
-            armed_day: Some(100),
-            sent_day: None,
-        };
-        let s = retarget_digest(&armed_today, Some(101), 100, true);
-        assert_eq!(
-            s,
-            DigestState {
-                armed_day: Some(101),
-                sent_day: Some(100)
-            }
-        );
-        assert!(!digest_catchup_due(
-            9,
-            8,
-            100,
-            s.armed_day,
-            s.sent_day,
-            true
-        ));
-        // Завтра пустое (Cancel) после часа — сегодня тоже показано.
-        let s = retarget_digest(&armed_today, None, 100, true);
-        assert_eq!(s.sent_day, Some(100));
-        // До часа: сегодняшний день опустел → будильник снят, не показан.
-        let s = retarget_digest(&armed_today, None, 100, false);
-        assert_eq!(
-            s,
-            DigestState {
-                armed_day: None,
-                sent_day: None
-            }
-        );
-        assert!(digest_catchup_due(9, 8, 100, s.armed_day, s.sent_day, true));
-        // Будильника на сегодня не было — день не помечается (догонка нужна).
-        let none = DigestState {
-            armed_day: Some(99),
-            sent_day: Some(99),
-        };
-        let s = retarget_digest(&none, Some(101), 100, true);
-        assert_eq!(s.sent_day, Some(99));
-        assert!(digest_catchup_due(9, 8, 100, s.armed_day, s.sent_day, true));
+    fn digest_state_reads_legacy_field() {
+        let s: DigestState = serde_json::from_str(r#"{"armed_day":100,"sent_day":99}"#).unwrap();
+        assert_eq!(s.armed_day, Some(100));
+        assert!(s.armed_days.is_empty());
+        let out = serde_json::to_string(&DigestState {
+            armed_days: vec![100, 101],
+            ..s
+        })
+        .unwrap();
+        assert_eq!(out, r#"{"armed_days":[100,101],"sent_day":99}"#);
     }
 
     /// Догоняющий дайджест нужен ровно тогда, когда час прошёл (в пределах
@@ -1794,22 +1719,22 @@ mod tests {
     #[test]
     fn digest_catchup_decision() {
         // 9:00, час 8, задачи есть, ни будильника, ни показа на сегодня.
-        assert!(digest_catchup_due(9, 8, 100, None, None, true));
+        assert!(digest_catchup_due(9, 8, 100, false, None, true));
         // Будильник на сегодня стоит — он и сработает, догонять нечего.
-        assert!(!digest_catchup_due(9, 8, 100, Some(100), None, true));
+        assert!(!digest_catchup_due(9, 8, 100, true, None, true));
         // Догонка уже показала дайджест сегодня.
-        assert!(!digest_catchup_due(9, 8, 100, None, Some(100), true));
+        assert!(!digest_catchup_due(9, 8, 100, false, Some(100), true));
         // Пустой день — молчим (как и у дайджеста по расписанию).
-        assert!(!digest_catchup_due(9, 8, 100, None, None, false));
+        assert!(!digest_catchup_due(9, 8, 100, false, None, false));
         // Час ещё не наступил.
-        assert!(!digest_catchup_due(7, 8, 100, None, None, true));
+        assert!(!digest_catchup_due(7, 8, 100, false, None, true));
         // Вышли из окна +6 ч: вечером «утренний» список не шлём.
-        assert!(!digest_catchup_due(14, 8, 100, None, None, true));
-        // Будильник стоял на ДРУГОЙ день — сегодня догоняем.
-        assert!(digest_catchup_due(9, 8, 100, Some(101), None, true));
+        assert!(!digest_catchup_due(14, 8, 100, false, None, true));
+        // Будильника на сегодня не было (стоял на другие дни) — догоняем.
+        assert!(digest_catchup_due(9, 8, 100, false, None, true));
         // Полночный час: окно не переполняется за сутки.
-        assert!(digest_catchup_due(3, 0, 100, None, None, true));
-        assert!(!digest_catchup_due(6, 0, 100, None, None, true));
+        assert!(digest_catchup_due(3, 0, 100, false, None, true));
+        assert!(!digest_catchup_due(6, 0, 100, false, None, true));
     }
 
     /// Решение по аларму дайджеста: без аларма — ставим; с тем же контентом —
