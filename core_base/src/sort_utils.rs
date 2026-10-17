@@ -26,14 +26,15 @@ impl NaturalCmp for String {
 /// Natural-order сравнение двух строковых срезов.
 ///
 /// Строка разбивается на чередующиеся не-цифровые и цифровые участки; цифровые
-/// участки сравниваются как числа (`u64`), остальные — посимвольно без учёта
+/// участки сравниваются как числа любой длины, остальные — посимвольно без учёта
 /// регистра ASCII. Это даёт интуитивный порядок имён файлов/страниц.
 pub fn natural_cmp(a: &str, b: &str) -> Ordering {
     let mut ai = a.chars().peekable();
     let mut bi = b.chars().peekable();
     loop {
         match (ai.peek(), bi.peek()) {
-            (None, None) => return Ordering::Equal,
+            // Равны по смыслу ("01" и "1") — короче раньше, как в Kotlin-копии ComiFlow.
+            (None, None) => return a.len().cmp(&b.len()),
             (None, _) => return Ordering::Less,
             (_, None) => return Ordering::Greater,
             (Some(&ac), Some(&bc)) => {
@@ -59,9 +60,11 @@ pub fn natural_cmp(a: &str, b: &str) -> Ordering {
                             break;
                         }
                     }
-                    let av: u64 = a_num.parse().unwrap_or(0);
-                    let bv: u64 = b_num.parse().unwrap_or(0);
-                    match av.cmp(&bv) {
+                    // По значению без u64: без ведущих нулей короче = меньше, равная
+                    // длина — посимвольно. Числа длиннее 20 цифр раньше парсились в 0.
+                    let at = a_num.trim_start_matches('0');
+                    let bt = b_num.trim_start_matches('0');
+                    match at.len().cmp(&bt.len()).then_with(|| at.cmp(bt)) {
                         Ordering::Equal => continue,
                         ord => return ord,
                     }
@@ -89,6 +92,12 @@ mod tests {
         assert_eq!(natural_cmp("page2", "page10"), Ordering::Less);
         assert_eq!(natural_cmp("page10", "page2"), Ordering::Greater);
         assert_eq!(natural_cmp("page2", "page2"), Ordering::Equal);
+        assert_eq!(natural_cmp("000", "001"), Ordering::Less);
+        assert_eq!(natural_cmp("1", "01"), Ordering::Less);
+        assert_eq!(
+            natural_cmp("p99999999999999999999999", "p100000000000000000000000"),
+            Ordering::Less
+        );
     }
 
     #[test]

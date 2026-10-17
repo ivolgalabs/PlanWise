@@ -21,14 +21,22 @@ pub fn file_extension(name: &str) -> &str {
 /// ```
 /// assert!(core_base::mime_utils::is_image_file("page01.jpg"));
 /// assert!(!core_base::mime_utils::is_image_file(".hidden.png"));
+/// assert!(!core_base::mime_utils::is_image_file("ch1/._p01.jpg"));
+/// assert!(!core_base::mime_utils::is_image_file("ch1/.hidden.png"));
+/// assert!(!core_base::mime_utils::is_image_file(".thumbs/p01.jpg"));
+/// assert!(core_base::mime_utils::is_image_file("ch1/p01.jpg"));
+/// assert!(core_base::mime_utils::is_image_file("./p01.jpg"));
 /// assert!(!core_base::mime_utils::is_image_file("page.txt"));
 /// ```
 pub fn is_image_file(name: &str) -> bool {
     let lower = name.to_lowercase();
-    if lower.starts_with('.')
+    // Скрытость — по каждому сегменту пути, а не только по началу строки:
+    // `ch1/._p01.jpg` (AppleDouble внутри архива) и `.thumbs/p.jpg` — служебные.
+    if lower
+        .split(['/', '\\'])
+        .any(|seg| seg.starts_with('.') && seg != ".")
         || lower.contains("__macosx")
         || lower.contains("thumbs.db")
-        || lower.starts_with("._")
         || lower.ends_with('/')
     {
         return false;

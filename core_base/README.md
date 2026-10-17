@@ -59,6 +59,39 @@ tokio::spawn(core_base::supervision::supervise("наблюдатель", move ||
 задачи перезапуска не вызывает). Обе — `async fn`: внешний запуск остаётся за
 вызывающим, потому что `tokio::spawn` требует уже запущенного рантайма.
 
+## Лицензия платного приложения (`licensing`)
+
+Эталон — `Apps/Rust/TensorMedia/src-tauri/src/licensing.rs` (три команды Tauri: `check_activation_status`,
+`verify_license`, `deactivate_license`) + экран активации в его `App.tsx`. Для нового платного приложения:
+
+1. `Cargo.toml`: `core_base` с `features = ["licensing"]`, `machine-uid = "0.3"`, `reqwest` (rustls).
+2. Скопировать `licensing.rs`; заменить `ALLOWED_VARIANTS` на **свой вариант + оба варианта Pass**
+   (`2199229` навсегда, `2199232` год) и `SALT` на уникальную строку приложения; три команды — в `invoke_handler`.
+3. Фронтенд: показывать экран активации, пока `check_activation_status().activated == false`; ключ —
+   `verify_license`; `.lic`-файл и диплинк `<app>://activate?key=` — по образцу TensorMedia.
+4. Проверка: `cargo test --features licensing licensing` + живая цепочка validate → activate → повторная
+   активация (должен быть отказ по лимиту) → deactivate на тестовом ключе.
+
+Перепроверка: `LicenseInfo.created_at` (из ответа LS) + `settled()` — разовая покупка (`expires_at` нет),
+у которой последняя успешная онлайн-проверка позже `created_at + 60 дн` (`REFUND_WINDOW_SECS`), больше не
+перепроверяется и офлайн работает бессрочно; подписки — прежние 7 дн / 30 дн. Используйте
+`info.recheck_due(now)` / `info.offline_grace_over(now)`, не свободные функции. `Revalidation::Valid
+{ created_at }` — обновить кеш. Имя устройства в `instance_name` — читаемое («<host> · <App>»).
+
+Подводные камни:
+- **Android**: `machine-uid` 0.3 не поддерживает `target_os = "android"` — glue из TensorMedia там не
+  соберётся. Для Android-сборки нужен свой идентификатор устройства (UUID в app data либо ANDROID_ID через
+  плагин); привязка к железу слабее, это решение владельца.
+- **Лимит активаций — на ключ, не на приложение** (задаётся на варианте в LS, действует на ключи, созданные
+  после правки). Каждое приложение на каждом устройстве занимает слот: лимит Pass = 3 × число платных
+  приложений (сейчас TensorMedia + ComiFlow + Convertia = 9). Бесплатные приложения слотов не занимают.
+- Экран активации живёт во фронтенде и обходится прямым `invoke`. Эталон закрытия — `require_activated`
+  в TensorMedia 2.0.100: локальный шлюз (кэш расшифровывается, `activated`, срок, офлайн-запас; без сети и
+  без записи) в первых строках входных команд + статик `REVOKED`, который поднимает онлайн-перепроверка.
+  Перед релизом прогнать `TM_REAL_DATA_DIR=<каталог данных> cargo test real_cache -- --ignored` на машине
+  с реальной активацией: шлюз не должен запирать платящего пользователя.
+- ID вариантов — из тестового режима LS; перед запуском сверить с `Website/src/constants/storeConfig.tsx`.
+
 ## Проверка
 
 ```bash
