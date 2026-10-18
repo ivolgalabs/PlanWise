@@ -1,6 +1,7 @@
-//! Lemon Squeezy licensing client — общий для приложений воркспейса.
-//! Только чистая логика (без Tauri): валидация ключа через LS API, модель
-//! лицензии, проверка срока действия, XOR-обфускация локального хранения.
+//! Клиент лицензий — общий для приложений воркспейса.
+//! Только чистая логика (без Tauri): проверка ключа через API сайта (ivolgalabs.com/api/license,
+//! провайдер оплаты стоит за ним и меняется без новой сборки приложения), модель лицензии,
+//! проверка срока действия, XOR-обфускация локального хранения.
 //! Хранение файла лицензии и Tauri-команды остаются в приложении (тонкая обвязка).
 
 use serde::{Deserialize, Serialize};
@@ -12,54 +13,40 @@ pub struct LicenseInfo {
     pub activated: bool,
     pub machine_id: String,
     pub expires_at: Option<String>,
-    /// ID инстанса LS из /activate — нужен для /deactivate (освободить место
+    /// ID места активации из /activate — нужен для /deactivate (освободить место
     /// активации). None у кэшей до 2.0.97 и у ключей, принятых через /validate.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub instance_id: Option<String>,
     /// Unix-время последней успешной онлайн-проверки ключа (None у кэшей до неё).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub checked_at: Option<i64>,
-    /// Unix-время создания ключа в LS (= дата покупки): от неё считается окно возврата.
+    /// Unix-время создания ключа (= дата покупки): от неё считается окно возврата.
     /// None у кэшей до 2.0.101 — заполняется первой же онлайн-проверкой.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub created_at: Option<i64>,
 }
 
+/// Вердикт API лицензий сайта (license.ts в Apps/Website). Контракт только расширяется.
 #[derive(Debug, Deserialize)]
-struct LemonSqueezyResponse {
+struct ApiVerdict {
     #[serde(default)]
-    activated: Option<bool>,
+    valid: bool,
     #[serde(default)]
-    valid: Option<bool>,
     error: Option<String>,
-    license_key: Option<LemonLicenseKey>,
     #[serde(default)]
-    instance: Option<LemonInstance>,
+    instance_id: Option<String>,
     #[serde(default)]
-    meta: Option<LemonMeta>,
-}
-
-#[derive(Debug, Deserialize)]
-struct LemonMeta {
-    variant_id: Option<u64>,
-}
-
-#[derive(Debug, Deserialize)]
-struct LemonInstance {
-    id: String,
-}
-
-// Поля activation_limit/activation_usage не читаются приложением, но обязаны
-// присутствовать в структуре — это ответ API LemonSqueezy (полный парсинг).
-#[derive(Debug, Deserialize)]
-#[allow(dead_code)]
-struct LemonLicenseKey {
-    status: String,
-    activation_limit: Option<i32>,
-    activation_usage: Option<i32>,
     expires_at: Option<String>,
     #[serde(default)]
     created_at: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ApiDeactivation {
+    #[serde(default)]
+    deactivated: bool,
+    #[serde(default)]
+    error: Option<String>,
 }
 
 /// XOR-обфускация для обратной совместимости локального хранения.
@@ -214,7 +201,7 @@ pub fn decode_license_cache(
 }
 
 // ── Срок действия лицензии ────────────────────────────────────────────────
-// LemonSqueezy присылает expires_at в ISO 8601 (UTC), например
+// Сервер лицензий присылает expires_at в ISO 8601 (UTC), например
 // "2026-12-31T23:59:59.000000Z". Парсим без внешних зависимостей
 // (chrono/jiff в проекте нет) и сравниваем с текущим временем.
 
@@ -271,20 +258,20 @@ pub fn is_expired(expires_at: &str) -> bool {
 
 /// Как часто ключ перепроверяется онлайн (возврат денег, снятие устройства).
 pub const RECHECK_SECS: i64 = 7 * 86400;
-/// Сколько активированное приложение работает без связи с LS после последней проверки.
+/// Сколько активированное приложение работает без связи с сервером лицензий после последней проверки.
 pub const OFFLINE_GRACE_SECS: i64 = 30 * 86400;
 
 /// Окно возврата денег: пока оно открыто, одноразовый ключ перепроверяется онлайн.
 pub const REFUND_WINDOW_SECS: i64 = 60 * 86400;
 
 impl LicenseInfo {
-    /// Одноразовая покупка (без срока), которую LS подтвердил уже ПОСЛЕ окна возврата: вернуть деньги
+    /// Одноразовая покупка (без срока), которую сервер подтвердил уже ПОСЛЕ окна возврата: вернуть деньги
     /// больше нельзя, поэтому сервер дальше не опрашивается и офлайн-запас не истекает. Подписка
     /// (`expires_at`) перепроверяется всегда. Дальнейшие проверки — только при активации, деактивации
-    /// и исчерпанном лимите устройств (это делает сам LS).
+    /// и исчерпанном лимите устройств (это делает сам сервер).
     // shortcut: отметка checked_at — локальные часы; переведя их вперёд на успешной проверке, окно
     // можно «закрыть» досрочно. Цена обхода — возврат денег при работающем ключе; усилить — брать
-    // время из заголовка Date ответа LS.
+    // время из заголовка Date ответа сервера.
     pub fn settled(&self) -> bool {
         self.expires_at.is_none()
             && matches!((self.created_at, self.checked_at),
@@ -319,98 +306,104 @@ pub fn offline_grace_over(checked_at: Option<i64>, now: i64) -> bool {
     checked_at.is_some_and(|t| now - t > OFFLINE_GRACE_SECS || t > now + 86400)
 }
 
-fn license_error(err: Option<&str>) -> String {
-    match err {
-        // LS: "This license key has reached the activation limit." (HTTP 400)
-        Some(e) if e.to_lowercase().contains("activation limit") => "Активация отклонена: превышен лимит устройств. Деактивируйте лицензию на другом устройстве или через личный кабинет (Customer Portal) Lemon Squeezy, чтобы перенести её сюда.".to_string(),
-        Some(e) if e.to_lowercase().contains("not found") => "Ключ не найден. Проверьте, что он скопирован полностью.".to_string(),
-        Some(e) => format!("Ошибка лицензии: {}", e),
-        None => "Эта лицензия недействительна (истекла, отключена или возвращены деньги)".to_string(),
+/// Адрес API лицензий сайта. Провайдер оплаты меняется на сервере, приложение его не знает.
+pub const LICENSE_API: &str = "https://ivolgalabs.com/api/license";
+
+/// Код отказа из вердикта сервера → текст для пользователя (сырой текст провайдера не показывается).
+fn license_error(code: Option<&str>) -> String {
+    match code {
+        Some("activation_limit") => "Активация отклонена: превышен лимит устройств. Деактивируйте лицензию на другом устройстве (Настройки → Деактивировать) или на странице ключа на ivolgalabs.com, чтобы перенести её сюда.".to_string(),
+        Some("not_found") => "Ключ не найден. Проверьте, что он скопирован полностью.".to_string(),
+        Some("not_entitled") => "Этот ключ не от этого приложения (и не от пропуска All-Access)".to_string(),
+        Some("expired") => "Срок действия лицензии истёк".to_string(),
+        Some("instance_not_found") => "Это устройство снято с лицензии. Активируйте ключ заново.".to_string(),
+        _ => "Эта лицензия недействительна (истекла, отключена или возвращены деньги)".to_string(),
     }
 }
 
-/// POST к License API LS. Ошибки клиента (4xx) LS отдаёт JSON-ом с полем error —
-/// они разбираются; Err — только сеть, 5xx и 429 (повторить позже).
-async fn post_ls(endpoint: &str, body: serde_json::Value) -> Result<LemonSqueezyResponse, String> {
+/// Только HTTP 200 с разобранным JSON — вердикт сервера. Всё остальное (сеть, 5xx, 429, 4xx, мусор) —
+/// Err: перепроверка считает это «нет связи», и решает офлайн-запас, а не отзыв ключа.
+fn interpret<T: serde::de::DeserializeOwned>(status: u16, body: &str) -> Result<T, String> {
+    match status {
+        200 => serde_json::from_str(body)
+            .map_err(|e| format!("Некорректный ответ сервера лицензий: {}", e)),
+        400 | 413 => Err("Сервер лицензий отклонил запрос: проверьте формат ключа".to_string()),
+        429 => Err("Слишком много попыток. Повторите через минуту.".to_string()),
+        s => Err(format!("Сервер лицензий недоступен ({})", s)),
+    }
+}
+
+async fn post_api<T: serde::de::DeserializeOwned>(
+    base: &str,
+    endpoint: &str,
+    body: serde_json::Value,
+) -> Result<T, String> {
     let res = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(15))
         .build()
         .map_err(|e| e.to_string())?
-        .post(format!(
-            "https://api.lemonsqueezy.com/v1/licenses/{endpoint}"
-        ))
+        .post(format!("{base}/{endpoint}"))
         .header("Accept", "application/json")
         .json(&body)
         .send()
         .await
-        .map_err(|e| format!("Ошибка подключения к серверу авторизации: {}", e))?;
-    let status = res.status();
-    if status.is_server_error() || status.as_u16() == 429 {
-        return Err(format!("Сервер LemonSqueezy недоступен: {}", status));
-    }
-    res.json()
+        .map_err(|e| format!("Нет связи с сервером лицензий: {}", e))?;
+    let status = res.status().as_u16();
+    let text = res
+        .text()
         .await
-        .map_err(|e| format!("Ошибка парсинга ответа LemonSqueezy: {}", e))
+        .map_err(|e| format!("Обрыв ответа сервера лицензий: {}", e))?;
+    interpret(status, &text)
 }
 
-/// Ключ принадлежит одному из разрешённых вариантов товара (ID вариантов LS уникальны
-/// во всех магазинах, поэтому это же отсекает ключи чужих магазинов). Пустой список — отказ.
-fn variant_allowed(r: &LemonSqueezyResponse, allowed_variants: &[u64]) -> bool {
-    r.meta
-        .as_ref()
-        .and_then(|m| m.variant_id)
-        .is_some_and(|v| allowed_variants.contains(&v))
-}
-
-/// Проверка и активация ключа: /validate (не занимает место, отсекает чужие, отключённые
-/// и возвращённые ключи) → /activate (занимает место; при исчерпанном лимите LS отвечает
-/// 400 с error, и активация отклоняется — обходного пути через /validate больше нет).
+/// Активация ключа на этом устройстве. Сервер сам проверяет ключ, что он открывает `product`
+/// (id из каталога сайта, напр. "tensormedia"; пропуск All-Access открывает всё) и только потом
+/// занимает место активации — чужой или возвращённый ключ места не тратит.
 pub async fn validate_license(
     key: &str,
     instance_name: &str,
-    allowed_variants: &[u64],
+    product: &str,
 ) -> Result<LicenseInfo, String> {
     let key = key.trim();
-    let v = post_ls("validate", serde_json::json!({ "license_key": key })).await?;
-    if v.valid != Some(true) {
-        return Err(license_error(v.error.as_deref()));
-    }
-    if !variant_allowed(&v, allowed_variants) {
-        return Err("Этот ключ не от этого приложения (и не от пропуска All-Access)".to_string());
-    }
-
-    let a = post_ls(
+    let a: ApiVerdict = post_api(
+        LICENSE_API,
         "activate",
-        serde_json::json!({ "license_key": key, "instance_name": instance_name }),
+        serde_json::json!({ "license_key": key, "product": product, "instance_name": instance_name }),
     )
     .await?;
-    if a.activated != Some(true) {
+    if !a.valid {
         return Err(license_error(a.error.as_deref()));
     }
-    let lk = a.license_key;
     Ok(LicenseInfo {
         key: key.to_string(),
         activated: true,
         machine_id: instance_name.to_string(),
-        expires_at: lk.as_ref().and_then(|k| k.expires_at.clone()),
-        instance_id: a.instance.map(|i| i.id),
+        expires_at: a.expires_at,
+        instance_id: a.instance_id,
         checked_at: Some(now_secs()),
-        created_at: lk
-            .and_then(|k| k.created_at)
-            .as_deref()
-            .and_then(parse_iso_secs),
+        created_at: a.created_at.as_deref().and_then(parse_iso_secs),
     })
 }
 
 /// Итог повторной онлайн-проверки уже активированного ключа.
 #[derive(Debug, PartialEq)]
 pub enum Revalidation {
-    /// Ключ действителен; `created_at` — дата покупки из ответа LS (для окна возврата).
+    /// Ключ действителен; `created_at` — дата покупки из ответа сервера (для окна возврата).
     Valid { created_at: Option<i64> },
-    /// Ключ отключён (возврат денег), истёк или место активации снято в Customer Portal.
+    /// Ключ отключён (возврат денег), истёк или место активации снято.
     Revoked(String),
-    /// Нет сети или LS недоступен — решает офлайн-запас.
+    /// Нет сети или сервер недоступен — решает офлайн-запас.
     Unreachable,
+}
+
+fn revalidation(r: Result<ApiVerdict, String>) -> Revalidation {
+    match r {
+        Err(_) => Revalidation::Unreachable,
+        Ok(v) if v.valid => Revalidation::Valid {
+            created_at: v.created_at.as_deref().and_then(parse_iso_secs),
+        },
+        Ok(v) => Revalidation::Revoked(license_error(v.error.as_deref())),
+    }
 }
 
 pub async fn revalidate_license(key: &str, instance_id: Option<&str>) -> Revalidation {
@@ -418,49 +411,24 @@ pub async fn revalidate_license(key: &str, instance_id: Option<&str>) -> Revalid
     if let Some(id) = instance_id {
         body["instance_id"] = id.into();
     }
-    match post_ls("validate", body).await {
-        Err(_) => Revalidation::Unreachable,
-        Ok(r) if r.valid == Some(true) => Revalidation::Valid {
-            created_at: r
-                .license_key
-                .and_then(|k| k.created_at)
-                .as_deref()
-                .and_then(parse_iso_secs),
-        },
-        Ok(r) => Revalidation::Revoked(license_error(r.error.as_deref())),
-    }
+    revalidation(post_api(LICENSE_API, "validate", body).await)
 }
 
-#[derive(Debug, Deserialize)]
-struct LemonDeactivateResponse {
-    #[serde(default)]
-    deactivated: bool,
-    error: Option<String>,
-}
-
-/// Освобождает место активации на сервере LS (/v1/licenses/deactivate).
-/// Err — только сбой сети/ответа: ключ остаётся активным локально, можно
-/// повторить. Отказ LS (инстанс уже снят через Customer Portal, ключ удалён)
-/// — Ok: на сервере освобождать уже нечего.
+/// Освобождает место активации на сервере. Err — только сбой сети/ответа: ключ остаётся
+/// активным локально, можно повторить. Отказ сервера (место уже снято, ключ удалён) — Ok:
+/// освобождать уже нечего.
 pub async fn deactivate_license(key: &str, instance_id: &str) -> Result<(), String> {
-    let res = reqwest::Client::new()
-        .post("https://api.lemonsqueezy.com/v1/licenses/deactivate")
-        .header("Accept", "application/json")
-        .json(&serde_json::json!({ "license_key": key.trim(), "instance_id": instance_id }))
-        .send()
-        .await
-        .map_err(|e| format!("Ошибка подключения к серверу авторизации: {}", e))?;
-    if res.status().is_server_error() {
-        return Err(format!("Сервер LemonSqueezy недоступен: {}", res.status()));
-    }
-    let parsed: LemonDeactivateResponse = res
-        .json()
-        .await
-        .map_err(|e| format!("Ошибка парсинга ответа LemonSqueezy: {}", e))?;
-    if !parsed.deactivated {
+    let d: ApiDeactivation = post_api(
+        LICENSE_API,
+        "deactivate",
+        serde_json::json!({ "license_key": key.trim(), "instance_id": instance_id }),
+    )
+    .await?;
+    if !d.deactivated {
+        // только код отказа, ключ в лог не пишется
         eprintln!(
-            "LemonSqueezy deactivate: {}",
-            parsed.error.as_deref().unwrap_or("deactivated=false")
+            "license deactivate: {}",
+            d.error.as_deref().unwrap_or("deactivated=false")
         );
     }
     Ok(())
@@ -744,12 +712,13 @@ mod tests {
         let enc = encode_license_cache(&info, salt).unwrap();
         let dec = decode_license_cache(&enc, salt, "m").unwrap();
         assert_eq!(dec.instance_id.as_deref(), Some("inst-1"));
-        // Ответ /activate: instance.id попадает в разбор.
-        let r: LemonSqueezyResponse = serde_json::from_str(
-            r#"{"activated":true,"error":null,"license_key":null,"instance":{"id":"abc","name":"m"}}"#,
+        // Вердикт /activate: instance_id попадает в разбор.
+        let r: ApiVerdict = interpret(
+            200,
+            r#"{"valid":true,"sku":"tensormedia","instance_id":"abc","expires_at":null,"created_at":null,"future_field":1}"#,
         )
         .unwrap();
-        assert_eq!(r.instance.map(|i| i.id).as_deref(), Some("abc"));
+        assert_eq!(r.instance_id.as_deref(), Some("abc"));
     }
 
     #[test]
@@ -809,22 +778,105 @@ mod tests {
     }
 
     #[test]
-    fn variant_and_error_mapping() {
-        let r: LemonSqueezyResponse = serde_json::from_str(
-            r#"{"valid":true,"error":null,"license_key":{"status":"active","activation_limit":3,"activation_usage":1,"expires_at":null},"meta":{"store_id":1,"variant_id":2199220}}"#,
-        )
-        .unwrap();
-        assert!(variant_allowed(&r, &[2199220, 2199229]));
-        assert!(!variant_allowed(&r, &[42]));
-        assert!(!variant_allowed(&r, &[]));
-        // Ответ LS 400 при исчерпанном лимите разбирается и даёт отказ, а не обход.
-        let limit: LemonSqueezyResponse = serde_json::from_str(
-            r#"{"activated":false,"error":"This license key has reached the activation limit.","license_key":null,"instance":null,"meta":null}"#,
-        )
-        .unwrap();
-        assert_ne!(limit.activated, Some(true));
-        assert!(license_error(limit.error.as_deref()).contains("лимит устройств"));
+    fn only_http_200_is_a_verdict() {
+        let ok: ApiVerdict = interpret(200, r#"{"valid":false,"error":"revoked"}"#).unwrap();
+        assert!(!ok.valid);
+        for (status, body) in [
+            (400, r#"{"error":"bad_request"}"#),
+            (413, r#"{"error":"bad_request"}"#),
+            (429, r#"{"valid":false,"error":"rate_limited"}"#),
+            (500, ""),
+            (502, r#"{"error":"provider_unavailable"}"#),
+            (404, "<html>not found</html>"),
+        ] {
+            assert!(interpret::<ApiVerdict>(status, body).is_err(), "{status}");
+        }
+        assert!(interpret::<ApiVerdict>(200, "<html>captive portal</html>").is_err());
+    }
+
+    #[test]
+    fn revalidation_revokes_only_on_a_definitive_refusal() {
+        // сбой сервера, перегрузка, мусор — офлайн-запас, а не отзыв ключа платящего пользователя
+        for status in [400, 429, 500, 502, 503] {
+            let r = interpret::<ApiVerdict>(status, r#"{"valid":false,"error":"revoked"}"#);
+            assert_eq!(revalidation(r), Revalidation::Unreachable, "{status}");
+        }
+        let revoked = revalidation(interpret(200, r#"{"valid":false,"error":"revoked"}"#));
+        assert!(matches!(revoked, Revalidation::Revoked(m) if m.contains("недействительна")));
+        let valid = revalidation(interpret(
+            200,
+            r#"{"valid":true,"sku":"all-access","created_at":"2026-10-13T12:00:00.000000Z"}"#,
+        ));
+        assert_eq!(
+            valid,
+            Revalidation::Valid {
+                created_at: Some(1_791_892_800)
+            }
+        );
+    }
+
+    #[test]
+    fn error_codes_map_to_neutral_texts() {
+        assert!(license_error(Some("activation_limit")).contains("лимит устройств"));
+        assert!(license_error(Some("not_found")).contains("не найден"));
+        assert!(license_error(Some("not_entitled")).contains("не от этого приложения"));
         assert!(license_error(None).contains("недействительна"));
+        // неизвестный код (будущий провайдер) — общий текст, а не сырой ответ
+        assert!(license_error(Some("<b>raw provider text</b>")).contains("недействительна"));
+        for code in [
+            "activation_limit",
+            "not_found",
+            "not_entitled",
+            "revoked",
+            "expired",
+            "instance_not_found",
+        ] {
+            assert!(
+                !license_error(Some(code)).to_lowercase().contains("lemon"),
+                "{code}"
+            );
+        }
+    }
+
+    /// Живой сервер: `LICENSE_API=http://127.0.0.1:8799/api/license cargo test --features licensing live_license -- --ignored`.
+    #[tokio::test]
+    #[ignore]
+    async fn live_license_api_verdicts() {
+        let base = std::env::var("LICENSE_API").expect("LICENSE_API");
+        let unknown = "00000000-0000-4000-8000-000000000000";
+        let v: ApiVerdict = post_api(
+            &base,
+            "validate",
+            serde_json::json!({ "license_key": unknown }),
+        )
+        .await
+        .unwrap();
+        assert!(!v.valid);
+        assert_eq!(v.error.as_deref(), Some("not_found"));
+        let a: ApiVerdict = post_api(
+            &base,
+            "activate",
+            serde_json::json!({ "license_key": unknown, "product": "tensormedia", "instance_name": "live-test" }),
+        )
+        .await
+        .unwrap();
+        assert!(!a.valid);
+        let d: ApiDeactivation = post_api(
+            &base,
+            "deactivate",
+            serde_json::json!({ "license_key": unknown, "instance_id": unknown }),
+        )
+        .await
+        .unwrap();
+        assert!(!d.deactivated);
+        let bad = post_api::<ApiVerdict>(
+            &base,
+            "validate",
+            serde_json::json!({ "license_key": "a b" }),
+        )
+        .await;
+        assert!(bad.is_err());
+        assert_eq!(revalidation(bad), Revalidation::Unreachable);
     }
 
     #[test]
