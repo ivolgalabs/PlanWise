@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import type { Task } from "../api";
 import { api } from "../api";
+import { quickTask } from "../quickAdd";
 import { weekDays, isToday, isPast, dayWeight, formatMinutes, toEpochDay, tasksForDay } from "../date";
 import { TaskCard } from "../components/TaskCard";
 import { CloseDayButton } from "../components/CloseDayDialog";
@@ -55,7 +56,7 @@ export function WeekViewVertical({ tasks, archivedTasks, mobileSections, anchor,
     const title = (titlesByDay[dayKey(d)] ?? "").trim();
     if (!title) return;
     try {
-      await api.upsertTask({ title, date: toEpochDay(d) });
+      await api.upsertTask(quickTask(title, toEpochDay(d), toEpochDay(new Date())));
       setTitlesByDay((m) => ({ ...m, [dayKey(d)]: "" }));
     } catch (e) {
       showToast(t("err.saveTask", { error: String(e) }));

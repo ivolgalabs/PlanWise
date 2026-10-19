@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import type { Task } from "../api";
 import { api } from "../api";
+import { quickTask } from "../quickAdd";
 import { TaskCard } from "../components/TaskCard";
 import { CloseDayButton, UsualLoad } from "../components/CloseDayDialog";
 import { SomedayColumn } from "../components/SomedayColumn";
@@ -53,7 +54,7 @@ export function DayView({ day, tasks, archivedTasks, onChange }: Props) {
     const title = newTitle.trim();
     if (!title) return;
     try {
-      await api.upsertTask({ title, date: epochDay });
+      await api.upsertTask(quickTask(title, epochDay, toEpochDay(new Date())));
       setNewTitle("");
     } catch (e) {
       // Текст не стираем — после сбоя можно повторить сохранение.

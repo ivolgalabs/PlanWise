@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import type { Task } from "../api";
 import { api } from "../api";
+import { quickTask } from "../quickAdd";
 import { isToday, isPast, dayWeight, toEpochDay } from "../date";
 import { TaskCard } from "./TaskCard";
 import { CloseDayButton } from "./CloseDayDialog";
@@ -56,7 +57,7 @@ export function DayColumn({
   const addTask = async () => {
     const title = newTitle.trim();
     if (!title) return;
-    await api.upsertTask({ title, date: epochDay });
+    await api.upsertTask(quickTask(title, epochDay, toEpochDay(new Date())));
     setNewTitle("");
     onChange();
     // Вернуть фокус на поле ввода для непрерывного набора.
