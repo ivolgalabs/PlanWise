@@ -3,58 +3,90 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PlanWise — день</title>
-<!-- Throwaway prototype of the day cycle (variant E) on mock data. Not part of the app build. A-D variants: commit 73d2912. -->
+<title>PlanWise — неделя</title>
+<!-- Throwaway prototype on mock data, not part of the app build. Earlier versions: 73d2912 (variants A-E), 1473074 (E with 3 phases). -->
 <link rel="stylesheet" href="../../../../General/UI/Universal%20UI/all.css">
 <style>
   body { margin: 0; background: var(--bg-primary); color: var(--text-primary); font-family: var(--font-ui); font-size: var(--fs-base); }
   button { font-family: inherit; }
-  .wrap { max-width: 980px; margin: 0 auto; padding: var(--sp-4); box-sizing: border-box; }
+  .wrap { max-width: 1500px; margin: 0 auto; padding: var(--sp-4); box-sizing: border-box; }
   .top { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; justify-content: space-between; margin-bottom: var(--sp-3); }
   .top h1 { font-size: var(--fs-lg); margin: 0; }
-  .card { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: var(--sp-3); margin-bottom: var(--sp-3); }
-  .bar { margin-bottom: var(--sp-3); }
-  .row { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2); border-radius: var(--radius-md); flex-wrap: wrap; }
-  .row:hover { background: var(--bg-hover); }
-  .row .t { flex: 1; min-width: 160px; }
-  .t.done { text-decoration: line-through; color: var(--text-muted); }
-  .dim { opacity: 0.45; }
-  .muted { color: var(--text-muted); font-size: var(--fs-sm); }
-  .line { border-top: 2px dashed var(--warning); margin: var(--sp-2) 0; padding-top: var(--sp-1); font-size: var(--fs-xs); color: var(--warning); }
-  .capture { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-bottom: var(--sp-1); align-items: center; }
-  .capture input[name=q] { flex: 1; min-width: 200px; }
+  .bar { display: flex; flex-wrap: wrap; gap: var(--sp-3); align-items: center; margin-bottom: var(--sp-3); }
+  .bar .segmented-control { min-width: 300px; }
+  .capture { display: flex; gap: var(--sp-2); flex: 1; min-width: 260px; }
+  .capture input { flex: 1; }
   input:not([type]), textarea { background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: var(--pad-control-y) var(--pad-control-x); font: inherit; box-sizing: border-box; }
   textarea { width: 100%; min-height: 60px; }
-  .hint { font-size: var(--fs-xs); color: var(--text-muted); min-height: 1.3em; margin-bottom: var(--sp-3); }
+  .hint { font-size: var(--fs-xs); color: var(--text-muted); min-height: 1.3em; margin: calc(-1 * var(--sp-2)) 0 var(--sp-2); }
+  .muted { color: var(--text-muted); font-size: var(--fs-sm); }
   .sec { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin: var(--sp-4) 0 var(--sp-1); }
-  .chip { display: inline-flex; align-items: center; gap: var(--sp-1); font-size: var(--fs-xs); padding: 2px var(--sp-2); border-radius: var(--radius-full); border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-secondary); cursor: pointer; font-family: inherit; }
-  .w-H { border-left: 3px solid var(--danger); }
-  .w-M { border-left: 3px solid var(--warning); }
-  .w-S { border-left: 3px solid var(--success); }
-  .now { padding: var(--sp-5); text-align: center; border: 2px dashed var(--border-color); border-radius: var(--radius-xl); margin-bottom: var(--sp-3); }
-  .now .big { font-size: var(--fs-xl); font-weight: 600; margin-bottom: var(--sp-2); }
-  .actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
-  .slots { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--sp-3); margin-bottom: var(--sp-2); }
-  .slot { min-height: 150px; display: flex; flex-direction: column; justify-content: space-between; gap: var(--sp-3); background: var(--bg-secondary); border: 2px solid var(--accent); border-radius: var(--radius-xl); padding: var(--sp-4); }
-  .slot.main { background: var(--accent-glow); }
-  .slot .big { font-size: var(--fs-md); font-weight: 600; }
-  .micro .row { padding: var(--sp-1) var(--sp-2); }
-  .stuck { width: 100%; font-size: var(--fs-xs); color: var(--warning); }
-  .ask { width: 100%; display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; padding: var(--sp-2); border: 1px solid var(--warning); border-radius: var(--radius-md); }
-  .ask input { flex: 1; min-width: 180px; }
-  .stack { display: flex; height: 14px; border-radius: var(--radius-full); overflow: hidden; background: var(--bg-tertiary); margin: var(--sp-1) 0; }
+  .nav { display: flex; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-2); flex-wrap: wrap; }
+  /* week */
+  .week { display: grid; gap: var(--sp-2); align-items: start; }
+  .col { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: var(--sp-2); min-height: 220px; min-width: 0; }
+  .col.today { border: 2px solid var(--accent); }
+  .col.past .task { opacity: 0.6; }
+  .col.hot, .side .box.hot { outline: 2px dashed var(--accent); }
+  .col h3, .box h3 { font-size: var(--fs-sm); margin: 0 0 var(--sp-1); display: flex; justify-content: space-between; gap: var(--sp-1); flex-wrap: wrap; }
+  .load { font-size: var(--fs-xs); font-weight: 400; color: var(--text-muted); }
+  .load.over { color: var(--danger); font-weight: 600; }
+  .side { display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; }
+  .side .box { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: var(--sp-2); min-height: 100px; }
+  .task { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--sp-1); padding: var(--sp-1); border-radius: var(--radius-sm); font-size: var(--fs-sm); border-left: 3px solid transparent; cursor: grab; }
+  .task:hover { background: var(--bg-hover); }
+  .task input { margin-top: 3px; }
+  .task .t { flex: 1 1 110px; min-width: 0; overflow-wrap: anywhere; }
+  .task .t.done { text-decoration: line-through; color: var(--text-muted); }
+  .task .meta { display: flex; gap: 2px; margin-left: auto; }
+  .task.now { background: var(--accent-glow); }
+  .task.below { opacity: 0.45; }
+  .w-H { border-left-color: var(--danger); } .w-M { border-left-color: var(--warning); } .w-S { border-left-color: var(--success); }
+  .tag { font-size: var(--fs-xs); color: var(--accent); font-weight: 600; }
+  .chip { display: inline-flex; align-items: center; font-size: var(--fs-xs); padding: 0 5px; border-radius: var(--radius-full); border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-secondary); cursor: pointer; font-family: inherit; line-height: 1.5; }
+  .line { border-top: 2px dashed var(--warning); margin: var(--sp-1) 0; font-size: var(--fs-xs); color: var(--warning); }
+  .add input { width: 100%; border: none; background: transparent; padding: var(--sp-1); font-size: var(--fs-sm); }
+  .add input:focus { background: var(--bg-primary); outline: 1px solid var(--border-color); }
+  .tailbar { width: 100%; text-align: left; margin-bottom: var(--sp-1); }
+  .closebtn { width: 100%; margin-top: var(--sp-2); }
+  .closed { font-size: var(--fs-xs); color: var(--success); margin-bottom: var(--sp-1); }
+  /* month */
+  .mgrid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+  .mhead { font-size: var(--fs-xs); color: var(--text-muted); text-align: center; }
+  .mcell { min-height: 92px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 4px; font-size: var(--fs-xs); cursor: pointer; text-align: left; vertical-align: top; color: var(--text-primary); min-width: 0; display: flex; flex-direction: column; justify-content: flex-start; }
+  .mcell:hover { border-color: var(--accent); }
+  .mcell.out { opacity: 0.4; }
+  .mcell.today { border: 2px solid var(--accent); }
+  .mcell .n { font-weight: 600; margin-bottom: 2px; }
+  .mcell .it { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .mcell .it.done { text-decoration: line-through; color: var(--text-muted); }
+  /* review */
+  .card { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: var(--sp-3); margin-bottom: var(--sp-3); }
+  .stack { display: flex; height: 12px; border-radius: var(--radius-full); overflow: hidden; background: var(--bg-tertiary); }
   .stack span { display: block; height: 100%; }
-  .legend { display: flex; flex-wrap: wrap; gap: var(--sp-3); font-size: var(--fs-xs); color: var(--text-secondary); margin-bottom: var(--sp-2); }
-  .wk { display: grid; grid-template-columns: 70px 1fr 24px; gap: var(--sp-2); align-items: center; font-size: var(--fs-xs); color: var(--text-secondary); }
-  .wk .stack { height: 10px; }
-  details summary { cursor: pointer; color: var(--text-secondary); font-size: var(--fs-sm); padding: var(--sp-2) 0; }
+  .wk { display: grid; grid-template-columns: 110px 1fr 28px; gap: var(--sp-2); align-items: center; font-size: var(--fs-xs); color: var(--text-secondary); margin-bottom: 4px; }
+  .legend { display: flex; flex-wrap: wrap; gap: var(--sp-3); font-size: var(--fs-xs); color: var(--text-secondary); margin: var(--sp-2) 0; }
+  .nums { display: flex; flex-wrap: wrap; gap: var(--sp-5); }
+  .nums b { font-size: var(--fs-xl); display: block; }
+  /* triage dialog */
+  .modal-dialog.triage { max-width: 760px; max-height: 88vh; overflow-y: auto; }
+  .row { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) 0; flex-wrap: wrap; border-bottom: 1px solid var(--border-color); }
+  .row .t { flex: 1; min-width: 160px; }
+  .triage .row .t { flex-basis: calc(100% - 60px); font-weight: 600; }
+  .stuck { width: 100%; font-size: var(--fs-xs); color: var(--warning); }
+  .ask { width: 100%; display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; }
+  .ask input { flex: 1; min-width: 180px; }
+  details summary { cursor: pointer; color: var(--text-secondary); font-size: var(--fs-sm); padding: var(--sp-1) 0; }
+  @media (max-width: 900px) { .week { grid-template-columns: 1fr !important; } .col { min-height: 0; } .bar .segmented-control { min-width: 0; width: 100%; } }
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="top">
-    <h1>PlanWise — день</h1>
+    <h1>PlanWise</h1>
     <div>
+      <button class="btn-ghost" data-a="focus" title="Оставить на экране только сегодняшний день — для работы, не для планирования">Фокус</button>
+      <button class="btn-ghost" data-a="nextday" title="Демо: прожить сутки — незакрытое уйдёт в хвосты">Демо: следующий день →</button>
       <button class="btn-ghost" data-a="theme">Тема</button>
       <button class="btn-ghost" data-a="reset">Сбросить демо</button>
     </div>
@@ -73,13 +105,15 @@ const VEC = {
   opt: { i: '⚙️', n: 'Оптимизация', c: 'var(--warning)' },
 };
 const WT = { H: { n: 'Heavy', pts: 3 }, M: { n: 'Medium', pts: 2 }, S: { n: 'Micro', pts: 1 } };
-// shortcut: budget, caps and past-week history are mock constants; the real app learns them from history (layer 2).
-const BUDGET = 9, CAP_H = 2, CAP_M = 3, SLOTS = 3, STUCK = 3;
-const HIST = [{ opt: 4, cash: 0, visa: 0, life: 2 }, { opt: 1, cash: 2, visa: 1, life: 1 }, { opt: 3, cash: 1, visa: 0, life: 1 },
-  { opt: 0, cash: 3, visa: 2, life: 1 }, { opt: 5, cash: 0, visa: 0, life: 0 }, { opt: 2, cash: 1, visa: 1, life: 2 }];
+// shortcut: budget and caps are constants; the real app learns them from the user's closed days (layer 2).
+const BUDGET = 9, CAP = { H: 2, M: 3 }, STUCK = 3;
 const DOW = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
+const MON = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'];
 const today = new Date(); today.setHours(0, 0, 0, 0);
-const dayDate = (d) => new Date(today.getTime() + d * 864e5);
+const monIdx = (today.getDay() + 6) % 7;
+const dayDate = (d) => { const x = new Date(today); x.setDate(x.getDate() + d); return x; };
+const offsetOf = (date) => Math.round((date - today) / 864e5);
+const dm = (d) => `${dayDate(d).getDate()}.${String(dayDate(d).getMonth() + 1).padStart(2, '0')}`;
 const dayLabel = (d) => d === 0 ? 'Сегодня' : d === 1 ? 'Завтра' : d === -1 ? 'Вчера' : `${DOW[dayDate(d).getDay()]} ${dayDate(d).getDate()}`;
 
 // Quick-capture parser (ru): date/time words are cut out of the title; no date means Inbox.
@@ -104,213 +138,277 @@ function parse(text) {
  ['купить хлеб в 9', ['купить хлеб', 0, '09:00']]]
   .forEach(([s, e]) => { const r = parse(s); console.assert(JSON.stringify([r.title, r.day, r.time]) === JSON.stringify(e), 'parse', s, r); });
 
+// ---------- mock data ----------
+function rng(a) { return () => { a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 function seed() {
-  const T = (id, title, day, w, v, pp = 0, extra = {}) => ({ id, title, day, w, v, pp, st: 'open', some: false, time: null, ...extra });
-  return [
-    T(1, 'Подать документы на ВНЖ: собрать справки', 0, 'H', 'visa', 3),
-    T(2, 'Выпустить PlanWise 0.3', 0, 'H', 'cash'),
-    T(3, 'Рефакторинг настроек PlanWise', 0, 'M', 'opt'),
-    T(4, 'Купить продукты', 0, 'S', 'life'),
-    T(5, 'Ответить в чат по сделке', 0, 'S', 'cash', 0, { time: '12:00' }),
-    T(6, 'Тренировка', 0, 'M', 'life'),
-    T(7, 'Настроить хоткеи в Obsidian', 0, 'S', 'opt'),
-    T(8, 'Почистить закладки', 0, 'S', 'opt'),
-    T(9, 'Позвонить в банк', -1, 'S', 'life', 1),
-    T(10, 'Дочитать статью про RAG', -2, 'M', 'opt', 2),
-    T(11, 'Курс немецкого: урок 12', 1, 'M', 'visa'),
-    T(12, 'Счёт клиенту', 2, 'M', 'cash'),
-    T(13, 'идея: заметки со связями между словами', null, null, null),
-    T(14, 'спросить у Макса про хостинг', null, null, null),
-    T(15, 'Свой сайт-портфолио', null, 'H', 'cash', 0, { some: true }),
-  ];
+  let id = 0;
+  const T = (title, day, w, v, extra = {}) => ({ id: ++id, title, day, w, v, pp: 0, st: 'open', some: false, time: null, doneDay: null, dropDay: null, ...extra });
+  const r = rng(7), pick = (a) => a[Math.floor(r() * a.length)];
+  const TITLES = { visa: ['Немецкий: урок', 'Справки для ВНЖ', 'Письмо в ведомство'], cash: ['Фича для клиента', 'Счёт клиенту', 'Релиз-заметки'],
+    life: ['Тренировка', 'Продукты', 'Врач', 'Уборка'], opt: ['Настроить терминал', 'Сравнить таск-менеджеры', 'Обновить дотфайлы', 'Переставить иконки'] };
+  const L = [];
+  for (let d = -40; d < 0; d++) { // history: some days drift into "optimisation"
+    const skew = r() < 0.3, n = 3 + Math.floor(r() * 4);
+    for (let i = 0; i < n; i++) {
+      const v = skew && r() < 0.7 ? 'opt' : pick(Object.keys(VEC)), ok = r() < 0.85;
+      L.push(T(pick(TITLES[v]), d, pick(['H', 'M', 'S', 'S']), v, ok ? { st: 'done', doneDay: d } : { st: 'dropped', dropDay: d }));
+    }
+  }
+  L.push(
+    T('Позвонить в банк', -1, 'S', 'life', { pp: 1 }),
+    T('Дочитать статью про RAG', -2, 'M', 'opt', { pp: 2 }),
+    T('Выпустить PlanWise 0.3', 0, 'H', 'cash'),
+    T('Подать документы на ВНЖ: собрать справки', 0, 'H', 'visa', { pp: 3 }),
+    T('Ответить в чат по сделке', 0, 'S', 'cash', { time: '12:00' }),
+    T('Тренировка', 0, 'M', 'life'),
+    T('Купить продукты', 0, 'S', 'life'),
+    T('Рефакторинг настроек PlanWise', 0, 'M', 'opt'),
+    T('Настроить хоткеи в Obsidian', 0, 'S', 'opt'),
+    T('Почистить закладки', 0, 'S', 'opt'),
+    T('Курс немецкого: урок 12', 1, 'M', 'visa'),
+    T('Счёт клиенту', 2, 'M', 'cash'),
+    T('Тренировка', 2, 'M', 'life'),
+    T('Созвон с заказчиком', 3, 'S', 'cash', { time: '15:00' }),
+    T('Налоговая декларация', 5, 'H', 'cash'),
+    T('Дедлайн: анкета на ВНЖ', 9, 'H', 'visa'),
+    T('ДР мамы — подарок', 12, 'S', 'life'),
+    T('Спланировать отпуск', 20, 'M', 'life'),
+    T('идея: заметки со связями между словами', null, null, null),
+    T('спросить у Макса про хостинг', null, null, null),
+    T('Свой сайт-портфолио', null, 'H', 'cash', { some: true }),
+    T('Выучить Rust macros', null, 'M', 'opt', { some: true }),
+  );
+  return L;
 }
-const init = () => ({ tasks: seed(), phase: 'morning', picked: [], main: null, note: '', ask: null, moved: 0, pickedCount: 0 });
+const init = () => ({ tasks: seed(), view: 'week', weekOff: 0, monthOff: 0, rev: 'week', focus: false, closed: false, notes: {}, dlg: null, ask: null, msg: '' });
 
 // ---------- state ----------
-const KEY = 'pw-proto-e1';
+const KEY = 'pw-proto-w1';
 let S;
 try { S = JSON.parse(localStorage.getItem(KEY)); } catch { /* storage unavailable */ }
 if (!S || !S.tasks) S = init();
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch { /* ignore */ } };
 const find = (id) => S.tasks.find((t) => t.id === id);
-const newTask = (title, day, extra = {}) => ({ id: Math.max(0, ...S.tasks.map((t) => t.id)) + 1, title, day, time: null, w: null, v: null, st: 'open', pp: 0, some: false, ...extra });
-const picked = () => S.picked.map(find).filter(Boolean);
-const isBig = (t) => t.w !== 'S'; // unweighted counts as Medium
+const newTask = (title, day, extra = {}) => ({ id: Math.max(0, ...S.tasks.map((t) => t.id)) + 1, title, day, time: null, w: null, v: null, st: 'open', pp: 0, some: false, doneDay: null, dropDay: null, ...extra });
+const on = (d) => S.tasks.filter((t) => t.day === d && !t.some);
+const tails = () => S.tasks.filter((t) => t.st === 'open' && !t.some && t.day !== null && t.day < 0);
+const pts = (t) => WT[t.w || 'M'].pts;
 
-// ---------- view helpers ----------
+// ---------- small views ----------
 const seg = (act, items, active) => `<div class="segmented-control">${items.map(([k, n]) => `<button type="button" data-a="${act}" data-id="${k}" class="${k === active ? 'active' : ''}">${n}</button>`).join('')}</div>`;
-const wChip = (t, click) => `<${click ? 'button type="button"' : 'span'} class="chip w-${t.w || 'none'}" ${click ? `data-a="cyclew" data-id="${t.id}"` : ''}>${t.w ? WT[t.w].n : 'вес?'}</${click ? 'button' : 'span'}>`;
-const vChip = (t, click) => `<${click ? 'button type="button"' : 'span'} class="chip" title="${t.v ? VEC[t.v].n : 'без вектора'}" ${click ? `data-a="cyclev" data-id="${t.id}"` : ''}>${t.v ? VEC[t.v].i : '·'}</${click ? 'button' : 'span'}>`;
-const ppBadge = (t) => t.pp ? `<span class="chip" title="Сколько раз переносилась">↻${t.pp}</span>` : '';
-const timeTag = (t) => t.time ? `<span class="muted">${t.time}</span>` : '';
+const wChip = (t) => `<button type="button" class="chip" data-a="cyclew" data-id="${t.id}" title="Вес: ${t.w ? WT[t.w].n : 'не задан'} (клик — сменить)">${t.w || '?'}</button>`;
+const vChip = (t) => `<button type="button" class="chip" data-a="cyclev" data-id="${t.id}" title="${t.v ? VEC[t.v].n : 'Без вектора'} (клик — сменить)">${t.v ? VEC[t.v].i : '·'}</button>`;
+const ppBadge = (t) => t.pp ? `<span class="chip" title="Переносилась ${t.pp} раз">↻${t.pp}</span>` : '';
 const hint = (p) => p.title ? `→ ${p.day === null ? 'Входящие' : dayLabel(p.day)}${p.time ? ', ' + p.time : ''} · «${p.title}»` : 'Без даты — во Входящие';
+function taskRow(t, cls = '', extra = '') {
+  const live = t.st === 'open';
+  return `<div class="task w-${t.w || 'none'} ${cls}" ${live ? 'draggable="true"' : ''} data-id="${t.id}">
+    <input type="checkbox" data-a="done" data-id="${t.id}" ${t.st === 'done' ? 'checked' : ''} ${t.st === 'dropped' ? 'disabled' : ''} aria-label="Сделано">
+    <span class="t ${live ? '' : 'done'}">${extra}${esc(t.title)}${t.time ? ` <span class="muted">${t.time}</span>` : ''}${t.st === 'dropped' ? ' <span class="muted">· отпущено</span>' : ''}</span>
+    <span class="meta">${ppBadge(t)}${live ? wChip(t) + vChip(t) : ''}</span></div>`;
+}
+const addForm = (where) => `<form class="add" data-f="add" data-where="${where}"><input name="q" placeholder="+ добавить" autocomplete="off" aria-label="Добавить задачу"></form>`;
 const stackBar = (c) => {
   const n = Object.values(c).reduce((a, b) => a + b, 0) || 1;
   return `<div class="stack">${Object.keys(VEC).map((k) => c[k] ? `<span style="width:${(c[k] / n) * 100}%;background:${VEC[k].c}" title="${VEC[k].n}: ${c[k]}"></span>` : '').join('')}</div>`;
 };
-function vecCount(list) {
-  const c = { visa: 0, cash: 0, life: 0, opt: 0 };
-  list.forEach((t) => { if (t.v) c[t.v]++; });
-  return c;
+const vecCount = (list) => list.reduce((c, t) => { if (t.v) c[t.v]++; return c; }, { visa: 0, cash: 0, life: 0, opt: 0 });
+
+// ---------- week ----------
+function todayCol(focus) {
+  const L = on(0), live = L.filter((t) => t.st !== 'dropped');
+  const used = live.reduce((a, t) => a + pts(t), 0), H = live.filter((t) => t.w === 'H').length, M = live.filter((t) => t.w === 'M').length;
+  const over = used > BUDGET || H > CAP.H || M > CAP.M;
+  let h = `<h3><span>Сегодня, ${dm(0)}</span><span class="load ${over ? 'over' : ''}" title="Обычно ты закрываешь ${BUDGET} очков (H=3, M=2, S=1), Heavy не больше ${CAP.H}, Medium не больше ${CAP.M}">${used}/${BUDGET} · H ${H}/${CAP.H} · M ${M}/${CAP.M}</span></h3>`;
+  if (S.closed) h += `<div class="closed">✓ День закрыт${S.notes[0] ? ' · ' + esc(S.notes[0]) : ''}</div>`;
+  const tl = tails();
+  if (tl.length && !S.closed) h += `<button class="btn-ghost tailbar" data-a="dlg" data-id="tails">↩ Хвосты прошлых дней: ${tl.length} — решить</button>`;
+  let acc = 0, lined = false, now = false;
+  const rows = [], below = [];
+  L.forEach((t) => {
+    if (t.st !== 'dropped') acc += pts(t);
+    const out = acc > BUDGET && t.st === 'open';
+    if (out && !lined && !focus) { lined = true; rows.push('<div class="line">черта: обычно ты успеваешь до сюда</div>'); }
+    const isNow = !now && !out && t.st === 'open' && !S.closed;
+    if (isNow) now = true;
+    const html = taskRow(t, (out ? 'below ' : '') + (isNow ? 'now' : ''), isNow ? '<span class="tag">сейчас · </span>' : '');
+    (focus && out ? below : rows).push(html);
+  });
+  h += rows.join('');
+  if (below.length) h += `<details><summary>За шторой, ниже черты: ${below.length}</summary>${below.join('')}</details>`;
+  if (!L.length) h += '<p class="muted">Пусто. Перетащи сюда задачи из Входящих или с других дней.</p>';
+  h += addForm('0');
+  if (!S.closed) h += '<button class="btn-primary closebtn" data-a="dlg" data-id="close">Закрыть день</button>';
+  return `<div class="col today" data-drop="0">${h}</div>`;
 }
-function dayVectors(done) {
-  const c = vecCount(done);
-  return stackBar(c) + `<div class="legend">${Object.keys(VEC).map((k) => `<span>${VEC[k].i} ${VEC[k].n}: <b>${c[k]}</b></span>`).join('')}</div>`
-    + (c.opt >= 3 && c.visa + c.cash === 0
-      ? `<div class="alert-banner danger">День ушёл в «Оптимизацию»: ${c.opt} задачи, а на ВНЖ/Учёбу и Кэш — ноль. Похоже на прокрастинацию с продуктивным лицом.</div>` : '');
+function dayCol(d) {
+  if (d === 0) return todayCol(false);
+  const L = on(d), open = L.filter((t) => t.st === 'open').length;
+  return `<div class="col ${d < 0 ? 'past' : ''}" data-drop="${d}"><h3><span>${DOW[dayDate(d).getDay()]}, ${dm(d)}</span><span class="load">${open || ''}</span></h3>
+    ${L.map((t) => taskRow(t, '', d < 0 && t.st === 'open' ? '<span class="tag">хвост · </span>' : '')).join('')}${d > 0 ? addForm(String(d)) : ''}</div>`;
 }
-function weekRadar(done) {
-  const days = HIST.map((c, i) => ({ c, d: i - HIST.length })).concat([{ c: vecCount(done), d: 0 }]);
-  const sum = { visa: 0, cash: 0, life: 0, opt: 0 };
-  days.forEach(({ c }) => Object.keys(sum).forEach((k) => { sum[k] += c[k]; }));
-  const total = Object.values(sum).reduce((a, b) => a + b, 0) || 1;
-  const warn = sum.opt / total > 0.4
-    ? `<div class="alert-banner danger">За неделю ${Math.round((sum.opt / total) * 100)}% сделанного — «Оптимизация». Перекос держится не один день.</div>` : '';
-  return `<div class="card">${days.map(({ c, d }) => `<div class="wk"><span>${dayLabel(d)}</span>${stackBar(c)}<span>${Object.values(c).reduce((a, b) => a + b, 0)}</span></div>`).join('')}
-    <div class="legend" style="margin-top:var(--sp-2)">${Object.keys(VEC).map((k) => `<span>${VEC[k].i} ${sum[k]}</span>`).join('')}<span class="muted">прошлые дни — пример</span></div>${warn}</div>`;
+function weekView() {
+  if (S.focus) return `<p class="muted">Фокус: только сегодня, всё ниже черты — за шторой. Чтобы планировать, нажми «Фокус» ещё раз.</p><div class="week" style="grid-template-columns:minmax(0,720px)">${todayCol(true)}</div>`;
+  const start = -monIdx + 7 * S.weekOff, days = [...Array(7)].map((_, i) => start + i);
+  const cols = days.map((d) => d === 0 ? 'minmax(0,1.7fr)' : 'minmax(0,1fr)').join(' ') + ' minmax(0,1fr)';
+  const inbox = S.tasks.filter((t) => t.day === null && !t.some && t.st === 'open'), some = S.tasks.filter((t) => t.some && t.st === 'open');
+  return `<div class="nav"><button class="btn-ghost" data-a="wk" data-id="-1" aria-label="Прошлая неделя">‹</button><b>${dm(start)} – ${dm(start + 6)}</b><button class="btn-ghost" data-a="wk" data-id="1" aria-label="Следующая неделя">›</button>${S.weekOff ? '<button class="btn-ghost" data-a="wk" data-id="0">К сегодня</button>' : ''}</div>
+    <div class="week" style="grid-template-columns:${cols}">${days.map(dayCol).join('')}
+      <div class="side"><div class="box" data-drop="inbox"><h3><span>Входящие</span><span class="load">${inbox.length}</span></h3>${inbox.map((t) => taskRow(t)).join('')}${addForm('inbox')}</div>
+      <div class="box" data-drop="some"><h3><span>Когда-нибудь</span><span class="load">${some.length}</span></h3>${some.map((t) => taskRow(t)).join('')}${addForm('some')}</div></div></div>`;
 }
 
-// ---------- views ----------
-function render() {
-  const P = picked();
-  let h = `<div class="bar">${seg('phase', [['morning', '1 · Утро: собрать'], ['day', '2 · День'], ['evening', '3 · Вечер: закрыть']], S.phase === 'closed' ? 'evening' : S.phase)}</div>`;
-  if (S.phase === 'closed') h += closedView();
-  else {
-    h += `<form class="capture" data-f="cap"><input name="q" placeholder="Запиши что угодно: «позвонить маме завтра в 18»" autocomplete="off"><button class="btn-primary">Записать</button></form><div class="hint">Без даты — во Входящие</div>`;
-    h += S.phase === 'morning' ? morningView(P) : S.phase === 'day' ? dayView(P) : eveningView(P);
+// ---------- month ----------
+function monthView() {
+  const first = new Date(today.getFullYear(), today.getMonth() + S.monthOff, 1), m = first.getMonth(), lead = (first.getDay() + 6) % 7;
+  const start = offsetOf(first) - lead, weeks = Math.ceil((lead + new Date(first.getFullYear(), m + 1, 0).getDate()) / 7);
+  let h = `<div class="nav"><button class="btn-ghost" data-a="mo" data-id="-1" aria-label="Прошлый месяц">‹</button><b>${MON[m]} ${first.getFullYear()}</b><button class="btn-ghost" data-a="mo" data-id="1" aria-label="Следующий месяц">›</button>${S.monthOff ? '<button class="btn-ghost" data-a="mo" data-id="0">К сегодня</button>' : ''}<span class="muted">Клик по дню — открыть его неделю</span></div><div class="mgrid">`;
+  h += ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'].map((x) => `<div class="mhead">${x}</div>`).join('');
+  for (let d = start; d < start + weeks * 7; d++) {
+    const L = on(d).filter((t) => t.st !== 'dropped');
+    const body = d < 0
+      ? (L.length ? `<div class="muted">✓ ${L.filter((t) => t.st === 'done').length}${L.some((t) => t.st === 'open') ? ' · хвост' : ''}</div>` : '')
+      : L.slice(0, 3).map((t) => `<div class="it ${t.st === 'done' ? 'done' : ''}">${t.time ? t.time + ' ' : ''}${esc(t.title)}</div>`).join('') + (L.length > 3 ? `<div class="muted">+${L.length - 3}</div>` : '');
+    h += `<button type="button" class="mcell ${dayDate(d).getMonth() !== m ? 'out' : ''} ${d === 0 ? 'today' : ''}" data-a="goto" data-id="${d}"><div class="n">${dayDate(d).getDate()}</div>${body}</button>`;
   }
-  $('#app').innerHTML = h;
-  save();
+  return h + '</div>';
 }
-function pickRow(t, isPicked) {
-  return `<div class="row w-${t.w || 'none'}">
-    <input type="checkbox" data-a="pick" data-id="${t.id}" ${isPicked ? 'checked' : ''} aria-label="Взять в день">
-    <span class="t">${esc(t.title)} ${timeTag(t)}</span>${ppBadge(t)}${wChip(t, true)}${vChip(t, true)}
-    <button type="button" class="btn-ghost" data-a="main" data-id="${t.id}" title="Главное на сегодня">${S.main === t.id ? '★' : '☆'}</button></div>`;
+
+// ---------- review ----------
+function reviewView() {
+  const span = S.rev === 'week' ? 7 : 35, from = -span + 1;
+  const done = S.tasks.filter((t) => t.st === 'done' && t.doneDay !== null && t.doneDay >= from && t.doneDay <= 0);
+  const dropped = S.tasks.filter((t) => t.st === 'dropped' && t.dropDay !== null && t.dropDay >= from && t.dropDay <= 0).length;
+  const rows = S.rev === 'week'
+    ? [...Array(7)].map((_, i) => { const d = from + i; return [dayLabel(d), done.filter((t) => t.doneDay === d)]; })
+    : [...Array(5)].map((_, i) => { const a = from + i * 7; return [`${dm(a)} – ${dm(a + 6)}`, done.filter((t) => t.doneDay >= a && t.doneDay <= a + 6)]; });
+  const sum = vecCount(done), optShare = Math.round((sum.opt / (done.length || 1)) * 100);
+  const zombies = S.tasks.filter((t) => t.st === 'open' && t.pp >= STUCK);
+  const noteDays = Object.keys(S.notes).map(Number).filter((d) => d >= from && d <= 0 && S.notes[d]).sort((a, b) => b - a);
+  let h = `<div class="bar">${seg('rev', [['week', 'Неделя'], ['month', 'Месяц']], S.rev)}<span class="muted">${S.rev === 'week' ? 'последние 7 дней' : 'последние 5 недель'}</span></div>`;
+  h += `<div class="card nums"><div><b>${done.length}</b><span class="muted">сделано</span></div><div><b>${dropped}</b><span class="muted">отпущено</span></div><div><b>${zombies.length}</b><span class="muted">застряло (↻${STUCK}+)</span></div><div><b>${tails().length}</b><span class="muted">хвостов сейчас</span></div></div>`;
+  h += `<div class="card"><div class="sec" style="margin-top:0">Куда ушло время</div>${rows.map(([l, L]) => `<div class="wk"><span>${l}</span>${stackBar(vecCount(L))}<span>${L.length}</span></div>`).join('')}
+    <div class="legend">${Object.keys(VEC).map((k) => `<span>${VEC[k].i} ${VEC[k].n}: <b>${sum[k]}</b></span>`).join('')}</div>`;
+  if (optShare > 40) h += `<div class="alert-banner danger">${optShare}% сделанного — «Оптимизация». Удобная работа вытесняет важную.</div>`;
+  if (!sum.visa) h += '<div class="alert-banner danger">За период ни одной задачи «ВНЖ / Учёба».</div>';
+  h += '</div>';
+  if (zombies.length) h += `<div class="card"><div class="sec" style="margin-top:0">Застрявшие задачи</div>${zombies.map((t) => `<div class="row"><span class="t">${esc(t.title)}</span>${ppBadge(t)}</div>`).join('')}<p><button class="btn-primary" data-a="dlg" data-id="zombies">Решить по ним</button></p></div>`;
+  if (noteDays.length) h += `<div class="card"><div class="sec" style="margin-top:0">Заметки дней</div>${noteDays.map((d) => `<p><b>${dayLabel(d)}:</b> ${esc(S.notes[d])}</p>`).join('')}</div>`;
+  return h;
 }
-function morningView(P) {
-  const pts = P.reduce((a, t) => a + WT[t.w || 'M'].pts, 0), H = P.filter((t) => t.w === 'H').length, M = P.filter((t) => t.w === 'M').length;
-  let h = `<div class="card">Очки <b>${pts}/${BUDGET}</b> (обычно закрываешь столько) · Heavy <b>${H}/${CAP_H}</b> · Medium <b>${M}/${CAP_M}</b> · Micro без лимита`;
-  const over = [pts > BUDGET && `очков ${pts} из ${BUDGET}`, H > CAP_H && `Heavy ${H} из ${CAP_H}`, M > CAP_M && `Medium ${M} из ${CAP_M}`].filter(Boolean);
-  if (over.length) h += `<div class="alert-banner danger" style="margin:var(--sp-2) 0 0">Перегруз: ${over.join(', ')}. Начать можно, но что-то из этого, скорее всего, уедет на завтра.</div>`;
-  h += '</div><div class="sec">Твой день</div>';
-  if (!P.length) h += '<p class="muted">Отметь задачи ниже. ★ — главное: если день сломается, его не жертвуем. Вес и вектор — кликом по меткам.</p>';
-  let acc = 0, lined = false;
-  P.forEach((t) => {
-    const out = (acc += WT[t.w || 'M'].pts) > BUDGET;
-    if (out && !lined) { h += '<div class="line">черта: ниже — вряд ли сегодня</div>'; lined = true; }
-    h += `<div class="${out ? 'dim' : ''}">${pickRow(t, true)}</div>`;
-  });
-  const free = S.tasks.filter((t) => t.st === 'open' && !t.some && !S.picked.includes(t.id));
-  [['Хвосты прошлых дней', (t) => t.day !== null && t.day < 0], ['Запланировано на сегодня', (t) => t.day === 0], ['Входящие', (t) => t.day === null]]
-    .forEach(([title, f]) => {
-      const L = free.filter(f);
-      if (L.length) h += `<div class="sec">${title} (${L.length})</div>${L.map((t) => pickRow(t, false)).join('')}`;
-    });
-  return h + `<p><button class="btn-primary" data-a="phase" data-id="day" ${P.length ? '' : 'disabled'}>Начать день →</button></p>`;
-}
-function dayView(P) {
-  if (!P.length) {
-    return `<div class="now"><div class="big">День ещё не собран</div><p class="muted">Утром выбери, что реально успеешь, — здесь будут только эти задачи.</p>
-      <button class="btn-primary" data-a="phase" data-id="morning">← 1 · Утро: собрать</button></div>`;
-  }
-  const open = P.filter((t) => t.st === 'open'), cards = open.filter(isBig), micro = P.filter((t) => !isBig(t));
-  let h = '';
-  if (!open.length) h += '<div class="now"><div class="big">Всё выбранное сделано</div><button class="btn-primary" data-a="phase" data-id="evening">Закрыть день</button></div>';
-  else if (cards.length) {
-    h += '<div class="slots">' + cards.slice(0, SLOTS).map((t) => `<div class="slot ${t.id === S.main ? 'main' : ''}">
-      <div><div class="muted">${t.id === S.main ? '★ главное' : '&nbsp;'}</div><div class="big">${esc(t.title)}</div></div>
-      <div>${wChip(t, false)} ${vChip(t, false)} ${timeTag(t)}</div>
-      <div class="actions"><button class="btn-primary" data-a="done" data-id="${t.id}">Сделано</button><button class="btn-ghost" data-a="skip" data-id="${t.id}">Потом</button></div></div>`).join('') + '</div>';
-    if (cards.length > SLOTS) h += `<p class="muted">Ещё ${cards.length - SLOTS} в очереди — появятся, когда освободится карточка.</p>`;
-  }
-  if (micro.length) {
-    h += `<div class="sec">Мелочи · ${micro.filter((t) => t.st === 'done').length}/${micro.length}</div><div class="card micro">${micro.map((t) => `<div class="row">
-      <input type="checkbox" data-a="done" data-id="${t.id}" ${t.st === 'done' ? 'checked' : ''}><span class="t ${t.st === 'done' ? 'done' : ''}">${esc(t.title)} ${timeTag(t)}</span>${vChip(t, false)}</div>`).join('')}</div>`;
-  }
-  const doneBig = P.filter((t) => isBig(t) && t.st === 'done');
-  if (doneBig.length) h += `<div class="sec">Сделано (${doneBig.length})</div>${doneBig.map((t) => `<div class="row"><span class="t done">${esc(t.title)}</span></div>`).join('')}`;
-  const hidden = S.tasks.filter((t) => t.st === 'open' && !S.picked.includes(t.id));
-  h += `<details><summary>За шторой ${hidden.length} задач — приоткрыть</summary>${hidden.map((t) => `<div class="row dim"><span class="t">${esc(t.title)}</span><span class="muted">${t.some ? 'когда-нибудь' : t.day === null ? 'входящие' : dayLabel(t.day)}</span></div>`).join('')}</details>`;
-  return h + '<p><button class="btn-ghost" data-a="phase" data-id="evening">Вечер: закрыть день →</button></p>';
-}
-function eveningView(P) {
-  const done = S.tasks.filter((t) => t.st === 'done' && t.doneToday), tl = P.filter((t) => t.st === 'open');
-  let h = `<div class="sec">Сделано (${done.length})</div>${done.map((t) => `<div class="row"><span class="t">✓ ${esc(t.title)}</span>${vChip(t, false)}</div>`).join('') || '<p class="muted">Пока ничего — и это тоже честный итог.</p>'}`;
-  h += '<form class="capture" data-f="unplanned"><input name="q" placeholder="Сделал вне плана? Одной строкой" autocomplete="off"><button class="btn-ghost">Добавить в сделанное</button></form>';
-  h += `<div class="sec">Куда ушёл день</div>${dayVectors(done)}`;
-  h += `<div class="sec">Куда ушла неделя</div>${weekRadar(done)}`;
-  h += `<div class="sec">Решить по хвостам дня (${tl.length})</div><p class="muted">Только то, что ты брал в день. Задачи за шторой вечером не трогаем.</p>`;
-  if (!tl.length) h += '<p class="muted">Хвостов нет.</p>';
-  tl.forEach((t) => {
-    const stuck = t.pp >= STUCK;
-    const lock = stuck ? `disabled title="Переносилась ${t.pp} раза — разбей или отпусти"` : '';
-    h += `<div class="row w-${t.w || 'none'}"><span class="t">${esc(t.title)}</span>${ppBadge(t)}
+
+// ---------- evening close / triage dialog ----------
+function dialogView() {
+  const mode = S.dlg;
+  const list = mode === 'close' ? on(0).filter((t) => t.st === 'open') : mode === 'tails' ? tails() : S.tasks.filter((t) => t.st === 'open' && t.pp >= STUCK);
+  const title = { close: 'Закрыть день', tails: 'Хвосты прошлых дней', zombies: 'Застрявшие задачи' }[mode];
+  let h = `<h2 style="margin-top:0">${title}</h2>`;
+  if (mode === 'close') {
+    const done = S.tasks.filter((t) => t.st === 'done' && t.doneDay === 0);
+    h += `<p>Сделано сегодня: <b>${done.length}</b>${done.length ? ' — ' + done.map((t) => esc(t.title)).join(', ') : ''}.</p>
+      <form class="capture" data-f="unplanned" style="margin-bottom:var(--sp-3)"><input name="q" placeholder="Сделал что-то вне плана? Одной строкой" autocomplete="off"><button class="btn-ghost">Добавить</button></form>
+      <div class="sec">Что не успел — реши по каждой (${list.length})</div>`;
+  } else h += '<p class="muted">Каждой задаче — одно решение. Ничего не переносится само.</p>';
+  if (!list.length) h += '<p class="muted">Решать нечего.</p>';
+  list.forEach((t) => {
+    const stuck = t.pp >= STUCK, lock = stuck ? `disabled title="Переносилась уже ${t.pp} раза"` : '';
+    h += `<div class="row"><span class="t">${esc(t.title)}</span>${ppBadge(t)}
       <button class="btn-ghost" data-a="mv" data-id="${t.id}" data-d="1" ${lock}>Завтра</button>
-      <button class="btn-ghost" data-a="mv" data-id="${t.id}" data-d="w" ${lock}>На неделе</button>
+      <button class="btn-ghost" data-a="mv" data-id="${t.id}" data-d="nw" ${lock}>След. неделя</button>
       <button class="btn-ghost" data-a="mv" data-id="${t.id}" data-d="s">Когда-нибудь</button>
-      <button class="${stuck ? 'btn-primary' : 'btn-ghost'}" data-a="split" data-id="${t.id}">Разбить на части</button>
+      <button class="${stuck ? 'btn-primary' : 'btn-ghost'}" data-a="split" data-id="${t.id}">Разбить</button>
       <button class="${stuck ? 'btn-danger-outline' : 'btn-ghost'}" data-a="drop" data-id="${t.id}">Отпустить</button>`;
-    if (stuck) h += `<div class="stuck">Переносилась ${t.pp} раза — похоже, задача слишком большая или уже не нужна. «Завтра» закрыто: разбей или отпусти.</div>`;
-    if (S.ask === t.id) h += `<div class="ask">Какой первый шаг на 15 минут?
-      <input placeholder="например: найти список справок на сайте" autocomplete="off">
-      <button class="btn-primary" data-a="step" data-id="${t.id}">Сделать первым шагом на завтра</button>
-      <button class="btn-ghost" data-a="cancelAsk">Отмена</button></div>`;
+    if (stuck) h += `<div class="stuck">Переносилась ${t.pp} раза — похоже, она слишком большая или уже не нужна. Перенос закрыт: разбей или отпусти.</div>`;
+    if (S.ask === t.id) h += `<div class="ask">Первый шаг на 15 минут: <input placeholder="например: найти список справок на сайте" autocomplete="off">
+      <button class="btn-primary" data-a="step" data-id="${t.id}">На завтра</button></div>`;
     h += '</div>';
   });
-  h += `<div class="sec">Как прошёл день (необязательно)</div><textarea name="note" placeholder="Пара слов — это и есть заметка дня">${esc(S.note)}</textarea>`;
-  return h + `<p><button class="btn-primary" data-a="close" ${tl.length ? 'disabled' : ''}>${tl.length ? `Закрыть день (осталось решить: ${tl.length})` : 'Закрыть день'}</button></p>`;
+  if (mode === 'close') {
+    h += `<div class="sec">Пара слов о дне (необязательно)</div><textarea name="note" placeholder="Это и есть заметка дня">${esc(S.notes[0] || '')}</textarea>
+      <p style="display:flex;gap:var(--sp-2)"><button class="btn-primary" data-a="closeday" ${list.length ? 'disabled' : ''}>${list.length ? `Осталось решить: ${list.length}` : 'Закрыть день'}</button><button class="btn-ghost" data-a="dlg" data-id="">Позже</button></p>`;
+  } else h += '<p><button class="btn-primary" data-a="dlg" data-id="">Готово</button></p>';
+  return `<div class="modal-overlay" data-a="dlgbg"><div class="modal-dialog triage" role="dialog" aria-modal="true" aria-label="${title}">${h}</div></div>`;
 }
-function closedView() {
-  const done = S.tasks.filter((t) => t.st === 'done' && t.doneToday), dropped = S.tasks.filter((t) => t.dropToday).length;
-  let h = `<div class="card"><p><b>День закрыт.</b></p>
-    <p>Сделано <b>${done.length}</b> (утром выбрано ${S.pickedCount}) · перенесено ${S.moved} · отпущено ${dropped}. Все хвосты дня получили решение — голове больше нечего держать.</p>`;
-  if (S.note) h += `<p class="muted">Заметка дня: ${esc(S.note)}</p>`;
-  return h + dayVectors(done) + '<button class="btn-primary" data-a="nextday">Следующий день (демо) →</button></div>';
+
+// ---------- render ----------
+function render() {
+  let h = `<div class="bar">${seg('view', [['week', 'Неделя'], ['month', 'Месяц'], ['review', 'Обзор']], S.focus ? '' : S.view)}
+    <form class="capture" data-f="cap"><input name="q" placeholder="Запиши что угодно: «позвонить маме завтра в 18»" autocomplete="off" aria-label="Быстрая запись"><button class="btn-primary">Записать</button></form></div><div class="hint">Без даты — во Входящие</div>`;
+  if (S.msg) h += `<div class="alert-banner info" style="margin-bottom:var(--sp-2)">${esc(S.msg)}</div>`;
+  h += S.view === 'week' ? weekView() : S.view === 'month' ? monthView() : reviewView();
+  if (S.dlg) h += dialogView();
+  $('#app').innerHTML = h;
+  $('[data-a=focus]').className = S.focus ? 'btn-primary' : 'btn-ghost';
+  save();
 }
 
 // ---------- actions ----------
-function unpick(id) { S.picked = S.picked.filter((x) => x !== id); if (S.main === id) S.main = null; }
-function moveTail(t, d) {
-  if (d !== 's' && t.pp >= STUCK) return; // postponing a stuck task is blocked, see eveningView
-  if (d === 's') { t.some = true; t.day = null; } else { t.day = d === 'w' ? 3 : 1; t.pp++; }
-  S.moved++; S.ask = null; unpick(t.id);
-}
 const cycle = (arr, x) => arr[(arr.indexOf(x) + 1) % arr.length];
+function postpone(t, day) { // moving an open task off a current/past day to the future counts as a postpone
+  const counts = t.day !== null && t.day <= 0 && !t.some && day > 0;
+  if (counts && t.pp >= STUCK) { S.msg = `«${t.title}» переносилась ${t.pp} раза — перенос закрыт. Разбей или отпусти: «Закрыть день» или Обзор.`; return false; }
+  if (counts) t.pp++;
+  Object.assign(t, { day, some: false });
+  return true;
+}
+function moveTo(t, where, beforeId) {
+  if (where === 'inbox') Object.assign(t, { day: null, some: false });
+  else if (where === 'some') Object.assign(t, { day: null, some: true });
+  else if (!postpone(t, Number(where))) return;
+  S.tasks.splice(S.tasks.indexOf(t), 1);
+  const b = beforeId ? S.tasks.findIndex((x) => x.id === beforeId) : -1;
+  if (b >= 0) S.tasks.splice(b, 0, t); else S.tasks.push(t);
+}
+// self-check: a stuck task cannot be dragged to the future; a fresh one gets ↻1
+(() => {
+  const keep = S, a = { id: 1, day: 0, some: false, pp: 3 }, b = { id: 2, day: 0, some: false, pp: 0 };
+  S = { tasks: [a, b], msg: '' };
+  moveTo(a, '2'); moveTo(b, '1');
+  console.assert(a.day === 0 && a.pp === 3 && S.msg && b.day === 1 && b.pp === 1, 'postpone rule');
+  S = keep;
+})();
 
 document.addEventListener('click', (e) => {
   const el = e.target.closest('[data-a]');
   if (!el) return;
   const a = el.dataset.a, raw = el.dataset.id, id = Number(raw), t = find(id);
+  if (a === 'dlgbg' && e.target !== el) return; // click inside the dialog body, not on the backdrop
+  S.msg = '';
   switch (a) {
     case 'theme': setTheme(document.documentElement.dataset.theme !== 'dark-slate'); return;
     case 'reset': S = init(); break;
-    case 'phase':
-      if (raw === 'day' && S.phase === 'morning') {
-        if (S.main) S.picked = [S.main, ...S.picked.filter((x) => x !== S.main)];
-        S.pickedCount = S.picked.length;
-      }
-      S.phase = raw; break;
-    case 'pick': if (S.picked.includes(id)) unpick(id); else S.picked.push(id); break;
-    case 'main': S.main = S.main === id ? null : id; if (!S.picked.includes(id)) S.picked.push(id); break;
-    case 'done': t.st = t.st === 'done' ? 'open' : 'done'; t.doneToday = t.st === 'done'; break;
-    case 'skip': S.picked = S.picked.filter((x) => x !== id).concat(id); break;
-    case 'mv': moveTail(t, el.dataset.d); break;
+    case 'view': S.view = raw; S.focus = false; break;
+    case 'rev': S.rev = raw; break;
+    case 'focus': S.focus = !S.focus; S.view = 'week'; S.weekOff = 0; break;
+    case 'wk': S.weekOff = id ? S.weekOff + id : 0; break;
+    case 'mo': S.monthOff = id ? S.monthOff + id : 0; break;
+    case 'goto': S.view = 'week'; S.weekOff = Math.floor((id + monIdx) / 7); break;
+    case 'done':
+      if (t.st === 'done') Object.assign(t, { st: 'open', doneDay: null });
+      else Object.assign(t, { st: 'done', doneDay: 0 });
+      break;
+    case 'cyclew': t.w = cycle([null, 'S', 'M', 'H'], t.w); break;
+    case 'cyclev': t.v = cycle(Object.keys(VEC), t.v); break;
+    case 'dlg': S.dlg = raw || null; S.ask = null; break;
+    case 'dlgbg': S.dlg = null; S.ask = null; break;
+    case 'mv':
+      if (el.dataset.d === 's') Object.assign(t, { some: true, day: null });
+      else postpone(t, el.dataset.d === 'nw' ? 7 - monIdx : 1);
+      S.ask = null; break;
     case 'split': S.ask = S.ask === id ? null : id; break;
-    case 'cancelAsk': S.ask = null; break;
-    case 'drop': t.st = 'dropped'; t.dropToday = true; S.ask = null; unpick(id); break;
+    case 'drop': Object.assign(t, { st: 'dropped', dropDay: 0 }); S.ask = null; break;
     case 'step': {
       const inp = el.closest('.ask').querySelector('input'), v = inp.value.trim();
       if (!v) { inp.focus(); return; }
       S.tasks.push(newTask(v, 1, { w: 'S', v: t.v }));
-      t.some = true; t.day = null; S.ask = null; S.moved++; unpick(id); break;
+      Object.assign(t, { some: true, day: null }); S.ask = null; break;
     }
-    case 'close': S.phase = 'closed'; break;
-    case 'nextday':
-      S.tasks.forEach((x) => { if (x.day !== null) x.day -= 1; x.doneToday = false; x.dropToday = false; });
-      Object.assign(S, { phase: 'morning', picked: [], main: null, note: '', ask: null, moved: 0, pickedCount: 0 }); break;
-    case 'cyclew': t.w = cycle([null, 'S', 'M', 'H'], t.w); break;
-    case 'cyclev': t.v = cycle(Object.keys(VEC), t.v); break;
+    case 'closeday': S.closed = true; S.dlg = null; break;
+    case 'nextday': {
+      S.tasks.forEach((x) => ['day', 'doneDay', 'dropDay'].forEach((k) => { if (x[k] !== null) x[k] -= 1; }));
+      const n = {}; Object.keys(S.notes).forEach((k) => { n[k - 1] = S.notes[k]; });
+      Object.assign(S, { notes: n, closed: false, weekOff: 0, monthOff: 0, dlg: null, ask: null }); break;
+    }
     default: return;
   }
   render();
@@ -318,22 +416,41 @@ document.addEventListener('click', (e) => {
 
 document.addEventListener('submit', (e) => {
   e.preventDefault();
-  const f = e.target, kind = f.dataset.f, p = parse(String(new FormData(f).get('q') || ''));
+  const f = e.target, kind = f.dataset.f, where = f.dataset.where, p = parse(String(new FormData(f).get('q') || ''));
   if (!p.title) return;
-  const t = newTask(p.title, p.day, { time: p.time });
-  if (kind === 'unplanned') Object.assign(t, { day: 0, st: 'done', doneToday: true });
+  let t;
+  if (kind === 'add') t = newTask(p.title, where === 'inbox' || where === 'some' ? null : Number(where), { time: p.time, some: where === 'some' });
+  else if (kind === 'unplanned') t = newTask(p.title, 0, { st: 'done', doneDay: 0 });
+  else t = newTask(p.title, p.day, { time: p.time });
   S.tasks.push(t);
   render();
-  const inp = document.querySelector(`form[data-f="${kind}"] input[name=q]`);
+  const inp = document.querySelector(`form[data-f="${kind}"]${where ? `[data-where="${where}"]` : ''} input[name=q]`);
   if (inp) inp.focus();
 });
 
 document.addEventListener('input', (e) => {
   const el = e.target;
-  if (el.name === 'note') { S.note = el.value; save(); return; }
+  if (el.name === 'note') { S.notes[0] = el.value; save(); return; }
   const f = el.closest('form');
-  if (el.name === 'q' && f && f.dataset.f === 'cap') f.nextElementSibling.textContent = hint(parse(el.value));
+  if (el.name === 'q' && f && f.dataset.f === 'cap') $('.hint').textContent = hint(parse(el.value));
 });
+
+// drag & drop between days, Inbox and Someday (mouse only in this prototype)
+let dragId = null;
+const unhot = () => document.querySelectorAll('.hot').forEach((x) => x.classList.remove('hot'));
+document.addEventListener('dragstart', (e) => { const r = e.target.closest && e.target.closest('.task[draggable]'); if (r) { dragId = Number(r.dataset.id); e.dataTransfer.setData('text/plain', String(dragId)); } });
+document.addEventListener('dragover', (e) => { const z = e.target.closest && e.target.closest('[data-drop]'); if (z && dragId) { e.preventDefault(); unhot(); z.classList.add('hot'); } });
+document.addEventListener('drop', (e) => {
+  const z = e.target.closest && e.target.closest('[data-drop]'), t = find(dragId);
+  if (!z || !t) return;
+  e.preventDefault();
+  const before = e.target.closest('.task');
+  S.msg = '';
+  moveTo(t, z.dataset.drop, before && Number(before.dataset.id) !== t.id ? Number(before.dataset.id) : null);
+  dragId = null; render();
+});
+document.addEventListener('dragend', () => { dragId = null; unhot(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && S.dlg) { S.dlg = null; S.ask = null; render(); } });
 
 function setTheme(dark) {
   document.documentElement.dataset.theme = dark ? 'dark-slate' : 'light-slate';
