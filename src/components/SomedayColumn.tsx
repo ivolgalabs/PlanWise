@@ -1,15 +1,14 @@
 import { useState } from "react";
-import type { ReactNode } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import type { Task } from "../api";
 import { api } from "../api";
 import { COLORS, accentTint } from "../theme";
 import { TaskCard } from "./TaskCard";
-import { somedayZoneId, planGroupZoneId } from "../drag";
+import { somedayZoneId } from "../drag";
 import { useStore } from "../store";
-import { sortSomedayTasks, toEpochDay } from "../date";
+import { sortSomedayTasks } from "../date";
 import { showToast } from "../toast";
-import { useI18n, type TKey } from "../i18n";
+import { useI18n } from "../i18n";
 
 interface Props {
   tasks: Task[];
@@ -19,48 +18,17 @@ interface Props {
   stretch?: boolean;
 }
 
-/** Группы правой панели: свежее без срока — «Входящие», истёкший срок — «Просроченные»,
- *  любой будущий срок — «Скоро» (сам срок виден чипом на карточке), иначе «Когда-нибудь». */
-type GroupKey = "inbox" | "overdue" | "soon" | "someday";
-
-/** «Входящие»: записано без срока и ещё свежее — разобрать (в день, в неделю
- *  или оставить). Старше — уходит в «Когда-нибудь».
- *  ponytail: признак — возраст (createdAt), без нового поля; задача, перетянутая
- *  в «Когда-нибудь» в первую неделю, до её конца остаётся во «Входящих». */
-const INBOX_DAYS = 7;
-/** Ключи словаря, а не готовые строки: подписи собираются на каждом рендере,
- *  поэтому смена языка их сразу подхватывает. */
-const GROUPS: { key: GroupKey; label: TKey; placeholder?: TKey }[] = [
-  { key: "inbox", label: "inbox.title", placeholder: "inbox.add" },
-  { key: "overdue", label: "someday.overdue" },
-  { key: "soon", label: "someday.soon", placeholder: "someday.addSoon" },
-  { key: "someday", label: "common.someday", placeholder: "someday.addSomeday" },
-];
-
-/** К какой группе относится задача по её мягкому сроку. */
-function bucket(t: Task, today: number): GroupKey {
-  const d = t.dueEpochDay ?? null;
-  if (d == null) return Date.now() - t.createdAt < INBOX_DAYS * 86_400_000 ? "inbox" : "someday";
-  if (d < today) return "overdue";
-  return "soon";
-}
-
-/** Секция «Когда-нибудь» внутри правой панели: сворачиваемые группы
- *  (Входящие / Просроченные / Скоро / Когда-нибудь). Принимает задачи
- *  drag-ом; перенос в день — обычным drag на колонку дня. */
+/** «Когда-нибудь» в правой панели: все задачи без дня одним списком. Мягкий срок
+ *  (если задан) виден чипом на карточке и поднимает задачу выше (sortSomedayTasks).
+ *  Принимает задачи drag-ом; перенос в день — обычным drag на колонку дня. */
 export function SomedayColumn({ tasks, onChange, stretch = false }: Props) {
   const { t } = useI18n();
   const { setNodeRef, isOver } = useDroppable({ id: somedayZoneId });
   const sortMode = useStore((s) => s.sortMode);
-  // Свёрнутые группы: явный выбор пользователя, иначе пустая группа свёрнута
-  // в одну строку (раскрытые пустые группы выглядели недоделанными).
-  const [collapsed, setCollapsed] = useState<Partial<Record<GroupKey, boolean>>>({});
-  const today = toEpochDay(new Date());
-  const sorted = sortSomedayTasks(tasks, sortMode);
-  const groups = GROUPS.map((g) => ({
-    ...g,
-    items: sorted.filter((t) => bucket(t, today) === g.key),
-  })).filter((g) => g.key !== "overdue" || g.items.length > 0);
+  // Явный выбор пользователя; пока его нет, пустой список свёрнут в одну строку.
+  const [collapsedByUser, setCollapsedByUser] = useState<boolean | null>(null);
+  const items = sortSomedayTasks(tasks, sortMode);
+  const collapsed = collapsedByUser ?? items.length === 0;
 
   return (
     <div
@@ -69,9 +37,6 @@ export function SomedayColumn({ tasks, onChange, stretch = false }: Props) {
         display: "flex",
         flexDirection: "column",
         flex: "1 1 auto",
-        // Скроллится весь столбец, а не отдельные группы: раньше развёрнутые
-        // группы (flex: 1 1 0) при нехватке высоты сжимались в 0 и их
-        // заголовки наслаивались друг на друга.
         maxHeight: stretch ? "none" : "45%",
         minHeight: 0,
         overflowY: "auto",
@@ -79,132 +44,63 @@ export function SomedayColumn({ tasks, onChange, stretch = false }: Props) {
         background: isOver ? accentTint(0.08) : undefined,
       }}
     >
-      {groups.map((g) => {
-        const isCollapsed = collapsed[g.key] ?? g.items.length === 0;
-        return (
-          <PlanGroup key={g.key} groupKey={g.key}>
-            <button
-              type="button"
-              onClick={() =>
-                setCollapsed((c) => ({ ...c, [g.key]: !isCollapsed }))
-              }
-              title={isCollapsed ? t("common.expand") : t("common.collapse")}
-              style={{
-                background: "transparent",
-                border: "none",
-                cursor: "pointer",
-                textAlign: "left",
-                // Верхний отступ меньше: секция сидит ближе к календарю.
-                padding: "var(--sp-1) var(--sp-3)",
-                fontSize: "var(--fs-sm)",
-                fontWeight: 700,
-                color: g.key === "overdue" ? "var(--danger, #e53935)" : "var(--accent-text)",
-                display: "flex",
-                alignItems: "center",
-                gap: "var(--sp-2)",
-                width: "100%",
-              }}
-            >
-              <span
-                style={{
-                  fontSize: "var(--fs-xs)",
-                  width: 12,
-                  flexShrink: 0,
-                  display: "inline-block",
-                  transform: isCollapsed ? "rotate(-90deg)" : "none",
-                  transition: "transform 120ms",
-                }}
-              >
-                ▾
-              </span>
-              {t(g.label)}
-              <span style={{ fontSize: "var(--fs-2xs)", color: g.key === "overdue" ? "var(--danger, #e53935)" : COLORS.muted, fontWeight: 400 }}>
-                {g.items.length}
-              </span>
-            </button>
-            {!isCollapsed && (
-              <>
-                <div style={{ display: "flex", flexDirection: "column", padding: 4 }}>
-                  {g.items.map((t) => (
-                    <TaskCard key={t.id} task={t} onChange={onChange} showTime={false} />
-                  ))}
-                </div>
-                {/* Форма: «Далее/Готово» на мобильной клавиатуре добавляет
-                    задачу сразу в эту группу (с соответствующим сроком). */}
-                {g.placeholder && (
-                  <GroupAdd
-                    placeholder={t(g.placeholder)}
-                    key={g.key}
-                    dueEpochDay={g.key === "soon" ? today + 7 : null}
-                    parked={g.key === "someday"}
-                    onChange={onChange}
-                  />
-                )}
-              </>
-            )}
-          </PlanGroup>
-        );
-      })}
+      <button
+        type="button"
+        onClick={() => setCollapsedByUser(!collapsed)}
+        title={collapsed ? t("common.expand") : t("common.collapse")}
+        style={{
+          background: "transparent",
+          border: "none",
+          cursor: "pointer",
+          textAlign: "left",
+          padding: "var(--sp-1) var(--sp-3)",
+          fontSize: "var(--fs-sm)",
+          fontWeight: 700,
+          color: "var(--accent-text)",
+          display: "flex",
+          alignItems: "center",
+          gap: "var(--sp-2)",
+          width: "100%",
+        }}
+      >
+        <span
+          style={{
+            fontSize: "var(--fs-xs)",
+            width: 12,
+            flexShrink: 0,
+            display: "inline-block",
+            transform: collapsed ? "rotate(-90deg)" : "none",
+            transition: "transform 120ms",
+          }}
+        >
+          ▾
+        </span>
+        {t("common.someday")}
+        <span style={{ fontSize: "var(--fs-2xs)", color: COLORS.muted, fontWeight: 400 }}>{items.length}</span>
+      </button>
+      {!collapsed && (
+        <>
+          <div style={{ display: "flex", flexDirection: "column", padding: 4 }}>
+            {items.map((x) => (
+              <TaskCard key={x.id} task={x} onChange={onChange} showTime={false} />
+            ))}
+          </div>
+          <SomedayAdd onChange={onChange} />
+        </>
+      )}
     </div>
   );
 }
 
-/** Обёртка группы: droppable-зона для переноса задачи именно в эту группу.
- *  Внешняя колонка тоже droppable («когда-нибудь»), но вложенная зона группы
- *  выигрывает у неё при наведении (pointerWithin — сначала точная зона под
- *  курсором), поэтому сброс на «неделю/месяц» задаёт срок, а не снимает его. */
-function PlanGroup({ groupKey, children }: { groupKey: GroupKey; children: ReactNode }) {
-  // «Просроченные» и «Входящие» — не цели переноса: сброс туда уходит во внешнюю колонку.
-  const zone = groupKey === "overdue" || groupKey === "inbox" ? null : groupKey;
-  const { setNodeRef, isOver } = useDroppable({
-    id: zone ? planGroupZoneId(zone) : `pg-disabled:${groupKey}`,
-    disabled: !zone,
-  });
-  return (
-    <div
-      ref={setNodeRef}
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        minHeight: 0,
-        // Группа всегда по высоте контента (заголовок + задачи/поля),
-        // чтобы заголовки не налезали друг на друга. Колонка скроллится.
-        flex: "0 0 auto",
-        background: isOver ? accentTint(0.12) : undefined,
-      }}
-    >
-      {children}
-    </div>
-  );
-}
-
-/** Строка добавления задачи в группу; создаёт «Когда-нибудь»-задачу с
- *  заданным мягким сроком (null для «Когда-нибудь»). */
-function GroupAdd({
-  placeholder,
-  dueEpochDay,
-  parked,
-  onChange,
-}: {
-  placeholder: string;
-  dueEpochDay: number | null;
-  /** Прямо в «Когда-нибудь»: задача сразу «старая», чтобы не попасть во «Входящие». */
-  parked: boolean;
-  onChange: () => void;
-}) {
+/** Строка добавления: создаёт задачу «Когда-нибудь» без срока. */
+function SomedayAdd({ onChange }: { onChange: () => void }) {
   const { t } = useI18n();
   const [value, setValue] = useState("");
   const add = async () => {
     const title = value.trim();
     if (!title) return;
     try {
-      await api.upsertTask({
-        title,
-        date: 0,
-        someday: true,
-        dueEpochDay,
-        createdAt: parked ? Date.now() - INBOX_DAYS * 86_400_000 : undefined,
-      });
+      await api.upsertTask({ title, date: 0, someday: true });
       setValue("");
     } catch (e) {
       showToast(t("err.saveTask", { error: String(e) }));
@@ -223,7 +119,7 @@ function GroupAdd({
         value={value}
         onChange={(e) => setValue(e.target.value)}
         enterKeyHint="done"
-        placeholder={placeholder}
+        placeholder={t("someday.addSomeday")}
         style={{
           flex: 1,
           minWidth: 0,

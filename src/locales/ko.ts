@@ -225,14 +225,9 @@ const ko: Dict = {
   "weekShift.title": "다음 주로 옮기기(+7일)",
   "weekShift.label": "다음 주 ▶",
 
-  "someday.overdue": "기한 지남",
-  "someday.soon": "곧",
   "someday.week": "일주일 이내",
   "someday.month": "한 달 이내",
-  "someday.addSoon": "+ 곧",
   "someday.addSomeday": "+ 언젠가",
-  "inbox.title": "수신함",
-  "inbox.add": "+ 정리 전",
   "someday.empty": "비어 있습니다. 여기로 끌거나 아래에 입력하세요.",
   "someday.addAria": "작업 추가",
 

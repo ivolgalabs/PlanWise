@@ -321,14 +321,9 @@ const ru = {
   "weekShift.label": "следующая неделя ▶",
 
   // ── «Когда-нибудь» ───────────────────────────────────────────────────
-  "someday.overdue": "Просроченные",
-  "someday.soon": "Скоро",
   "someday.week": "В течение недели",
   "someday.month": "В течение месяца",
-  "someday.addSoon": "+ скоро",
   "someday.addSomeday": "+ когда-нибудь",
-  "inbox.title": "Входящие",
-  "inbox.add": "+ разобрать позже",
   "someday.empty": "Пусто. Перетащите сюда или напишите ниже.",
   "someday.addAria": "Добавить задачу",
 
@@ -764,14 +759,9 @@ const en: Dict = {
   "weekShift.title": "Move to next week (+7 days)",
   "weekShift.label": "next week ▶",
 
-  "someday.overdue": "Overdue",
-  "someday.soon": "Soon",
   "someday.week": "Within a week",
   "someday.month": "Within a month",
-  "someday.addSoon": "+ soon",
   "someday.addSomeday": "+ someday",
-  "inbox.title": "Inbox",
-  "inbox.add": "+ to sort",
   "someday.empty": "Empty. Drag here or type below.",
   "someday.addAria": "Add task",
 

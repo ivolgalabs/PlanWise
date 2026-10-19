@@ -225,14 +225,9 @@ const ja: Dict = {
   "weekShift.title": "次の週へ移動（+7 日）",
   "weekShift.label": "次の週 ▶",
 
-  "someday.overdue": "期限切れ",
-  "someday.soon": "もうすぐ",
   "someday.week": "1 週間以内",
   "someday.month": "1 か月以内",
-  "someday.addSoon": "+ もうすぐ",
   "someday.addSomeday": "+ いつか",
-  "inbox.title": "受信トレイ",
-  "inbox.add": "+ 未整理",
   "someday.empty": "空です。ここへドラッグするか下に入力してください。",
   "someday.addAria": "タスクを追加",
 

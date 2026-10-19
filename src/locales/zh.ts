@@ -225,14 +225,9 @@ const zh: Dict = {
   "weekShift.title": "移到下一周（+7 天）",
   "weekShift.label": "下一周 ▶",
 
-  "someday.overdue": "已逾期",
-  "someday.soon": "近期",
   "someday.week": "一周内",
   "someday.month": "一个月内",
-  "someday.addSoon": "+ 近期",
   "someday.addSomeday": "+ 某天",
-  "inbox.title": "收件箱",
-  "inbox.add": "+ 待整理",
   "someday.empty": "空。拖到这里或在下方输入。",
   "someday.addAria": "添加任务",
 
