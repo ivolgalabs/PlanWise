@@ -34,13 +34,12 @@ export interface VisibilityState {
   navArrows: boolean; search: boolean; datePicker: boolean;
   miniCalendar: boolean; taskTime: boolean; subtasks: boolean; notes: boolean;
   someday: boolean;
- archiveBanner: boolean;
 }
 
 /** Видимость по умолчанию — все элементы показаны. */
 const DEFAULT_VISIBILITY: VisibilityState = {
   navArrows: true, search: true, datePicker: true, miniCalendar: true,
-  taskTime: true, subtasks: true, notes: true, someday: true, archiveBanner: true,
+  taskTime: true, subtasks: true, notes: true, someday: true,
 };
 export { DEFAULT_VISIBILITY };
 
@@ -76,8 +75,6 @@ interface PlannerState {
   uiScale: number;
   /** Множитель размера шрифта 0.8-1.6 (меняет --fs-* токены через html font-size). */
   fontScale: number;
-  /** Авто-архив просроченных невыполненных задач (вкл/выкл). */
-  archiveEnabled: boolean;
   /** Категории (цвет-сеты) из БД — грузятся при старте. */
   colorSets: ColorSet[];
   /** Видимость элементов интерфейса — можно прятать в настройках. */
@@ -111,10 +108,6 @@ interface PlannerState {
   /** Запрещать создание задачи на время, занятое другой задачей
    *  (настройка хранится в БД, см. get_settings/set_settings). */
   preventOverlaps: boolean;
-  /** Авто-выполнение: если время задачи уже прошло (дата в прошлом или
-   *  сегодня и время ≤ текущего) — задача автоматически выполнена;
-   *  время в будущем — снимает выполнение. Применяется при установке времени. */
-  autoDonePastTime: boolean;
   /** Автосинхронизация: включена, папка (абсолютный путь, десктоп),
    *  момент последней синхронизации (exportedAt последнего принятого файла). */
   autoSyncEnabled: boolean;
@@ -138,7 +131,6 @@ interface PlannerState {
   setWeekVertical: (v: boolean) => void;
   setUiScale: (s: number) => void;
   setFontScale: (s: number) => void;
-  setArchiveEnabled: (v: boolean) => void;
   setVisibility: (k: keyof VisibilityState, v: boolean) => void;
   setPanelGap: (v: number) => void;
   setCalOpen: (v: boolean) => void;
@@ -155,7 +147,6 @@ interface PlannerState {
   setTaskPatterns: (p: TaskPattern[]) => void;
   setSortMode: (m: SortMode) => void;
   setPreventOverlaps: (v: boolean) => void;
-  setAutoDonePastTime: (v: boolean) => void;
   setAutoSyncEnabled: (v: boolean) => void;
   setAutoSyncPath: (p: string) => void;
   setAutoSyncLastAt: (t: number) => void;
@@ -200,7 +191,6 @@ export const useStore = create<PlannerState>()(
       weekVertical: true,
       uiScale: 1.0,
       fontScale: 1.0,
-      archiveEnabled: false,
       archivedTasks: [],
       colorSets: [],
       visibility: DEFAULT_VISIBILITY,
@@ -216,7 +206,6 @@ export const useStore = create<PlannerState>()(
       taskPatterns: [],
       sortMode: "time",
       preventOverlaps: true,
-      autoDonePastTime: false,
       autoSyncEnabled: false,
       autoSyncPath: "",
       autoSyncLastAt: 0,
@@ -238,7 +227,6 @@ export const useStore = create<PlannerState>()(
       setWeekVertical: (v) => set({ weekVertical: v }),
       setUiScale: (s) => set({ uiScale: s }),
       setFontScale: (s) => set({ fontScale: s }),
-      setArchiveEnabled: (v) => set({ archiveEnabled: v }),
       setVisibility: (k, v) =>
         set((s) => ({ visibility: { ...s.visibility, [k]: v } })),
       setPanelGap: (v) => set({ panelGap: v }),
@@ -263,7 +251,6 @@ export const useStore = create<PlannerState>()(
       setTaskPatterns: (p) => set({ taskPatterns: p }),
       setSortMode: (m) => set({ sortMode: m }),
       setPreventOverlaps: (v) => set({ preventOverlaps: v }),
-      setAutoDonePastTime: (v) => set({ autoDonePastTime: v }),
       setAutoSyncEnabled: (v) => set({ autoSyncEnabled: v }),
       setAutoSyncPath: (p) => set({ autoSyncPath: p }),
       setAutoSyncLastAt: (t) => set({ autoSyncLastAt: t }),
@@ -273,16 +260,8 @@ export const useStore = create<PlannerState>()(
       // version+migrate: без версии любое переименование поля в будущем молча
       // сбрасывало бы настройки у старых установок (zustand считает всё v0).
       version: 2,
-      // v2 (этап 1): авто-архив и авто-«сделано» выключены и у старых установок —
-      // хвосты остаются на своих днях, галочка значит «я сделал».
-      migrate: (persisted, version) => {
-        const p = persisted as PlannerState;
-        if (version < 2) {
-          p.archiveEnabled = false;
-          p.autoDonePastTime = false;
-        }
-        return p;
-      },
+      // v2 (этап 1): авто-архив и авто-«сделано» убраны совсем — старые ключи
+      // в сохранённых настройках просто игнорируются.
       // Сохраняем только настройки UI — без tasks и selectedDate.
       partialize: (s) => ({
         view: s.view,
@@ -297,7 +276,6 @@ export const useStore = create<PlannerState>()(
         weekVertical: s.weekVertical,
         uiScale: s.uiScale,
         fontScale: s.fontScale,
-        archiveEnabled: s.archiveEnabled,
         visibility: s.visibility,
         panelGap: s.panelGap,
         calOpen: s.calOpen,
@@ -308,7 +286,6 @@ export const useStore = create<PlannerState>()(
         timePresets: s.timePresets,
         taskPatterns: s.taskPatterns,
         sortMode: s.sortMode,
-        autoDonePastTime: s.autoDonePastTime,
         autoSyncEnabled: s.autoSyncEnabled,
         autoSyncPath: s.autoSyncPath,
         autoSyncLastAt: s.autoSyncLastAt,

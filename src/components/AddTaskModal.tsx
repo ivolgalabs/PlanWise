@@ -207,10 +207,6 @@ export function TaskFormFields({
       .finally(() => setAttLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initial?.id]);
-  // Авто-выполнение: время в прошлом → задача выполнена; в будущем —
-  // выполнение снимается (настройка «авто-выполнение»). Применяется только
-  // если время реально изменилось в карточке.
-  const { autoDonePastTime } = useStore();
   const { colorSets } = useStore();
   const sets = colorSets.filter((s) => s.id !== "cs-none");
 
@@ -258,33 +254,7 @@ export function TaskFormFields({
           setNewSub("");
           useStore.getState().bumpSubtasks();
         }
-        // Авто-выполнение при смене времени (настройка): прошлое → выполнена,
-        // будущее → выполнение снимается. Только если время изменилось и у
-        // задачи ЕСТЬ дата — «Когда-нибудь» (date=0 → 1970) не «прошлая»:
-        // иначе установка времени помечала бы её выполненной.
-        // Рассчитываем итоговый статус выполнения ДО сохранения, избегая дублирующего IPC-вызова.
-        let finalDone = initial.isDone;
-        const timeChanged = initial.timeMinutes !== time;
-        if (
-          autoDonePastTime &&
-          timeChanged &&
-          time != null &&
-          !initial.someday &&
-          !initial.archived
-        ) {
-          const now = new Date();
-          const today = toEpochDay(now);
-          const nowMin = now.getHours() * 60 + now.getMinutes();
-          // Считаем по КОНЦУ задачи: идущая прямо сейчас (10:00–10:30 в 10:05)
-          // не должна помечаться выполненной в минуту старта.
-          const end = time + (initial.durationMinutes ?? 0);
-          const past = toEpochDay(day) < today || (toEpochDay(day) === today && end <= nowMin);
-          const future = toEpochDay(day) > today || (toEpochDay(day) === today && end > nowMin);
-          if (past || future) {
-            finalDone = past;
-          }
-        }
-        await api.upsertTask({ ...initial, ...payload, repeat, isDone: finalDone });
+        await api.upsertTask({ ...initial, ...payload, repeat });
         onChange?.();
       } else {
         // Новая задача + подзадачи + файлы. Сначала создаём задачу (id нужен

@@ -136,8 +136,6 @@ const ru = {
   "app.loadError":
     "Не удалось загрузить задачи. Проверьте доступ к данным приложения.",
   "app.hide": "Скрыть",
-  "app.archiveBanner":
-    "Перенесено в архив просроченных задач: {n} — можно восстановить из раздела «Архив»",
   "app.loading": "Загрузка…",
   "app.resizeHandle": "Тяните, чтобы изменить ширину",
   "app.fatalTitle": "Что-то пошло не так",
@@ -424,13 +422,9 @@ const ru = {
   "settings.asList": "Списком",
   "settings.asGrid": "Сеткой",
   "settings.tasksSection": "Задачи",
-  "settings.autoArchive": "Авто-архив просроченных задач",
   "settings.preventOverlaps": "Запрещать задачи на одно время",
   "settings.preventOverlapsHint":
     "Не даёт поставить задачу на время, занятое другой (можно добавить как подзадачу). Наложения у старых задач подсвечиваются красным.",
-  "settings.autoDone": "Прошедшее время = задача выполнена",
-  "settings.autoDoneHint":
-    "При установке времени: если оно уже прошло — задача автоматически выполненная; время в будущем — снимает выполнение.",
   "settings.sortMode": "Сортировка задач в дне/неделе/месяце:",
   "settings.sortTime": "По времени",
   "settings.sortManual": "Вручную",
@@ -479,7 +473,6 @@ const ru = {
   "settings.visSubtasks": "Подзадачи",
   "settings.visNotes": "Заметки",
   "settings.visSomeday": "«Позже»",
-  "settings.visArchiveBanner": "Баннер «Архивировано задач»",
   "settings.rightPanel": "Панель справа",
   "settings.rightPanelHint": "Расстояние между календарём и «Позже»",
   "settings.resetInterface": "Сбросить настройки интерфейса",
@@ -594,8 +587,6 @@ const en: Dict = {
 
   "app.loadError": "Failed to load tasks. Check access to the app data.",
   "app.hide": "Hide",
-  "app.archiveBanner":
-    "Overdue tasks moved to the archive: {n} — you can restore them from “Archive”",
   "app.loading": "Loading…",
   "app.resizeHandle": "Drag to resize",
   "app.fatalTitle": "Something went wrong",
@@ -863,13 +854,9 @@ const en: Dict = {
   "settings.asList": "List",
   "settings.asGrid": "Grid",
   "settings.tasksSection": "Tasks",
-  "settings.autoArchive": "Auto-archive overdue tasks",
   "settings.preventOverlaps": "Forbid tasks at the same time",
   "settings.preventOverlapsHint":
     "Prevents scheduling a task at a time taken by another one (you can add it as a subtask). Overlaps of older tasks are highlighted in red.",
-  "settings.autoDone": "Past time = task is done",
-  "settings.autoDoneHint":
-    "When setting the time: if it has already passed, the task is marked done automatically; a future time clears the done mark.",
   "settings.sortMode": "Task sorting in day/week/month:",
   "settings.sortTime": "By time",
   "settings.sortManual": "Manual",
@@ -916,7 +903,6 @@ const en: Dict = {
   "settings.visSubtasks": "Subtasks",
   "settings.visNotes": "Notes",
   "settings.visSomeday": "“Later”",
-  "settings.visArchiveBanner": "“Tasks archived” banner",
   "settings.rightPanel": "Right panel",
   "settings.rightPanelHint": "Distance between the calendar and “Later”",
   "settings.resetInterface": "Reset interface settings",

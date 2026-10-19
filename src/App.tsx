@@ -5,7 +5,7 @@ import { useStore } from "./store";
 import { useShallow } from "zustand/react/shallow";
 import { resolveActiveTheme } from "./store";
 import type { ViewKind } from "./store";
-import { COLORS, applyTheme, watchSystemTheme, accentTint, applyCustomSlot } from "./theme";
+import { COLORS, applyTheme, watchSystemTheme, applyCustomSlot } from "./theme";
 import { useMediaQuery } from "./useMediaQuery";
 import { TopBar } from "./components/TopBar";
 import { SettingsPanel } from "./components/SettingsPanel";
@@ -99,7 +99,6 @@ function App() {
     customDark,
     uiScale,
     fontScale,
-    archiveEnabled,
     visibility,
     weekVertical,
     setWeekVertical,
@@ -130,7 +129,6 @@ function App() {
       customDark: s.customDark,
       uiScale: s.uiScale,
       fontScale: s.fontScale,
-      archiveEnabled: s.archiveEnabled,
       visibility: s.visibility,
       weekVertical: s.weekVertical,
       setWeekVertical: s.setWeekVertical,
@@ -171,11 +169,6 @@ function App() {
   // панель в неделе пропадала; 1000 — панель видна, а при 1140+ вместе
   // с сеткой недели.
   const calNarrow = useMediaQuery(`(max-width: ${view === "day" ? 700 : 1000}px)`);
-  const [archiveCount, setArchiveCount] = useState(0);
-  // Флаг «архив уже выполнен за маунт»: в dev React.StrictMode монтирует
-  // компонент дважды и эффект вызывается два раза — второй вызов архивирует
-  // 0 задач и затирает счётчик из первого (баннер не появляется).
-  const archiveRan = useRef(false);
   // Поиск: полоса поиска открыта, текст, фильтр по цвету-сету,
   // период, статус и сортировка результатов.
   const [searchOpen, setSearchOpen] = useState(false);
@@ -355,24 +348,6 @@ function App() {
       )
       .catch(() => {});
   }, [notifyDaySummary, notifyReminders]);
-
-  // Авто-архив просроченных невыполненных задач (если включён в настройках).
-  // Выполняется один раз за маунт — см. archiveRan выше.
-  useEffect(() => {
-    if (!archiveEnabled || archiveRan.current) return;
-    archiveRan.current = true;
-    (async () => {
-      try {
-        setArchiveCount(await api.archiveOverdue());
-        // Заархивированные задачи должны исчезнуть из видов, а «Архив» —
-        // получить их: перезагружаем оба пула (мутация → и автоэкспорт).
-        onMutation();
-      } catch {
-        /* некритично */
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [archiveEnabled]);
 
   // Если кнопка поиска скрыта настройками — закрываем открытый поиск
   // и сбрасываем всё его состояние (запрос, фильтры, сортировку).
@@ -644,32 +619,6 @@ function App() {
           }}
         >
           {toast}
-        </div>
-      )}
-      {/* Баннер архива скрывается настройками видимости. */}
-      {visibility.archiveBanner && archiveCount > 0 && (
-        <div
-          style={{
-            background: accentTint(0.15),
-            color: COLORS.text,
-            fontSize: "var(--fs-2xs)",
-            padding: "var(--sp-2) var(--sp-8)",
-            display: "flex",
-            alignItems: "center",
-            gap: "var(--sp-2)",
-          }}
-        >
-          <span>
-            {t("app.archiveBanner", { n: archiveCount })}
-          </span>
-          <button
-            className="icon-btn"
-            style={{ marginLeft: "auto" }}
-            onClick={() => setArchiveCount(0)}
-            title={t("app.hide")}
-          >
-            <Icon name="close" size={14} />
-          </button>
         </div>
       )}
       {/* Один общий drag-контекст на контент и панель: переносы между

@@ -201,7 +201,6 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
     presets,
     uiScale,
     fontScale,
-    archiveEnabled,
     colorSets,
     visibility,
     panelGap,
@@ -216,7 +215,6 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
     setWeekVertical,
     setUiScale,
     setFontScale,
-    setArchiveEnabled,
     setVisibility,
     setPanelGap,
     notifyDaySummary,
@@ -235,8 +233,6 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
     setSortMode,
     preventOverlaps,
     setPreventOverlaps,
-    autoDonePastTime,
-    setAutoDonePastTime,
     autoSyncEnabled,
     autoSyncPath,
     setAutoSyncEnabled,
@@ -257,7 +253,6 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
       presets: s.presets,
       uiScale: s.uiScale,
       fontScale: s.fontScale,
-      archiveEnabled: s.archiveEnabled,
       colorSets: s.colorSets,
       visibility: s.visibility,
       panelGap: s.panelGap,
@@ -272,7 +267,6 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
       setWeekVertical: s.setWeekVertical,
       setUiScale: s.setUiScale,
       setFontScale: s.setFontScale,
-      setArchiveEnabled: s.setArchiveEnabled,
       setVisibility: s.setVisibility,
       setPanelGap: s.setPanelGap,
       notifyDaySummary: s.notifyDaySummary,
@@ -291,8 +285,6 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
       setSortMode: s.setSortMode,
       preventOverlaps: s.preventOverlaps,
       setPreventOverlaps: s.setPreventOverlaps,
-      autoDonePastTime: s.autoDonePastTime,
-      setAutoDonePastTime: s.setAutoDonePastTime,
       autoSyncEnabled: s.autoSyncEnabled,
       autoSyncPath: s.autoSyncPath,
       setAutoSyncEnabled: s.setAutoSyncEnabled,
@@ -1196,14 +1188,9 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
           {/* ── Задачи ── */}
           <section className="settings-section">
             <h3 className="section-title">{t("settings.tasksSection")}</h3>
-            <Toggle checked={archiveEnabled} onChange={setArchiveEnabled} label={t("settings.autoArchive")} />
             <Toggle checked={preventOverlaps} onChange={setPrevent} label={t("settings.preventOverlaps")} />
             <p className="section-hint">
               {t("settings.preventOverlapsHint")}
-            </p>
-            <Toggle checked={autoDonePastTime} onChange={setAutoDonePastTime} label={t("settings.autoDone")} />
-            <p className="section-hint">
-              {t("settings.autoDoneHint")}
             </p>
             <p className="section-hint" style={{ margin: "var(--sp-2) 0 var(--sp-1)" }}>
               {t("settings.sortMode")}
@@ -1487,7 +1474,6 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
               ["subtasks", t("settings.visSubtasks")],
               ["notes", t("settings.visNotes")],
               ["someday", t("settings.visSomeday")],
-              ["archiveBanner", t("settings.visArchiveBanner")],
             ] as [keyof VisibilityState, string][]).map(([k, label]) => (
               <Toggle key={k} checked={visibility[k]} onChange={(v) => setVisibility(k, v)} label={label} />
             ))}

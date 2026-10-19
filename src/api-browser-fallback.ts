@@ -178,16 +178,6 @@ export const browserApi = {
     save(K.sets, load<ColorSet>(K.sets).filter((s) => s.id !== id));
     save(K.tasks, load<Task>(K.tasks).map((t) => (t.colorSetId === id ? { ...t, colorSetId: null } : t)));
   },
-  async archiveOverdue(): Promise<number> {
-    // Граница архивации — задачи старше вчерашнего дня (date < today - 1), как на бэкенде.
-    const threshold = toEpochDay(new Date()) - 1;
-    let n = 0;
-    save(K.tasks, load<Task>(K.tasks).map((t) => {
-      if (t.date < threshold && !t.isDone && !t.someday && !t.archived) { n++; return { ...t, archived: true, updatedAt: Date.now() }; }
-      return t;
-    }));
-    return n;
-  },
   async getArchivedTasks(): Promise<Task[]> {
     return load<Task>(K.tasks)
       .filter((t) => t.archived)
