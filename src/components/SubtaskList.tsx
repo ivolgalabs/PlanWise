@@ -17,31 +17,18 @@ interface Props {
 }
 
 /**
- * Чек-лист подзадач под задачей: всегда виден — заголовок (если есть подзадачи),
- * список (строки draggable) и поле ввода «+ подзадача». Поле всегда на месте,
- * поэтому добавить подзадачу можно в любом виде.
+ * Чек-лист подзадач под задачей: заголовок (если есть подзадачи) и список
+ * (строки draggable). Добавляются подзадачи только в карточке задачи (✎):
+ * поле ввода на главном экране убрано ради чистоты вида.
  * Текст подзадачи редактируется прямо в строке (как текст задачи) — тап/клик
  * по тексту переводит строку в инлайн-редактирование. Карточка родительской
  * задачи открывается ТОЛЬКО кнопкой «✎» в строке задачи.
  */
 export function SubtaskList({ taskId }: Props) {
   const { t } = useI18n();
-  const [newTitle, setNewTitle] = useState("");
   // Подзадачи + перезагрузка (общий хук: защита от гонки размонтирования,
   // глобальный subtaskRev после promote/смены родителя).
   const { items, error: loadError, reload } = useSubtasks(taskId);
-
-  const add = async () => {
-    const title = newTitle.trim();
-    if (!title) return;
-    try {
-      await api.upsertSubtask({ taskId, title });
-      setNewTitle("");
-    } catch (e) {
-      showToast(t("err.addSubtask", { error: String(e) }));
-    }
-    reload();
-  };
 
   const toggle = async (s: Subtask) => {
     try {
@@ -54,8 +41,8 @@ export function SubtaskList({ taskId }: Props) {
 
   const done = items.filter((s) => s.isDone).length;
 
-  // Всегда показываем блок подзадач: заголовок (если есть подзадачи) + список
-  // + поле ввода. Это решает «нельзя добавить подзадачу» — поле всегда на месте.
+  if (items.length === 0 && !loadError) return null;
+
   return (
     <div className="subtasks-area">
       {items.length > 0 && (
@@ -87,7 +74,7 @@ export function SubtaskList({ taskId }: Props) {
         />
       ))}
       {/* Ошибка загрузки — не молчим (раньше пустой список читался как
-          «подзадач нет»). Поле «+ подзадача» остаётся на месте. */}
+          «подзадач нет»). */}
       {loadError && (
         <div
           style={{
@@ -104,31 +91,6 @@ export function SubtaskList({ taskId }: Props) {
           </button>
         </div>
       )}
-      {/* Форма: на мобильной клавиатуре кнопка «Далее/Готово» (enterKeyHint)
-          срабатывает как Enter — добавляет подзадачу. */}
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          add();
-        }}
-      >
-        <input
-          value={newTitle}
-          onChange={(e) => setNewTitle(e.target.value)}
-          enterKeyHint="done"
-          placeholder={t("subtasks.addPh")}
-          className="inline-input"
-          style={{
-            width: "100%",
-            border: "none",
-            padding: "1px 0",
-            fontSize: "var(--fs-sm)",
-            background: "transparent",
-            outline: "none",
-            color: COLORS.text,
-          }}
-        />
-      </form>
     </div>
   );
 }

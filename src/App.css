@@ -137,15 +137,6 @@ body {
   margin: 0.15em var(--sp-2) var(--sp-2) calc(var(--sp-4) + 2px);
 }
 
-/* «+ подзадача» — только у задачи в фокусе (тап/клик по названию): под каждой
-   задачей поле удваивало высоту списка. Без подзадач блок пропадает целиком. */
-.task-block:not(:focus-within) .subtasks-area > form {
-  display: none;
-}
-.task-block:not(:focus-within) .subtasks-area:not(:has(> :not(form))) {
-  display: none;
-}
-
 /* Шестерёнка «Настроить» у поля добавления — при наведении или фокусе.
    visibility, а не display: ряд не прыгает по ширине. */
 .add-row:not(:hover):not(:focus-within) .add-row-gear {
