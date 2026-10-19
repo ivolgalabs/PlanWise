@@ -322,10 +322,10 @@ const ru = {
 
   // ── «Когда-нибудь» ───────────────────────────────────────────────────
   "someday.overdue": "Просроченные",
+  "someday.soon": "Скоро",
   "someday.week": "В течение недели",
   "someday.month": "В течение месяца",
-  "someday.addWeek": "+ на неделю",
-  "someday.addMonth": "+ на месяц",
+  "someday.addSoon": "+ скоро",
   "someday.addSomeday": "+ когда-нибудь",
   "inbox.title": "Входящие",
   "inbox.add": "+ разобрать позже",
@@ -765,10 +765,10 @@ const en: Dict = {
   "weekShift.label": "next week ▶",
 
   "someday.overdue": "Overdue",
+  "someday.soon": "Soon",
   "someday.week": "Within a week",
   "someday.month": "Within a month",
-  "someday.addWeek": "+ for a week",
-  "someday.addMonth": "+ for a month",
+  "someday.addSoon": "+ soon",
   "someday.addSomeday": "+ someday",
   "inbox.title": "Inbox",
   "inbox.add": "+ to sort",

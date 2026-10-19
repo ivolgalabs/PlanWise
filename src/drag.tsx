@@ -65,20 +65,19 @@ export const weekShiftNextId = "w:next";
 export const somedayZoneId = "sd:someday";
 
 /** id droppable-группы внутри панели плана: сброс на конкретную группу задаёт
- *  мягкий срок («неделя» → +7, «месяц» → +30), «когда-нибудь» — снимает. Без
- *  этих зон попадание в группу не отличалось от попадания в колонку, и задача
- *  всегда становилась «когда-нибудь» — перенести именно в «неделю/месяц» было
- *  нельзя. */
-export const planGroupZoneId = (key: "someday" | "week" | "month"): string => `pg:${key}`;
+ *  мягкий срок («скоро» → +7), «когда-нибудь» — снимает. Без этих зон попадание
+ *  в группу не отличалось от попадания в колонку, и задача всегда становилась
+ *  «когда-нибудь» — перенести именно в «скоро» было нельзя. */
+export const planGroupZoneId = (key: "someday" | "soon"): string => `pg:${key}`;
 
 /** Тип группы плана из droppable-зоны (null — это не зона группы). */
 const parsePlanGroup = (
   id: string | number | undefined | null,
-): "someday" | "week" | "month" | null => {
+): "someday" | "soon" | null => {
   const s = String(id ?? "");
   if (!s.startsWith("pg:")) return null;
   const key = s.slice(3);
-  return key === "someday" || key === "week" || key === "month" ? key : null;
+  return key === "someday" || key === "soon" ? key : null;
 };
 
 /** Распарсить id задачи-цели из droppable-зоны. null, если это не задача. */
@@ -203,9 +202,8 @@ export function TaskDndContext({ children, onChange }: TaskDndContextProps) {
 
     // ── Задача → день: перенос задачи.
     if (task) {
-      // Задача → группа плана («когда-нибудь»/«неделя»/«месяц»): «неделя» и
-      // «месяц» задают мягкий срок (задача становится план-задачей), сброс на
-      // «когда-нибудь» — снимает срок. Сначала снимаем прежний срок
+      // Задача → группа плана («когда-нибудь»/«скоро»): «скоро» задаёт мягкий
+      // срок +7 дней (задача становится план-задачей), сброс на «когда-нибудь» — снимает срок. Сначала снимаем прежний срок
       // (set_someday), затем задаём новый: move_task у план-задачи меняет
       // due_epoch_day, а у обычной перенёс бы её на этот день как дневную.
       const group = parsePlanGroup(over);
@@ -216,7 +214,7 @@ export function TaskDndContext({ children, onChange }: TaskDndContextProps) {
           } else {
             const today = toEpochDay(new Date());
             await api.setSomeday(task.id);
-            await api.moveTask(task.id, fromEpochDay(today + (group === "week" ? 7 : 30)));
+            await api.moveTask(task.id, fromEpochDay(today + 7));
           }
         } catch (err) {
           // Отказ команды (например, запрет наложений) раньше был unhandled

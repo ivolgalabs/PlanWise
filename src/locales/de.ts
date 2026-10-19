@@ -226,10 +226,10 @@ const de: Dict = {
   "weekShift.label": "nächste Woche ▶",
 
   "someday.overdue": "Überfällig",
+  "someday.soon": "Demnächst",
   "someday.week": "Innerhalb einer Woche",
   "someday.month": "Innerhalb eines Monats",
-  "someday.addWeek": "+ für eine Woche",
-  "someday.addMonth": "+ für einen Monat",
+  "someday.addSoon": "+ demnächst",
   "someday.addSomeday": "+ irgendwann",
   "inbox.title": "Eingang",
   "inbox.add": "+ erfassen",

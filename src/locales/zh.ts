@@ -226,10 +226,10 @@ const zh: Dict = {
   "weekShift.label": "下一周 ▶",
 
   "someday.overdue": "已逾期",
+  "someday.soon": "近期",
   "someday.week": "一周内",
   "someday.month": "一个月内",
-  "someday.addWeek": "+ 一周内",
-  "someday.addMonth": "+ 一个月内",
+  "someday.addSoon": "+ 近期",
   "someday.addSomeday": "+ 某天",
   "inbox.title": "收件箱",
   "inbox.add": "+ 待整理",

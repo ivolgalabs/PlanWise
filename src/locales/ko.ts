@@ -226,10 +226,10 @@ const ko: Dict = {
   "weekShift.label": "다음 주 ▶",
 
   "someday.overdue": "기한 지남",
+  "someday.soon": "곧",
   "someday.week": "일주일 이내",
   "someday.month": "한 달 이내",
-  "someday.addWeek": "+ 일주일 이내",
-  "someday.addMonth": "+ 한 달 이내",
+  "someday.addSoon": "+ 곧",
   "someday.addSomeday": "+ 언젠가",
   "inbox.title": "수신함",
   "inbox.add": "+ 정리 전",

@@ -19,10 +19,9 @@ interface Props {
   stretch?: boolean;
 }
 
-/** Группа «Когда-нибудь»: как её разбить по горизонту плана. Без срока
- *  или свыше месяца — «Когда-нибудь», со сроком в пределах недели — «В течение недели»,
- *  в пределах месяца — «В течение месяца», с истёкшим сроком — «Просроченные». */
-type GroupKey = "inbox" | "overdue" | "week" | "month" | "someday";
+/** Группы правой панели: свежее без срока — «Входящие», истёкший срок — «Просроченные»,
+ *  любой будущий срок — «Скоро» (сам срок виден чипом на карточке), иначе «Когда-нибудь». */
+type GroupKey = "inbox" | "overdue" | "soon" | "someday";
 
 /** «Входящие»: записано без срока и ещё свежее — разобрать (в день, в неделю
  *  или оставить). Старше — уходит в «Когда-нибудь».
@@ -34,8 +33,7 @@ const INBOX_DAYS = 7;
 const GROUPS: { key: GroupKey; label: TKey; placeholder?: TKey }[] = [
   { key: "inbox", label: "inbox.title", placeholder: "inbox.add" },
   { key: "overdue", label: "someday.overdue" },
-  { key: "week", label: "someday.week", placeholder: "someday.addWeek" },
-  { key: "month", label: "someday.month", placeholder: "someday.addMonth" },
+  { key: "soon", label: "someday.soon", placeholder: "someday.addSoon" },
   { key: "someday", label: "common.someday", placeholder: "someday.addSomeday" },
 ];
 
@@ -44,13 +42,11 @@ function bucket(t: Task, today: number): GroupKey {
   const d = t.dueEpochDay ?? null;
   if (d == null) return Date.now() - t.createdAt < INBOX_DAYS * 86_400_000 ? "inbox" : "someday";
   if (d < today) return "overdue";
-  if (d <= today + 7) return "week";
-  if (d <= today + 30) return "month";
-  return "someday";
+  return "soon";
 }
 
 /** Секция «Когда-нибудь» внутри правой панели: сворачиваемые группы
- *  (Просроченные / В течение недели / В течение месяца / Когда-нибудь). Принимает задачи
+ *  (Входящие / Просроченные / Скоро / Когда-нибудь). Принимает задачи
  *  drag-ом; перенос в день — обычным drag на колонку дня. */
 export function SomedayColumn({ tasks, onChange, stretch = false }: Props) {
   const { t } = useI18n();
@@ -139,7 +135,7 @@ export function SomedayColumn({ tasks, onChange, stretch = false }: Props) {
                   <GroupAdd
                     placeholder={t(g.placeholder)}
                     key={g.key}
-                    dueEpochDay={g.key === "week" ? today + 7 : g.key === "month" ? today + 30 : null}
+                    dueEpochDay={g.key === "soon" ? today + 7 : null}
                     parked={g.key === "someday"}
                     onChange={onChange}
                   />
