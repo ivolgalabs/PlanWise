@@ -130,6 +130,7 @@ const ja: Dict = {
   "close.drop": "手放す",
   "close.stuck": "3回先送り済み：手放す、分割する、または日付を自分で選ぶ",
   "close.note": "今日のメモ（任意）",
+  "close.usual": "普段は1日 {n} 件終わらせています",
   "task.edit": "タスクを編集（時刻、カテゴリ、メモ…）",
   "task.note": "メモ",
   "task.empty": "（空のタスク）",
@@ -230,6 +231,8 @@ const ja: Dict = {
   "someday.addWeek": "+ 1 週間以内",
   "someday.addMonth": "+ 1 か月以内",
   "someday.addSomeday": "+ いつか",
+  "inbox.title": "受信トレイ",
+  "inbox.add": "+ 未整理",
   "someday.empty": "空です。ここへドラッグするか下に入力してください。",
   "someday.addAria": "タスクを追加",
 

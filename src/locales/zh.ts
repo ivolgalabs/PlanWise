@@ -130,6 +130,7 @@ const zh: Dict = {
   "close.drop": "放下",
   "close.stuck": "已推迟3次：放下、拆分，或手动选日期",
   "close.note": "今日笔记（可选）",
+  "close.usual": "你通常每天完成 {n} 项",
   "task.edit": "编辑任务（时间、分类、备注…）",
   "task.note": "备注",
   "task.empty": "（空任务）",
@@ -230,6 +231,8 @@ const zh: Dict = {
   "someday.addWeek": "+ 一周内",
   "someday.addMonth": "+ 一个月内",
   "someday.addSomeday": "+ 某天",
+  "inbox.title": "收件箱",
+  "inbox.add": "+ 待整理",
   "someday.empty": "空。拖到这里或在下方输入。",
   "someday.addAria": "添加任务",
 

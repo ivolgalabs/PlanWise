@@ -216,6 +216,7 @@ const ru = {
   "close.drop": "Отпустить",
   "close.stuck": "Уже 3 переноса: отпусти, раздели или назначь дату вручную",
   "close.note": "Заметка дня (по желанию)",
+  "close.usual": "обычно закрываешь {n} в день",
   "task.edit": "Редактировать задачу (время, категория, заметка…)",
   "task.note": "Заметка",
   "task.empty": "(пустая задача)",
@@ -326,6 +327,8 @@ const ru = {
   "someday.addWeek": "+ на неделю",
   "someday.addMonth": "+ на месяц",
   "someday.addSomeday": "+ когда-нибудь",
+  "inbox.title": "Входящие",
+  "inbox.add": "+ разобрать позже",
   "someday.empty": "Пусто. Перетащите сюда или напишите ниже.",
   "someday.addAria": "Добавить задачу",
 
@@ -663,6 +666,7 @@ const en: Dict = {
   "close.drop": "Let go",
   "close.stuck": "Postponed 3 times: let it go, split it, or pick a date yourself",
   "close.note": "Day note (optional)",
+  "close.usual": "you usually close {n} a day",
   "task.edit": "Edit task (time, category, note…)",
   "task.note": "Note",
   "task.empty": "(empty task)",
@@ -766,6 +770,8 @@ const en: Dict = {
   "someday.addWeek": "+ for a week",
   "someday.addMonth": "+ for a month",
   "someday.addSomeday": "+ someday",
+  "inbox.title": "Inbox",
+  "inbox.add": "+ to sort",
   "someday.empty": "Empty. Drag here or type below.",
   "someday.addAria": "Add task",
 

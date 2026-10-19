@@ -130,6 +130,7 @@ const ko: Dict = {
   "close.drop": "내려놓기",
   "close.stuck": "이미 3번 미렸습니다: 내려놓거나, 쪼개거나, 날짜를 직접 정하세요",
   "close.note": "오늘 메모(선택)",
+  "close.usual": "보통 하루에 {n}개를 끝냅니다",
   "task.edit": "작업 편집(시간, 분류, 메모…)",
   "task.note": "메모",
   "task.empty": "(빈 작업)",
@@ -230,6 +231,8 @@ const ko: Dict = {
   "someday.addWeek": "+ 일주일 이내",
   "someday.addMonth": "+ 한 달 이내",
   "someday.addSomeday": "+ 언젠가",
+  "inbox.title": "수신함",
+  "inbox.add": "+ 정리 전",
   "someday.empty": "비어 있습니다. 여기로 끌거나 아래에 입력하세요.",
   "someday.addAria": "작업 추가",
 

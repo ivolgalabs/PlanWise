@@ -11,6 +11,32 @@ import { useI18n } from "../i18n";
 /** После стольких переносов «Завтра» заблокировано (то же число в Rust move_task). */
 const POSTPONE_LIMIT = 3;
 
+/** «Обычно закрываешь N в день»: среднее по дням с закрытиями за 14 дней.
+ *  Только после двух недель истории (есть закрытие старше 14 дней в окне 28). */
+export function UsualLoad() {
+  const { t } = useI18n();
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    const end = new Date();
+    const start = new Date();
+    start.setDate(end.getDate() - 28);
+    api
+      .getTasks(start, end)
+      .then((list) => {
+        const now = Date.now();
+        const span = 14 * 86_400_000;
+        const done = list.filter((x) => x.isDone && !x.droppedAt && x.doneAt);
+        if (!done.some((x) => now - x.doneAt! >= span)) return;
+        const recent = done.filter((x) => now - x.doneAt! < span);
+        const days = new Set(recent.map((x) => toEpochDay(new Date(x.doneAt!))));
+        if (days.size) setN(Math.round(recent.length / days.size));
+      })
+      .catch((e) => showToast(errText(e)));
+  }, []);
+  if (n < 1) return null;
+  return <span style={{ fontSize: "var(--fs-sm)", color: "var(--text-secondary)" }}>{t("close.usual", { n })}</span>;
+}
+
 const errText = (e: unknown) => String(e instanceof Error ? e.message : e);
 
 /** Кнопка «Закрыть день» (у сегодняшней колонки) + диалог разбора: у каждой

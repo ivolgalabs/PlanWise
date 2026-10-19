@@ -22,10 +22,17 @@ interface Props {
 /** Группа «Когда-нибудь»: как её разбить по горизонту плана. Без срока
  *  или свыше месяца — «Когда-нибудь», со сроком в пределах недели — «В течение недели»,
  *  в пределах месяца — «В течение месяца», с истёкшим сроком — «Просроченные». */
-type GroupKey = "overdue" | "week" | "month" | "someday";
+type GroupKey = "inbox" | "overdue" | "week" | "month" | "someday";
+
+/** «Входящие»: записано без срока и ещё свежее — разобрать (в день, в неделю
+ *  или оставить). Старше — уходит в «Когда-нибудь».
+ *  ponytail: признак — возраст (createdAt), без нового поля; задача, перетянутая
+ *  в «Когда-нибудь» в первую неделю, до её конца остаётся во «Входящих». */
+const INBOX_DAYS = 7;
 /** Ключи словаря, а не готовые строки: подписи собираются на каждом рендере,
  *  поэтому смена языка их сразу подхватывает. */
 const GROUPS: { key: GroupKey; label: TKey; placeholder?: TKey }[] = [
+  { key: "inbox", label: "inbox.title", placeholder: "inbox.add" },
   { key: "overdue", label: "someday.overdue" },
   { key: "week", label: "someday.week", placeholder: "someday.addWeek" },
   { key: "month", label: "someday.month", placeholder: "someday.addMonth" },
@@ -35,7 +42,7 @@ const GROUPS: { key: GroupKey; label: TKey; placeholder?: TKey }[] = [
 /** К какой группе относится задача по её мягкому сроку. */
 function bucket(t: Task, today: number): GroupKey {
   const d = t.dueEpochDay ?? null;
-  if (d == null) return "someday";
+  if (d == null) return Date.now() - t.createdAt < INBOX_DAYS * 86_400_000 ? "inbox" : "someday";
   if (d < today) return "overdue";
   if (d <= today + 7) return "week";
   if (d <= today + 30) return "month";
@@ -133,6 +140,7 @@ export function SomedayColumn({ tasks, onChange, stretch = false }: Props) {
                     placeholder={t(g.placeholder)}
                     key={g.key}
                     dueEpochDay={g.key === "week" ? today + 7 : g.key === "month" ? today + 30 : null}
+                    parked={g.key === "someday"}
                     onChange={onChange}
                   />
                 )}
@@ -150,10 +158,11 @@ export function SomedayColumn({ tasks, onChange, stretch = false }: Props) {
  *  выигрывает у неё при наведении (pointerWithin — сначала точная зона под
  *  курсором), поэтому сброс на «неделю/месяц» задаёт срок, а не снимает его. */
 function PlanGroup({ groupKey, children }: { groupKey: GroupKey; children: ReactNode }) {
-  const isDroppable = groupKey !== "overdue";
+  // «Просроченные» и «Входящие» — не цели переноса: сброс туда уходит во внешнюю колонку.
+  const zone = groupKey === "overdue" || groupKey === "inbox" ? null : groupKey;
   const { setNodeRef, isOver } = useDroppable({
-    id: isDroppable ? planGroupZoneId(groupKey) : `pg-disabled:${groupKey}`,
-    disabled: !isDroppable,
+    id: zone ? planGroupZoneId(zone) : `pg-disabled:${groupKey}`,
+    disabled: !zone,
   });
   return (
     <div
@@ -178,10 +187,13 @@ function PlanGroup({ groupKey, children }: { groupKey: GroupKey; children: React
 function GroupAdd({
   placeholder,
   dueEpochDay,
+  parked,
   onChange,
 }: {
   placeholder: string;
   dueEpochDay: number | null;
+  /** Прямо в «Когда-нибудь»: задача сразу «старая», чтобы не попасть во «Входящие». */
+  parked: boolean;
   onChange: () => void;
 }) {
   const { t } = useI18n();
@@ -190,7 +202,13 @@ function GroupAdd({
     const title = value.trim();
     if (!title) return;
     try {
-      await api.upsertTask({ title, date: 0, someday: true, dueEpochDay });
+      await api.upsertTask({
+        title,
+        date: 0,
+        someday: true,
+        dueEpochDay,
+        createdAt: parked ? Date.now() - INBOX_DAYS * 86_400_000 : undefined,
+      });
       setValue("");
     } catch (e) {
       showToast(t("err.saveTask", { error: String(e) }));

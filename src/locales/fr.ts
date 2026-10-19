@@ -130,6 +130,7 @@ const fr: Dict = {
   "close.drop": "Lâcher prise",
   "close.stuck": "Déjà reportée 3 fois : abandonnez, découpez ou choisissez une date vous-même",
   "close.note": "Note du jour (facultatif)",
+  "close.usual": "vous bouclez en général {n} par jour",
   "task.edit": "Modifier la tâche (heure, catégorie, note…)",
   "task.note": "Note",
   "task.empty": "(tâche vide)",
@@ -230,6 +231,8 @@ const fr: Dict = {
   "someday.addWeek": "+ pour une semaine",
   "someday.addMonth": "+ pour un mois",
   "someday.addSomeday": "+ un jour",
+  "inbox.title": "Boîte de réception",
+  "inbox.add": "+ à trier",
   "someday.empty": "Vide. Glissez ici ou écrivez ci-dessous.",
   "someday.addAria": "Ajouter une tâche",
 

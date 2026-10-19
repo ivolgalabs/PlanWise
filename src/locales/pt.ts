@@ -130,6 +130,7 @@ const pt: Dict = {
   "close.drop": "Soltar",
   "close.stuck": "Já adiada 3 vezes: solte, divida ou escolha uma data você mesmo",
   "close.note": "Nota do dia (opcional)",
+  "close.usual": "você costuma fechar {n} por dia",
   "task.edit": "Editar tarefa (horário, categoria, nota…)",
   "task.note": "Nota",
   "task.empty": "(tarefa vazia)",
@@ -230,6 +231,8 @@ const pt: Dict = {
   "someday.addWeek": "+ para uma semana",
   "someday.addMonth": "+ para um mês",
   "someday.addSomeday": "+ algum dia",
+  "inbox.title": "Caixa de entrada",
+  "inbox.add": "+ a classificar",
   "someday.empty": "Vazio. Arraste aqui ou escreva abaixo.",
   "someday.addAria": "Adicionar tarefa",
 

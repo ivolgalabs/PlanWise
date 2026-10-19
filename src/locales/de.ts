@@ -130,6 +130,7 @@ const de: Dict = {
   "close.drop": "Loslassen",
   "close.stuck": "Schon 3-mal verschoben: loslassen, aufteilen oder selbst ein Datum wählen",
   "close.note": "Tagesnotiz (optional)",
+  "close.usual": "du erledigst meist {n} pro Tag",
   "task.edit": "Aufgabe bearbeiten (Zeit, Kategorie, Notiz…)",
   "task.note": "Notiz",
   "task.empty": "(leere Aufgabe)",
@@ -230,6 +231,8 @@ const de: Dict = {
   "someday.addWeek": "+ für eine Woche",
   "someday.addMonth": "+ für einen Monat",
   "someday.addSomeday": "+ irgendwann",
+  "inbox.title": "Eingang",
+  "inbox.add": "+ erfassen",
   "someday.empty": "Leer. Hierher ziehen oder unten schreiben.",
   "someday.addAria": "Aufgabe hinzufügen",
 
