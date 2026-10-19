@@ -5,7 +5,7 @@ import { api } from "../api";
 import { COLORS, accentTint, argbToHex } from "../theme";
 import { useStore } from "../store";
 import { showToast } from "../toast";
-import { fromEpochDay, conflictIdFor, taskTimeRange, travelTimeText, dueEpochLabel } from "../date";
+import { fromEpochDay, toEpochDay, conflictIdFor, taskTimeRange, travelTimeText, dueEpochLabel } from "../date";
 import { useMediaQuery } from "../useMediaQuery";
 import { SubtaskList } from "./SubtaskList";
 import { AddTaskModal } from "./AddTaskModal";
@@ -47,7 +47,8 @@ function taskEquals(a: Task, b: Task): boolean {
     a.difficulty === b.difficulty &&
     a.notifyMinutes === b.notifyMinutes &&
     a.travelNotifyMinutes === b.travelNotifyMinutes &&
-    a.dueEpochDay === b.dueEpochDay
+    a.dueEpochDay === b.dueEpochDay &&
+    a.postponeCount === b.postponeCount
   );
 }
 
@@ -405,6 +406,16 @@ export const TaskCard = memo(function TaskCard({
     </span>
   ) : null;
 
+  // ↻N — сколько раз задачу переносили вперёд; с 3-го раза окрашен (застряла).
+  // Хвост — открытая задача прошлого дня: остаётся на своём дне, но приглушена.
+  const postponed = task.postponeCount ?? 0;
+  const postponeBadge = postponed > 0 ? (
+    <span className={`task-time has${postponed >= 3 ? " stuck" : ""}`} title={`↻${postponed}`}>
+      ↻{postponed}
+    </span>
+  ) : null;
+  const isTail = !task.isDone && !task.someday && task.date < toEpochDay(new Date());
+
   // Чип мягкого срока «Когда-нибудь»: просрочено / в течение недели/месяца / до даты.
   const dueBadge = due != null ? (
     <span className="task-time has" title={t("task.dueSoft")}>
@@ -433,7 +444,7 @@ export const TaskCard = memo(function TaskCard({
   // compact (сетка недели): строка времени НАД текстом, с отступом сверху
   // (иначе прижимается к предыдущей задаче). Не-compact (День, список):
   // в ряду с текстом.
-  const showTimeRow = !mobileRow && (compact ? (prioMeta != null || task.timeMinutes != null || due != null) : ((effectiveShowTime && timeText != null) || prioMeta != null || due != null));
+  const showTimeRow = !mobileRow && (compact ? (prioMeta != null || task.timeMinutes != null || due != null) : ((effectiveShowTime && timeText != null) || prioMeta != null || due != null)) || (!mobileRow && postponeBadge != null);
   // Выравнивание элемента строки по центру ПЕРВОЙ строки текста в компактной
   // сетке: строка «шапки» (время/приоритет, shift) + фактический padding
   // текста (padTop, в em — меняется со шрифтом) + пол-разницы высот. Центр
@@ -480,6 +491,7 @@ export const TaskCard = memo(function TaskCard({
         </span>
       )}
       {dueBadge}
+      {postponeBadge}
     </div>
   ) : null;
 
@@ -661,13 +673,13 @@ export const TaskCard = memo(function TaskCard({
             resize: "none",
             overflow: "hidden",
             lineHeight: 1.4,
-            color: task.isDone ? COLORS.muted : COLORS.text,
+            color: task.isDone || isTail ? COLORS.muted : COLORS.text,
             textDecoration: task.isDone ? "line-through" : "none",
           }}
         />
         {/* Не-compact (День, вертикальная неделя): время — в ряду с текстом. */}
         {!compact && timeRow}
-        {mobileRow && effectiveShowTime && (timeText != null || prioDot || timeMeta.length > 0) && (
+        {mobileRow && effectiveShowTime && (timeText != null || prioDot || timeMeta.length > 0 || postponeBadge) && (
           <div
             style={{
               display: "flex",
@@ -680,6 +692,7 @@ export const TaskCard = memo(function TaskCard({
           >
             {prioDot}
             {timeBadge}
+            {postponeBadge}
             {timeMeta.length > 0 && (
               <span
                 style={{

@@ -497,6 +497,10 @@ input[type="checkbox"] {
   color: var(--accent);
   background: var(--bg-hover);
 }
+.task-time.stuck {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+}
 .task-time.conflict {
   color: var(--danger);
   background: color-mix(in srgb, var(--danger) 14%, transparent);
