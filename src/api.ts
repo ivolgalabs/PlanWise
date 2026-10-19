@@ -38,6 +38,8 @@ export interface Task {
   droppedAt?: number | null;
   /** Сколько раз переносилась с сегодня/прошлого на будущее. */
   postponeCount?: number;
+  /** Повтор: закрытие рождает следующее вхождение; null = разовая. */
+  repeat?: "daily" | "weekly" | "monthly" | null;
 }
 
 /** День как страница: заметка и отметка «день закрыт». */
@@ -111,6 +113,7 @@ export const api = {
       notifyMinutes: task.notifyMinutes ?? null,
       travelNotifyMinutes: task.travelNotifyMinutes ?? null,
       dueEpochDay: task.dueEpochDay ?? null,
+      repeat: task.repeat ?? null,
     };
     return isTauri() ? invoke<Task>("upsert_task", { task: t }) : browserApi.upsertTask(t);
   },

@@ -116,6 +116,7 @@ export function TaskFormFields({
   // у задачи «Когда-нибудь» (initial.someday) — у задач дня не показываем.
   const [dueEpochDay, setDueEpochDay] = useState<number | null>(initial?.dueEpochDay ?? null);
   const [dueDateOpen, setDueDateOpen] = useState(false);
+  const [repeat, setRepeat] = useState<Task["repeat"]>(initial?.repeat ?? null);
   const [error, setError] = useState("");
   const [confirmDel, setConfirmDel] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
@@ -283,14 +284,14 @@ export function TaskFormFields({
             finalDone = past;
           }
         }
-        await api.upsertTask({ ...initial, ...payload, isDone: finalDone });
+        await api.upsertTask({ ...initial, ...payload, repeat, isDone: finalDone });
         onChange?.();
       } else {
         // Новая задача + подзадачи + файлы. Сначала создаём задачу (id нужен
         // для вложений), потом прикрепляем выбранные файлы.
         let created = createdTaskRef.current;
         if (!created) {
-          created = await api.upsertTask({ ...payload, date: toEpochDay(day) });
+          created = await api.upsertTask({ ...payload, repeat, date: toEpochDay(day) });
           createdTaskRef.current = created;
           for (const s of subs) {
             const st = s.trim();
@@ -496,6 +497,25 @@ export function TaskFormFields({
                 {dueEpochLabel(dueEpochDay)}
               </span>
             )}
+          </div>
+        </div>
+      )}
+      {!templateMode && !initial?.someday && (
+        <div style={fieldRow}>
+          <span style={labelStyle}>{t("form.repeat")}</span>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-2)" }}>
+            {([null, "daily", "weekly", "monthly"] as const).map((r) => (
+              <button
+                key={r ?? "none"}
+                type="button"
+                className="text-chip"
+                style={{ border: `1px solid ${repeat === r ? COLORS.accent : "var(--border-color)"}` }}
+                aria-pressed={repeat === r}
+                onClick={() => setRepeat(r)}
+              >
+                {t(`repeat.${r ?? "none"}`)}
+              </button>
+            ))}
           </div>
         </div>
       )}

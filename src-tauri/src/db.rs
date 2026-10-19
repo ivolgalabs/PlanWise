@@ -114,7 +114,7 @@ mod tests {
         )
         .expect("insert subtask");
 
-        let copy = crate::commands::duplicate_task_conn(&mut conn, "src").expect("duplicate");
+        let copy = crate::commands::duplicate_task_conn(&mut conn, "src", None).expect("duplicate");
         assert_ne!(copy.id, "src");
         assert!(!copy.is_done);
         assert_eq!(copy.time_minutes, Some(600));

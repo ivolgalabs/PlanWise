@@ -5,7 +5,7 @@
  * Сортировки совпадают с commands.rs (sortOrder ASC).
  */
 import type { Task, ColorSet, Subtask, Day } from "./api";
-import { toEpochDay } from "./date";
+import { fromEpochDay, toEpochDay } from "./date";
 import { showToast } from "./toast";
 import { t } from "./i18n";
 
@@ -20,6 +20,23 @@ const withDone = (prev: Task | undefined, next: Task): Task => {
 
 /** epoch-day «сегодня» по локальной дате (как toEpochDay на фронте). */
 const todayEpochDay = (): number => toEpochDay(new Date());
+
+/** Первая дата серии строго после today (ср. next_repeat_date в commands.rs):
+ *  месяц считается от исходной даты, 31-е прижимается к концу месяца. */
+const nextRepeatDay = (date: number, repeat: string, today: number): number => {
+  const base = fromEpochDay(date);
+  for (let k = 1; k <= 1200; k++) {
+    let e: number;
+    if (repeat === "monthly") {
+      const last = new Date(base.getFullYear(), base.getMonth() + k + 1, 0).getDate();
+      e = toEpochDay(new Date(base.getFullYear(), base.getMonth() + k, Math.min(base.getDate(), last)));
+    } else {
+      e = date + k * (repeat === "weekly" ? 7 : 1);
+    }
+    if (e > today) return e;
+  }
+  return date + 1;
+};
 
 // Дефолтные категории — как сид V1 в SQLite (ARGB-int = 0xFFRRGGBB).
 // Пишутся при первом обращении, если ключа ещё нет в localStorage.
@@ -70,6 +87,11 @@ export const browserApi = {
     const all = load<Task>(K.tasks).filter((t) => t.id !== id);
     all.push(rec);
     save(K.tasks, all);
+    if (prev && !prev.isDone && rec.isDone && rec.repeat && !rec.someday && !rec.archived) {
+      const next = nextRepeatDay(rec.date, rec.repeat, todayEpochDay());
+      const dup = all.some((t) => t.title === rec.title && t.repeat === rec.repeat && t.date === next && !t.isDone);
+      if (!dup) await this.duplicateTask(id, next);
+    }
     return rec;
   },
   async deleteTask(id: string): Promise<void> {
@@ -78,14 +100,18 @@ export const browserApi = {
   },
   /** Дублировать задачу: копия с полями и подзадачами (как duplicate_task
    *  в Rust — наложения в браузерном фоллбеке и так не проверяются). */
-  async duplicateTask(id: string): Promise<Task> {
+  async duplicateTask(id: string, date?: number): Promise<Task> {
     const orig = load<Task>(K.tasks).find((t) => t.id === id);
     if (!orig) throw new Error(t("err.taskNotFound"));
     const copy: Task = {
       ...orig,
       id: crypto.randomUUID(),
+      date: date ?? orig.date,
       isDone: false,
       archived: false,
+      doneAt: null,
+      droppedAt: null,
+      postponeCount: 0,
       createdAt: Date.now(),
       updatedAt: Date.now(),
       sortOrder: Date.now(),

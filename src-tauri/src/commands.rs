@@ -12,7 +12,7 @@ fn now_ms() -> i64 {
 
 /// Колонки таблицы tasks — единый список для SELECT и INSERT: новая колонка
 /// добавляется в одном месте (маппинг в Task — см. task_from_row).
-pub(crate) const TASK_COLUMNS: &str = "id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes, someday, archived, travel_time, duration_minutes, difficulty, notify_minutes, travel_notify_minutes, due_epoch_day, done_at, dropped_at, postpone_count";
+pub(crate) const TASK_COLUMNS: &str = "id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes, someday, archived, travel_time, duration_minutes, difficulty, notify_minutes, travel_notify_minutes, due_epoch_day, done_at, dropped_at, postpone_count, repeat";
 
 /// Маппинг строки tasks в Task (единый для всех выборок — колонки не разъезжаются).
 fn task_from_row(row: &rusqlite::Row) -> rusqlite::Result<Task> {
@@ -39,6 +39,7 @@ fn task_from_row(row: &rusqlite::Row) -> rusqlite::Result<Task> {
         done_at: row.get(19)?,
         dropped_at: row.get(20)?,
         postpone_count: row.get(21)?,
+        repeat: row.get(22)?,
     })
 }
 
@@ -150,7 +151,7 @@ pub fn get_tasks(state: State<'_, Db>, start_day: i64, end_day: i64) -> Result<V
 pub fn upsert_task(state: State<'_, Db>, mut task: Task) -> Result<Task, String> {
     // Одна блокировка на проверку и вставку: иначе два параллельных
     // сохранения могли бы оба пройти проверку наложений и вставить конфликт.
-    let conn = state.lock();
+    let mut conn = state.lock();
     // Границы полей — до любых проверок: и наложения, и напоминания считают
     // по sanitized-значениям.
     sanitize_task(&mut task);
@@ -198,14 +199,24 @@ pub fn upsert_task(state: State<'_, Db>, mut task: Task) -> Result<Task, String>
         task.created_at = now_ms();
     }
     task.updated_at = now_ms();
+    // Новая задача (id нет в БД) «уже закрытой» не считается переходом.
+    let was_done = conn
+        .query_row("SELECT is_done FROM tasks WHERE id = ?1", [&task.id], |r| {
+            r.get::<_, i64>(0)
+        })
+        .map(|v| v != 0)
+        .unwrap_or(true);
     write_task(&conn, &task)?;
+    if !was_done && task.is_done {
+        spawn_next_repeat(&mut conn, &task)?;
+    }
     // Пересчёт расписания уведомлений: без этого планировщик до следующего
     // тика считал бы по устаревшим данным (десктоп — до 30 минут).
     crate::notify::wake_scheduler();
     Ok(task)
 }
 
-/// INSERT/UPDATE задачи — единый для upsert_task и duplicate_task (22 колонки
+/// INSERT/UPDATE задачи — единый для upsert_task и duplicate_task (23 колонки
 /// в одном месте; расхождение списка с TASK_COLUMNS ловит тест в db.rs).
 /// done_at/dropped_at/postpone_count при обновлении не трогаем: их ведёт БД
 /// (триггер V15) и move_task — устаревшая копия с фронта их не затрёт.
@@ -213,7 +224,7 @@ pub(crate) fn write_task(conn: &rusqlite::Connection, task: &Task) -> Result<(),
     conn.execute(
         &format!(
             "INSERT INTO tasks ({TASK_COLUMNS})
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)
              ON CONFLICT(id) DO UPDATE SET
                title=excluded.title, date=excluded.date, is_done=excluded.is_done,
                color_set_id=excluded.color_set_id, sort_order=excluded.sort_order,
@@ -223,7 +234,7 @@ pub(crate) fn write_task(conn: &rusqlite::Connection, task: &Task) -> Result<(),
                travel_time=excluded.travel_time, duration_minutes=excluded.duration_minutes,
                difficulty=excluded.difficulty, notify_minutes=excluded.notify_minutes,
                travel_notify_minutes=excluded.travel_notify_minutes,
-               due_epoch_day=excluded.due_epoch_day",
+               due_epoch_day=excluded.due_epoch_day, repeat=excluded.repeat",
         ),
         rusqlite::params![
             task.id,
@@ -248,6 +259,7 @@ pub(crate) fn write_task(conn: &rusqlite::Connection, task: &Task) -> Result<(),
             task.done_at,
             task.dropped_at,
             task.postpone_count,
+            task.repeat,
         ],
     )
     .map_err(|e| e.to_string())?;
@@ -269,7 +281,7 @@ pub(crate) fn write_task(conn: &rusqlite::Connection, task: &Task) -> Result<(),
 #[tauri::command]
 pub fn duplicate_task(state: State<'_, Db>, id: String) -> Result<Task, String> {
     let mut conn = state.lock();
-    let copy = duplicate_task_conn(&mut conn, &id)?;
+    let copy = duplicate_task_conn(&mut conn, &id, None)?;
     crate::notify::wake_scheduler();
     Ok(copy)
 }
@@ -280,12 +292,16 @@ pub fn duplicate_task(state: State<'_, Db>, id: String) -> Result<Task, String> 
 pub(crate) fn duplicate_task_conn(
     conn: &mut rusqlite::Connection,
     id: &str,
+    date: Option<i64>,
 ) -> Result<Task, String> {
     let tx = conn.transaction().map_err(|e| e.to_string())?;
     let orig = select_task_by_id(&tx, id)?.ok_or("Задача не найдена")?;
     let subs = select_subtasks(&tx, id)?;
     let mut copy = orig;
     copy.id = Uuid::new_v4().to_string();
+    if let Some(d) = date {
+        copy.date = d;
+    }
     copy.is_done = false;
     copy.archived = false;
     copy.done_at = None;
@@ -315,6 +331,49 @@ pub(crate) fn duplicate_task_conn(
     Ok(copy)
 }
 
+/// Первая дата серии строго после today: date + k·шаг (месяц считается от
+/// исходной даты, чтобы 31-е не «съезжало» на 28-е навсегда).
+fn next_repeat_date(date: i64, repeat: &str, today: i64) -> Option<i64> {
+    let base = epoch_to_date(date)?;
+    (1..=1200u32).find_map(|k| {
+        let next = match repeat {
+            "daily" => base.checked_add_days(chrono::Days::new(u64::from(k)))?,
+            "weekly" => base.checked_add_days(chrono::Days::new(7 * u64::from(k)))?,
+            "monthly" => base.checked_add_months(chrono::Months::new(k))?,
+            _ => return None,
+        };
+        let e = date_to_epoch(next);
+        (e > today).then_some(e)
+    })
+}
+
+/// Закрытая повторяющаяся задача рождает следующее вхождение: копия со сдвинутой
+/// датой (подзадачи — невыполненными). «Отпустить» (drop_task) серию кончает.
+/// Не плодим дубль при повторном «снял-поставил галочку»: если на ту дату уже
+/// есть открытая задача серии — ничего не делаем.
+fn spawn_next_repeat(conn: &mut rusqlite::Connection, task: &Task) -> Result<(), String> {
+    let Some(repeat) = task.repeat.as_deref() else {
+        return Ok(());
+    };
+    if task.someday || task.archived {
+        return Ok(());
+    }
+    let Some(next) = next_repeat_date(task.date, repeat, today_epoch_day()) else {
+        return Ok(());
+    };
+    let exists: bool = conn
+        .query_row(
+            "SELECT COUNT(*) > 0 FROM tasks WHERE title = ?1 AND repeat = ?2 AND date = ?3 AND is_done = 0",
+            rusqlite::params![task.title, repeat, next],
+            |r| r.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    if !exists {
+        duplicate_task_conn(conn, &task.id, Some(next))?;
+    }
+    Ok(())
+}
+
 /// Привести поля задачи к допустимым диапазонам. Граница доверия: значения
 /// приходят из webview и из файла бэкапа, а логика опирается на эти границы —
 /// время 0..1439 (иначе врут наложения, напоминания и формат «ЧЧ:ММ»),
@@ -332,6 +391,10 @@ fn sanitize_task(task: &mut Task) {
     task.difficulty = task.difficulty.clamp(0, 3);
     task.due_epoch_day = task.due_epoch_day.map(|d| d.clamp(-719_162, 2_932_896));
     task.postpone_count = task.postpone_count.max(0);
+    task.repeat = task
+        .repeat
+        .take()
+        .filter(|r| matches!(r.as_str(), "daily" | "weekly" | "monthly"));
 }
 
 /// Проверка пересечения времени с другими задачами дня (настройка
@@ -1170,14 +1233,14 @@ fn apply_import(
         tx.execute(
             &format!(
                 "INSERT INTO tasks ({TASK_COLUMNS})
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)",
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)",
             ),
             rusqlite::params![
                 t.id, t.title, t.date, t.is_done as i64, t.color_set_id, t.sort_order,
                 t.created_at, t.updated_at, t.device_id, t.time_minutes, t.notes,
                 t.someday as i64, t.archived as i64, t.travel_time, t.duration_minutes,
                 t.difficulty, t.notify_minutes, t.travel_notify_minutes, t.due_epoch_day,
-                t.done_at, t.dropped_at, t.postpone_count
+                t.done_at, t.dropped_at, t.postpone_count, t.repeat
             ],
         )
         .map_err(|e| e.to_string())?;
@@ -1911,7 +1974,7 @@ mod tests {
         conn.execute(
             &format!(
                 "INSERT INTO tasks ({TASK_COLUMNS})
-                 VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22)"
+                 VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23)"
             ),
             rusqlite::params![
                 "t1",
@@ -1935,7 +1998,8 @@ mod tests {
                 Some(20_010),
                 None::<i64>,
                 None::<i64>,
-                3
+                3,
+                Some("weekly")
             ],
         )
         .unwrap();
@@ -2008,6 +2072,58 @@ mod tests {
             updated_at: 123,
             ..Default::default()
         }
+    }
+
+    /// V16: закрытие повторяющейся задачи рождает следующее вхождение строго
+    /// после сегодня; разовая, «когда-нибудь» и повторное закрытие — нет.
+    #[test]
+    fn repeat_spawns_next_occurrence() {
+        let mut conn = open(":memory:").expect("open test db");
+        let today = today_epoch_day();
+        let mut t = open_task("r", today - 10);
+        t.repeat = Some("daily".into());
+        t.is_done = true;
+        write_task(&conn, &t).unwrap();
+        conn.execute(
+            "INSERT INTO subtasks (id, task_id, title, is_done, sort_order, created_at) VALUES ('s', 'r', 'x', 1, 0, 0)",
+            [],
+        )
+        .unwrap();
+        spawn_next_repeat(&mut conn, &t).unwrap();
+        spawn_next_repeat(&mut conn, &t).unwrap(); // второй раз — без дубля
+        let all = select_tasks(&conn, "WHERE id != 'r'", &[]).unwrap();
+        assert_eq!(all.len(), 1);
+        assert_eq!(all[0].date, today + 1);
+        assert_eq!(all[0].repeat.as_deref(), Some("daily"));
+        assert!(!all[0].is_done);
+        let undone: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM subtasks WHERE task_id = ?1 AND is_done = 0",
+                [&all[0].id],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(undone, 1);
+
+        let mut once = open_task("o", today);
+        once.is_done = true;
+        spawn_next_repeat(&mut conn, &once).unwrap();
+        let mut some = open_task("s2", today);
+        some.repeat = Some("weekly".into());
+        some.someday = true;
+        spawn_next_repeat(&mut conn, &some).unwrap();
+        assert_eq!(select_tasks(&conn, "", &[]).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn repeat_dates() {
+        let d = date_to_epoch(NaiveDate::from_ymd_opt(2026, 1, 31).unwrap());
+        let feb = date_to_epoch(NaiveDate::from_ymd_opt(2026, 2, 28).unwrap());
+        assert_eq!(next_repeat_date(d, "monthly", d), Some(feb));
+        assert_eq!(next_repeat_date(d, "weekly", d), Some(d + 7));
+        assert_eq!(next_repeat_date(d, "weekly", d + 20), Some(d + 21));
+        assert_eq!(next_repeat_date(d, "daily", d + 3), Some(d + 4));
+        assert_eq!(next_repeat_date(d, "yearly", d), None);
     }
 
     /// V15: перенос открытой задачи с сегодня/прошлого на будущее считается;

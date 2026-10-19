@@ -48,7 +48,8 @@ function taskEquals(a: Task, b: Task): boolean {
     a.notifyMinutes === b.notifyMinutes &&
     a.travelNotifyMinutes === b.travelNotifyMinutes &&
     a.dueEpochDay === b.dueEpochDay &&
-    a.postponeCount === b.postponeCount
+    a.postponeCount === b.postponeCount &&
+    a.repeat === b.repeat
   );
 }
 

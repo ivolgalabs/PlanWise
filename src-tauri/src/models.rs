@@ -38,6 +38,8 @@ pub struct Task {
     pub dropped_at: Option<i64>, // «отпущена» (epoch-ms); такая задача и is_done = true
     #[serde(default)]
     pub postpone_count: i32, // сколько раз перенесена с сегодня/прошлого на будущее
+    #[serde(default)]
+    pub repeat: Option<String>, // повтор: daily | weekly | monthly; NULL = разовая
 }
 
 /// День как страница: заметка «как прошёл день» и отметка «день закрыт».
