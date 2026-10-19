@@ -3,6 +3,7 @@ import { useDroppable } from "@dnd-kit/core";
 import type { Task } from "../api";
 import { api } from "../api";
 import { TaskCard } from "../components/TaskCard";
+import { CloseDayButton } from "../components/CloseDayDialog";
 import { SomedayColumn } from "../components/SomedayColumn";
 import { ArchivePanel } from "../components/ArchivePanel";
 import { AddTaskModal } from "../components/AddTaskModal";
@@ -225,6 +226,7 @@ function DayTasksArea({
           })}
           {today && " ●"}
         </h2>
+        {today && <CloseDayButton onChange={onChange} />}
       </div>
 
       <div>

@@ -4,6 +4,7 @@ import type { Task } from "../api";
 import { api } from "../api";
 import { isToday, isPast, dayWeight, toEpochDay } from "../date";
 import { TaskCard } from "./TaskCard";
+import { CloseDayButton } from "./CloseDayDialog";
 import { COLORS, accentTint } from "../theme";
 import { dayId } from "../drag";
 import { useI18n } from "../i18n";
@@ -110,6 +111,7 @@ export function DayColumn({
           {`${weekday}, ${dayNum}`}
           {today && " ●"}
         </span>
+        {today && <CloseDayButton onChange={onChange} compact />}
       </div>
       <div
         className="day-tasks"

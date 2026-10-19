@@ -76,6 +76,26 @@ fn select_task_by_id(conn: &rusqlite::Connection, id: &str) -> Result<Option<Tas
 /// Общее для переноса и возврата из архива.
 /// Открытая задача, уехавшая с сегодня/прошлого на будущее, — это перенос:
 /// postpone_count растёт (SET в SQLite читает старую строку: date — прежняя).
+/// После стольких переносов «на потом» задачу двигать дальше нельзя: её надо
+/// отпустить, разделить или назначить дату вручную (в окне задачи).
+const POSTPONE_LIMIT: i32 = 3;
+
+/// Перенос открытой задачи с сегодня/прошлого на будущее — откладывание. Упёрлась
+/// в лимит — отказ. Архив (возврат) и закрытые не считаются.
+fn check_postpone_limit(task: &Task, new_date: i64, today: i64) -> Result<(), String> {
+    if !task.is_done
+        && !task.archived
+        && task.date <= today
+        && new_date > today
+        && task.postpone_count >= POSTPONE_LIMIT
+    {
+        return Err(format!(
+            "Задача уже переносилась {POSTPONE_LIMIT} раза: отпустите её, разделите или назначьте дату вручную"
+        ));
+    }
+    Ok(())
+}
+
 fn move_task_to_date(conn: &rusqlite::Connection, id: &str, new_date: i64) -> Result<(), String> {
     conn.execute(
         "UPDATE tasks SET date = ?1, someday = 0, archived = 0,
@@ -434,6 +454,7 @@ pub fn move_task(state: State<'_, Db>, id: String, new_date: i64) -> Result<(), 
         moved.date = new_date;
         check_time_overlap(&conn, &moved)?;
     }
+    check_postpone_limit(&task, new_date, today_epoch_day())?;
     move_task_to_date(&conn, &id, new_date)?;
     crate::notify::wake_scheduler();
     Ok(())
@@ -2018,6 +2039,47 @@ mod tests {
         write_task(&conn, &done).unwrap();
         move_task_to_date(&conn, "b", today + 1).unwrap();
         assert_eq!(count("b"), 0, "закрытая задача не переносится");
+    }
+
+    #[test]
+    fn postpone_limit_blocks_only_further_postponing() {
+        let today = today_epoch_day();
+        let mut t = open_task("a", today);
+        t.postpone_count = POSTPONE_LIMIT - 1;
+        assert!(
+            check_postpone_limit(&t, today + 1, today).is_ok(),
+            "до лимита можно"
+        );
+        t.postpone_count = POSTPONE_LIMIT;
+        assert!(
+            check_postpone_limit(&t, today + 1, today).is_err(),
+            "лимит: вперёд нельзя"
+        );
+        assert!(
+            check_postpone_limit(&t, today, today).is_ok(),
+            "на сегодня можно"
+        );
+        assert!(
+            check_postpone_limit(&t, today - 1, today).is_ok(),
+            "в прошлое можно"
+        );
+        t.date = today + 2;
+        assert!(
+            check_postpone_limit(&t, today + 5, today).is_ok(),
+            "будущее → будущее не откладывание"
+        );
+        t.date = today;
+        t.is_done = true;
+        assert!(
+            check_postpone_limit(&t, today + 1, today).is_ok(),
+            "закрытая не блокируется"
+        );
+        t.is_done = false;
+        t.archived = true;
+        assert!(
+            check_postpone_limit(&t, today + 1, today).is_ok(),
+            "архив: возврат не блокируется"
+        );
     }
 
     /// Перенос на прошлый день не ставит галочку: открытая остаётся открытой,

@@ -4,6 +4,7 @@ import type { Task } from "../api";
 import { api } from "../api";
 import { weekDays, isToday, isPast, dayWeight, formatMinutes, toEpochDay, tasksForDay } from "../date";
 import { TaskCard } from "../components/TaskCard";
+import { CloseDayButton } from "../components/CloseDayDialog";
 import { WeekShiftZone } from "../components/WeekShiftZone";
 import { SomedayColumn } from "../components/SomedayColumn";
 import { ArchivePanel } from "../components/ArchivePanel";
@@ -234,11 +235,17 @@ function DayRow({
           fontSize: headFs,
           color: headColor,
           textTransform: "capitalize",
+          display: "flex",
+          alignItems: "center",
+          gap: "var(--sp-3)",
         }}
       >
-        {past ? "✓ " : ""}
-        {`${weekday}, ${day.getDate()}`}
-        {today && " ●"}
+        <span>
+          {past ? "✓ " : ""}
+          {`${weekday}, ${day.getDate()}`}
+          {today && " ●"}
+        </span>
+        {today && <CloseDayButton onChange={onChange} />}
       </div>
       <div
         style={{
