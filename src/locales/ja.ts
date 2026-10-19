@@ -209,6 +209,9 @@ const ja: Dict = {
   "search.isToday": " · 今日",
 
   "month.noTasks": "この日のタスクはありません",
+  "month.done": "完了",
+  "month.dropped": "手放した",
+  "month.stuck": "停滞",
   "month.toDay": "日表示へ",
   "month.toWeek": "週表示へ",
   "month.deleteSubtask": "サブタスクを削除",

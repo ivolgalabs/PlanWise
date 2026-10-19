@@ -209,6 +209,9 @@ const fr: Dict = {
   "search.isToday": " · aujourd'hui",
 
   "month.noTasks": "Aucune tâche pour ce jour",
+  "month.done": "Faites",
+  "month.dropped": "Lâchées",
+  "month.stuck": "Bloquées",
   "month.toDay": "Vers le jour",
   "month.toWeek": "Vers la semaine",
   "month.deleteSubtask": "Supprimer la sous-tâche",

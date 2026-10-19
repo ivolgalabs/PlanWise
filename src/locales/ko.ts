@@ -209,6 +209,9 @@ const ko: Dict = {
   "search.isToday": " · 오늘",
 
   "month.noTasks": "이 날에는 작업이 없습니다",
+  "month.done": "완료",
+  "month.dropped": "내려놓음",
+  "month.stuck": "정체",
   "month.toDay": "일 보기로",
   "month.toWeek": "주 보기로",
   "month.deleteSubtask": "하위 작업 삭제",

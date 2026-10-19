@@ -209,6 +209,9 @@ const zh: Dict = {
   "search.isToday": " · 今天",
 
   "month.noTasks": "这一天没有任务",
+  "month.done": "已完成",
+  "month.dropped": "已放下",
+  "month.stuck": "卡住",
   "month.toDay": "到日视图",
   "month.toWeek": "到周视图",
   "month.deleteSubtask": "删除子任务",

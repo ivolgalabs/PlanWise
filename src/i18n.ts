@@ -303,6 +303,9 @@ const ru = {
 
   // ── Месяц ────────────────────────────────────────────────────────────
   "month.noTasks": "Нет задач на этот день",
+  "month.done": "Сделано",
+  "month.dropped": "Отпущено",
+  "month.stuck": "Застряло",
   "month.toDay": "К дню",
   "month.toWeek": "К неделе",
   "month.deleteSubtask": "Удалить подзадачу",
@@ -742,6 +745,9 @@ const en: Dict = {
   "search.isToday": " · today",
 
   "month.noTasks": "No tasks for this day",
+  "month.done": "Done",
+  "month.dropped": "Let go",
+  "month.stuck": "Stuck",
   "month.toDay": "To day",
   "month.toWeek": "To week",
   "month.deleteSubtask": "Delete subtask",
