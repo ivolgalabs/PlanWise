@@ -23,7 +23,9 @@ interface Props {
 /** Правая панель: мини-календарь сверху, «Когда-нибудь» под ним, полоска
  *  «Архив · N» внизу. Разворот архива занимает панель целиком. */
 export function RightPanel({ tasks, width, onSelect, onChange, fill = false }: Props) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
+  const calOpen = useStore((s) => s.calOpen);
+  const setCalOpen = useStore((s) => s.setCalOpen);
   const visibility = useStore((s) => s.visibility);
   const archivedTasks = useStore((s) => s.archivedTasks);
   const view = useStore((s) => s.view);
@@ -36,7 +38,11 @@ export function RightPanel({ tasks, width, onSelect, onChange, fill = false }: P
   // Календарь виден не везде: в «Месяце» его нет, и настройкой его можно
   // скрыть. Тогда «Когда-нибудь» растягивается на всю панель (stretch),
   // чтобы под ней не оставалось мёртвого пространства.
-  const calVisible = visibility.miniCalendar && view !== "month";
+  // Свёрнутый календарь — одна строка-заголовок: он дублирует стрелки и
+  // «Месяц», а развёрнутый занимал треть экрана.
+  const calAllowed = visibility.miniCalendar && view !== "month";
+  const calVisible = calAllowed && calOpen;
+  const monthTitle = new Date().toLocaleDateString(lang, { month: "long", year: "numeric" });
 
   return (
     <div
@@ -61,7 +67,33 @@ export function RightPanel({ tasks, width, onSelect, onChange, fill = false }: P
         />
       ) : (
         <>
-          {visibility.miniCalendar && view !== "month" && (
+          {calAllowed && (
+            <button
+              type="button"
+              onClick={() => setCalOpen(!calOpen)}
+              title={calOpen ? t("common.collapse") : t("common.expand")}
+              aria-expanded={calOpen}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "var(--sp-2)",
+                width: "100%",
+                border: "none",
+                background: "transparent",
+                padding: "var(--sp-2) var(--sp-3)",
+                fontSize: "var(--fs-sm)",
+                fontWeight: 700,
+                color: "var(--accent-text)",
+                cursor: "pointer",
+                flexShrink: 0,
+              }}
+            >
+              <span style={{ fontSize: "var(--fs-xs)", width: 12, flexShrink: 0, display: "inline-block", transform: calOpen ? "none" : "rotate(-90deg)", transition: "transform 120ms" }}>▾</span>
+              <Icon name="calendar" size={14} />
+              {monthTitle.charAt(0).toUpperCase() + monthTitle.slice(1)}
+            </button>
+          )}
+          {calVisible && (
             // Карточка календаря растягивается на всю область (fill), чтобы
             // под ней не оставалось мёртвого пространства. В «Месяце»
             // календарь не показываем — сетка месяца и так видна.

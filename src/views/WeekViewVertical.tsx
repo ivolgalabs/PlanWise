@@ -263,6 +263,7 @@ function DayRow({
             на ряду, а не на input (раньше линия была только под полем, и
             шестерёнка «наезжала» на заголовок дня/последнюю задачу). */}
         <div
+          className="add-row"
           style={{
             display: "flex",
             alignItems: "center",
@@ -297,7 +298,8 @@ function DayRow({
             />
           </form>
           <button
-            className="chip-btn-sm"
+            className="chip-btn-sm add-row-gear"
+            onMouseDown={(e) => e.preventDefault()}
             onClick={() => setAddOpen(true)}
             title={t("task.configure")}
             style={{ flexShrink: 0 }}

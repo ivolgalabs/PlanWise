@@ -84,6 +84,8 @@ interface PlannerState {
   visibility: VisibilityState;
   /** Зазор между мини-календарём и «Когда-нибудь» в правой панели (px). */
   panelGap: number;
+  /** Мини-календарь в правой панели развёрнут (по умолчанию свёрнут в строку). */
+  calOpen: boolean;
   /** Версия списков подзадач: bump после любого переноса/преобразования
    *  подзадачи (promote, смена родителя) — SubtaskList перезагружается,
    *  чтобы исчезнувшая подзадача не «зависала» у старого родителя. */
@@ -139,6 +141,7 @@ interface PlannerState {
   setArchiveEnabled: (v: boolean) => void;
   setVisibility: (k: keyof VisibilityState, v: boolean) => void;
   setPanelGap: (v: number) => void;
+  setCalOpen: (v: boolean) => void;
   bumpSubtasks: () => void;
   setFocusTask: (id: string | null) => void;
   setNotifyDaySummary: (v: boolean) => void;
@@ -202,6 +205,7 @@ export const useStore = create<PlannerState>()(
       colorSets: [],
       visibility: DEFAULT_VISIBILITY,
       panelGap: 20,
+      calOpen: false,
       subtaskRev: 0,
       focusTaskId: null,
       notifyDaySummary: true,
@@ -238,6 +242,7 @@ export const useStore = create<PlannerState>()(
       setVisibility: (k, v) =>
         set((s) => ({ visibility: { ...s.visibility, [k]: v } })),
       setPanelGap: (v) => set({ panelGap: v }),
+      setCalOpen: (v) => set({ calOpen: v }),
       bumpSubtasks: () => set((s) => ({ subtaskRev: s.subtaskRev + 1 })),
       setFocusTask: (id) => set({ focusTaskId: id }),
       setNotifyDaySummary: (v) => set({ notifyDaySummary: v }),
@@ -286,6 +291,7 @@ export const useStore = create<PlannerState>()(
         archiveEnabled: s.archiveEnabled,
         visibility: s.visibility,
         panelGap: s.panelGap,
+        calOpen: s.calOpen,
         notifyDaySummary: s.notifyDaySummary,
         notifyDayHour: s.notifyDayHour,
         notifyReminders: s.notifyReminders,

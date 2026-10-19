@@ -249,6 +249,7 @@ function DayTasksArea({
           Ряд отделён от задач полной линией сверху (на ряду, а не на input —
           чтобы линия шла и под шестерёнкой, и кнопка не наезжала на задачи). */}
       <div
+        className="add-row"
         style={{
           display: "flex",
           alignItems: "center",
@@ -284,7 +285,8 @@ function DayTasksArea({
           />
         </form>
         <button
-          className="chip-btn-sm"
+          className="chip-btn-sm add-row-gear"
+          onMouseDown={(e) => e.preventDefault()}
           onClick={() => setAddOpen(true)}
           title={t("task.configure")}
           style={{ flexShrink: 0 }}

@@ -2,6 +2,7 @@ import { useDroppable } from "@dnd-kit/core";
 import { COLORS, accentTint } from "../theme";
 import { weekShiftNextId } from "../drag";
 import { useI18n } from "../i18n";
+import { useMediaQuery } from "../useMediaQuery";
 
 /**
  * Узкая боковая зона переноса задачи на следующую неделю (+7 дней от текущей
@@ -12,6 +13,9 @@ import { useI18n } from "../i18n";
 export function WeekShiftZone() {
   const { t } = useI18n();
   const { setNodeRef, isOver } = useDroppable({ id: weekShiftNextId });
+  // На телефоне полоса съедает ширину, а перетаскивание там редкое.
+  const narrow = useMediaQuery("(max-width: 820px)");
+  if (narrow) return null;
   return (
     <div
       ref={setNodeRef}

@@ -49,13 +49,9 @@ export function SomedayColumn({ tasks, onChange, stretch = false }: Props) {
   const { t } = useI18n();
   const { setNodeRef, isOver } = useDroppable({ id: somedayZoneId });
   const sortMode = useStore((s) => s.sortMode);
-  // Свёрнутые группы: по умолчанию все развёрнуты.
-  const [collapsed, setCollapsed] = useState<Record<GroupKey, boolean>>({
-    overdue: false,
-    someday: false,
-    week: false,
-    month: false,
-  });
+  // Свёрнутые группы: явный выбор пользователя, иначе пустая группа свёрнута
+  // в одну строку (раскрытые пустые группы выглядели недоделанными).
+  const [collapsed, setCollapsed] = useState<Partial<Record<GroupKey, boolean>>>({});
   const today = toEpochDay(new Date());
   const sorted = sortSomedayTasks(tasks, sortMode);
   const groups = GROUPS.map((g) => ({
@@ -81,13 +77,13 @@ export function SomedayColumn({ tasks, onChange, stretch = false }: Props) {
       }}
     >
       {groups.map((g) => {
-        const isCollapsed = collapsed[g.key];
+        const isCollapsed = collapsed[g.key] ?? g.items.length === 0;
         return (
           <PlanGroup key={g.key} groupKey={g.key}>
             <button
               type="button"
               onClick={() =>
-                setCollapsed((c) => ({ ...c, [g.key]: !c[g.key] }))
+                setCollapsed((c) => ({ ...c, [g.key]: !isCollapsed }))
               }
               title={isCollapsed ? t("common.expand") : t("common.collapse")}
               style={{
@@ -129,11 +125,6 @@ export function SomedayColumn({ tasks, onChange, stretch = false }: Props) {
                   {g.items.map((t) => (
                     <TaskCard key={t.id} task={t} onChange={onChange} showTime={false} />
                   ))}
-                  {g.items.length === 0 && (
-                    <p style={{ margin: 0, padding: "var(--sp-2) var(--sp-3)", fontSize: "var(--fs-2xs)", color: COLORS.muted }}>
-                      {t("someday.empty")}
-                    </p>
-                  )}
                 </div>
                 {/* Форма: «Далее/Готово» на мобильной клавиатуре добавляет
                     задачу сразу в эту группу (с соответствующим сроком). */}

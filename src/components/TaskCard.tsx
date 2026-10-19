@@ -394,15 +394,16 @@ export const TaskCard = memo(function TaskCard({
   if (travel) timeMeta.push(travel);
   const timeText = taskTimeRange(task);
   // Статичный «бейдж» времени: выглядит как раньше, но это не кнопка —
-  // клик открывает карточку, где время настраивается.
-  const timeBadge = (
+  // клик открывает карточку, где время настраивается. Без времени бейджа нет:
+  // «в течение дня» под каждой задачей — шум, отсутствие времени и так видно.
+  const timeBadge = timeText ? (
     <span
       className={`task-time${task.timeMinutes != null ? " has" : ""}${timeConflict ? " conflict" : ""}`}
       title={timeConflict ? t("task.timeConflict") : task.timeMinutes != null ? t("task.configureTime") : t("task.noTime")}
     >
-      {timeText ?? (compact ? t("task.withinDayShort") : t("task.withinDay"))}
+      {timeText}
     </span>
-  );
+  ) : null;
 
   // Чип мягкого срока «Когда-нибудь»: просрочено / в течение недели/месяца / до даты.
   const dueBadge = due != null ? (
@@ -432,7 +433,7 @@ export const TaskCard = memo(function TaskCard({
   // compact (сетка недели): строка времени НАД текстом, с отступом сверху
   // (иначе прижимается к предыдущей задаче). Не-compact (День, список):
   // в ряду с текстом.
-  const showTimeRow = !mobileRow && (compact ? (prioMeta != null || task.timeMinutes != null || due != null) : (effectiveShowTime || prioMeta != null || due != null));
+  const showTimeRow = !mobileRow && (compact ? (prioMeta != null || task.timeMinutes != null || due != null) : ((effectiveShowTime && timeText != null) || prioMeta != null || due != null));
   // Выравнивание элемента строки по центру ПЕРВОЙ строки текста в компактной
   // сетке: строка «шапки» (время/приоритет, shift) + фактический padding
   // текста (padTop, в em — меняется со шрифтом) + пол-разницы высот. Центр
@@ -666,7 +667,7 @@ export const TaskCard = memo(function TaskCard({
         />
         {/* Не-compact (День, вертикальная неделя): время — в ряду с текстом. */}
         {!compact && timeRow}
-        {mobileRow && effectiveShowTime && (
+        {mobileRow && effectiveShowTime && (timeText != null || prioDot || timeMeta.length > 0) && (
           <div
             style={{
               display: "flex",
