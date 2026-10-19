@@ -251,6 +251,7 @@ object WidgetData {
           put("updated_at", System.currentTimeMillis())
         }
         db.update("tasks", cv, "id = ?", arrayOf(taskId))
+        if (current == 0) spawnNextRepeat(db, taskId)
       } finally {
         db.close()
       }
@@ -264,6 +265,100 @@ object WidgetData {
     } catch (e: Exception) {
       e.printStackTrace()
       "Не удалось обновить задачу"
+    }
+  }
+
+  private fun utcCal(): Calendar = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
+
+  /** Первая дата серии строго после today (ср. next_repeat_date в commands.rs):
+   *  месяц считается от исходной даты, 31-е прижимается к концу месяца. */
+  internal fun nextRepeatDay(date: Long, repeat: String, today: Long): Long? {
+    val base = utcCal().apply { timeInMillis = date * 86_400_000L }
+    for (k in 1..1200) {
+      val e = when (repeat) {
+        "daily" -> date + k
+        "weekly" -> date + 7L * k
+        "monthly" -> {
+          val c = utcCal()
+          c.clear()
+          c.set(base.get(Calendar.YEAR), base.get(Calendar.MONTH) + k, 1)
+          c.set(Calendar.DAY_OF_MONTH, minOf(base.get(Calendar.DAY_OF_MONTH), c.getActualMaximum(Calendar.DAY_OF_MONTH)))
+          c.timeInMillis / 86_400_000L
+        }
+        else -> return null
+      }
+      if (e > today) return e
+    }
+    return null
+  }
+
+  /**
+   * Закрытая с виджета повторяющаяся задача рождает следующее вхождение — как
+   * spawn_next_repeat в Rust (копия строки со сдвинутой датой + подзадачи
+   * невыполненными; дубль на ту же дату не плодим).
+   * shortcut: напоминания копии поставит сверка при запуске приложения.
+   */
+  private fun spawnNextRepeat(db: SQLiteDatabase, taskId: String) {
+    db.rawQuery("SELECT * FROM tasks WHERE id = ?", arrayOf(taskId)).use { c ->
+      if (!c.moveToFirst()) return
+      val ri = c.getColumnIndex("repeat")
+      if (ri < 0 || c.isNull(ri)) return
+      val repeat = c.getString(ri)
+      if (c.getInt(c.getColumnIndexOrThrow("someday")) != 0 || c.getInt(c.getColumnIndexOrThrow("archived")) != 0) return
+      val title = c.getString(c.getColumnIndexOrThrow("title"))
+      val next = nextRepeatDay(c.getLong(c.getColumnIndexOrThrow("date")), repeat, todayEpochDay()) ?: return
+      val exists = db.rawQuery(
+        "SELECT COUNT(*) FROM tasks WHERE title = ? AND repeat = ? AND date = ? AND is_done = 0",
+        arrayOf(title, repeat, next.toString()),
+      ).use { q -> q.moveToFirst() && q.getInt(0) > 0 }
+      if (exists) return
+      val now = System.currentTimeMillis()
+      val newId = UUID.randomUUID().toString()
+      val over = mapOf<String, Any?>(
+        "id" to newId, "date" to next, "is_done" to 0, "archived" to 0, "done_at" to null,
+        "dropped_at" to null, "postpone_count" to 0, "created_at" to now, "updated_at" to now,
+        "sort_order" to now.toDouble(),
+      )
+      val cv = android.content.ContentValues()
+      for (i in 0 until c.columnCount) {
+        val name = c.getColumnName(i)
+        if (over.containsKey(name)) {
+          when (val v = over[name]) {
+            null -> cv.putNull(name)
+            is Int -> cv.put(name, v)
+            is Long -> cv.put(name, v)
+            is Double -> cv.put(name, v)
+            else -> cv.put(name, v.toString())
+          }
+          continue
+        }
+        when (c.getType(i)) {
+          android.database.Cursor.FIELD_TYPE_INTEGER -> cv.put(name, c.getLong(i))
+          android.database.Cursor.FIELD_TYPE_FLOAT -> cv.put(name, c.getDouble(i))
+          android.database.Cursor.FIELD_TYPE_STRING -> cv.put(name, c.getString(i))
+          android.database.Cursor.FIELD_TYPE_NULL -> cv.putNull(name)
+          else -> {}
+        }
+      }
+      db.beginTransaction()
+      try {
+        db.insertOrThrow("tasks", null, cv)
+        db.rawQuery("SELECT title, sort_order FROM subtasks WHERE task_id = ?", arrayOf(taskId)).use { s ->
+          while (s.moveToNext()) {
+            db.insertOrThrow("subtasks", null, android.content.ContentValues().apply {
+              put("id", UUID.randomUUID().toString())
+              put("task_id", newId)
+              put("title", s.getString(0))
+              put("is_done", 0)
+              put("sort_order", s.getDouble(1))
+              put("created_at", now)
+            })
+          }
+        }
+        db.setTransactionSuccessful()
+      } finally {
+        db.endTransaction()
+      }
     }
   }
 
@@ -306,7 +401,7 @@ object WidgetData {
 
   /**
    * Генерирует widget.json прямо из SQLite — та же логика, что refresh_widget
-   * в Rust (сегодня ≤8, неделя 7×≤4, «Когда-нибудь» ≤8, окно вчера..+5 ≤8).
+   * в Rust (сегодня ≤8, неделя 7×≤4, «Позже» ≤8, окно вчера..+5 ≤8).
    * Тему (dark) берём из текущего файла, чтобы быстрый ввод не переключал
    * виджет на светлую тему.
    */

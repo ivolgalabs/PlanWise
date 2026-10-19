@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- «Когда-нибудь»: ставится маленьким (2×2) и расширяется до 4×4+;
+<!-- «Позже»: ставится маленьким (2×2) и расширяется до 4×4+;
      содержимое адаптируется к размеру (2/5/7 строк). -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:minWidth="140dp"

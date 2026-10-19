@@ -415,6 +415,11 @@ export const TaskCard = memo(function TaskCard({
       ↻{postponed}
     </span>
   ) : null;
+  const repeatBadge = task.repeat ? (
+    <span className="task-time has" title={t(`repeat.${task.repeat}` as const)}>
+      ⟳
+    </span>
+  ) : null;
   const isTail = !task.isDone && !task.someday && task.date < toEpochDay(new Date());
 
   // Чип мягкого срока «Когда-нибудь»: просрочено / в течение недели/месяца / до даты.
@@ -445,7 +450,7 @@ export const TaskCard = memo(function TaskCard({
   // compact (сетка недели): строка времени НАД текстом, с отступом сверху
   // (иначе прижимается к предыдущей задаче). Не-compact (День, список):
   // в ряду с текстом.
-  const showTimeRow = !mobileRow && (compact ? (prioMeta != null || task.timeMinutes != null || due != null) : ((effectiveShowTime && timeText != null) || prioMeta != null || due != null)) || (!mobileRow && postponeBadge != null);
+  const showTimeRow = !mobileRow && (compact ? (prioMeta != null || task.timeMinutes != null || due != null) : ((effectiveShowTime && timeText != null) || prioMeta != null || due != null)) || (!mobileRow && (postponeBadge != null || repeatBadge != null));
   // Выравнивание элемента строки по центру ПЕРВОЙ строки текста в компактной
   // сетке: строка «шапки» (время/приоритет, shift) + фактический padding
   // текста (padTop, в em — меняется со шрифтом) + пол-разницы высот. Центр
@@ -493,6 +498,7 @@ export const TaskCard = memo(function TaskCard({
       )}
       {dueBadge}
       {postponeBadge}
+      {repeatBadge}
     </div>
   ) : null;
 
@@ -680,7 +686,7 @@ export const TaskCard = memo(function TaskCard({
         />
         {/* Не-compact (День, вертикальная неделя): время — в ряду с текстом. */}
         {!compact && timeRow}
-        {mobileRow && effectiveShowTime && (timeText != null || prioDot || timeMeta.length > 0 || postponeBadge) && (
+        {mobileRow && effectiveShowTime && (timeText != null || prioDot || timeMeta.length > 0 || postponeBadge || repeatBadge) && (
           <div
             style={{
               display: "flex",
@@ -694,6 +700,7 @@ export const TaskCard = memo(function TaskCard({
             {prioDot}
             {timeBadge}
             {postponeBadge}
+            {repeatBadge}
             {timeMeta.length > 0 && (
               <span
                 style={{

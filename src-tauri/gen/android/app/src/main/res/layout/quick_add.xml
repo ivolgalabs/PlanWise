@@ -31,7 +31,7 @@
         android:imeOptions="actionDone"
         android:maxLines="1" />
 
-    <!-- Чипы даты: 4 режима в две строки («Когда-нибудь»/«Другая дата» не
+    <!-- Чипы даты: 4 режима в две строки («Позже»/«Другая дата» не
          влезают в одну строку на узких экранах). -->
     <LinearLayout
         android:layout_width="match_parent"

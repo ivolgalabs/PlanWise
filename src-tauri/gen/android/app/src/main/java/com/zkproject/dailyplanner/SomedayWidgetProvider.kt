@@ -4,10 +4,10 @@ import android.content.Context
 import android.widget.RemoteViews
 
 /**
- * Виджет «Когда-нибудь»: задачи без даты, адаптация к размеру как у «Сегодня»
+ * Виджет «Позже»: задачи без даты, адаптация к размеру как у «Сегодня»
  * (2×2 — 2 строки, 4×2 — 5 строк, 4×3+ — 7 строк). Тап по строке отмечает
  * задачу выполненной. Кнопка «＋» открывает быстрый ввод сразу с выбранным
- * чипом «Когда-нибудь».
+ * чипом «Позже».
  */
 class SomedayWidgetProvider : WidgetProvider() {
 
@@ -35,7 +35,7 @@ class SomedayWidgetProvider : WidgetProvider() {
     )
 
     if (data == null) {
-      v.setTextViewText(R.id.widget_title, "Когда-нибудь")
+      v.setTextViewText(R.id.widget_title, "Позже")
       v.setTextViewText(R.id.widget_subtitle, "Откройте приложение, чтобы загрузить данные")
       timeIds.forEach { v.setViewVisibility(it, android.view.View.GONE) }
       titleIds.forEach { v.setViewVisibility(it, android.view.View.GONE) }
