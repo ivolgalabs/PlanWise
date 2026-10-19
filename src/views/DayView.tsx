@@ -237,6 +237,9 @@ function DayTasksArea({
             {t("day.noTasks")}
           </p>
         )}
+        {today && dayTasks.length > 0 && dayTasks.every((x) => x.isDone) && (
+          <p style={{ color: "var(--accent-text)", fontSize: "var(--fs-base)" }}>{t("day.allDone")}</p>
+        )}
         {dayTasks.map((t) => (
           <TaskCard
             key={t.id}

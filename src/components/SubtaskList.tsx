@@ -51,7 +51,7 @@ export function SubtaskList({ taskId }: Props) {
             fontSize: "var(--fs-sm)",
             color: COLORS.muted,
             marginBottom: 2,
-            fontWeight: 600,
+            fontWeight: 400,
             userSelect: "none",
           }}
         >

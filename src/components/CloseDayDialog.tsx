@@ -39,6 +39,10 @@ export function UsualLoad() {
 
 const errText = (e: unknown) => String(e instanceof Error ? e.message : e);
 
+/** Закрытые сегодня (по локальному дню `done_at`), без «отпущенных». */
+const doneToday = (tasks: Task[], todayEd: number) =>
+  tasks.filter((x) => x.isDone && !x.droppedAt && x.doneAt && toEpochDay(new Date(x.doneAt)) === todayEd);
+
 /** Кнопка «Закрыть день» (у сегодняшней колонки) + диалог разбора: у каждой
  *  открытой задачи сегодня и прошлых дней — завтра / когда-нибудь / отпустить,
  *  внизу заметка дня. После ↻3 «Завтра» заблокировано: пора отпустить или
@@ -46,7 +50,19 @@ const errText = (e: unknown) => String(e instanceof Error ? e.message : e);
 export function CloseDayButton({ onChange, compact = false }: { onChange: () => void; compact?: boolean }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
-  const label = t("close.button");
+  const [closed, setClosed] = useState(false);
+  const todayEd = toEpochDay(new Date());
+  const tasks = useStore((s) => s.tasks);
+  const refresh = () =>
+    api
+      .getDays(todayEd, todayEd)
+      .then((d) => setClosed(!!d[0]?.closedAt))
+      .catch((e) => showToast(errText(e)));
+  useEffect(() => void refresh(), [todayEd]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Утром, пока нечего закрывать и нечего отмечать, кнопка — шум: прячем.
+  const hasOpen = tasks.some((x) => !x.isDone && !x.someday && !x.archived && x.date <= todayEd);
+  if (!closed && !hasOpen && doneToday(tasks, todayEd).length === 0) return null;
+  const label = closed ? t("close.closed") : t("close.button");
   return (
     <>
       <button
@@ -57,9 +73,17 @@ export function CloseDayButton({ onChange, compact = false }: { onChange: () => 
         onClick={() => setOpen(true)}
         style={{ flexShrink: 0, alignSelf: "center", fontSize: "var(--fs-2xs)" }}
       >
-        {compact ? "✓" : `✓ ${label}`}
+        {compact ? "✓" : closed ? label : `✓ ${label}`}
       </button>
-      {open && <CloseDayDialog onChange={onChange} onClose={() => setOpen(false)} />}
+      {open && (
+        <CloseDayDialog
+          onChange={onChange}
+          onClose={() => {
+            setOpen(false);
+            void refresh();
+          }}
+        />
+      )}
     </>
   );
 }
@@ -71,6 +95,7 @@ function CloseDayDialog({ onChange, onClose }: { onChange: () => void; onClose: 
   const open = tasks
     .filter((x) => !x.isDone && !x.someday && !x.archived && x.date <= todayEd)
     .sort((a, b) => a.date - b.date || a.sortOrder - b.sortOrder);
+  const wins = doneToday(tasks, todayEd);
   const [note, setNote] = useState("");
   const [loaded, setLoaded] = useState<{ note: string; closedAt: number | null } | null>(null);
 
@@ -190,6 +215,18 @@ function CloseDayDialog({ onChange, onClose }: { onChange: () => void; onClose: 
         <div style={{ fontSize: "var(--fs-md)", fontWeight: 600, color: COLORS.text, marginBottom: "var(--sp-3)" }}>
           {t("close.button")}
         </div>
+        {wins.length > 0 && (
+          <div style={{ fontSize: "var(--fs-sm)", color: "var(--accent-text)", marginBottom: "var(--sp-3)" }}>
+            {t("close.done", { n: wins.length })}
+            <div style={{ color: "var(--text-secondary)", fontSize: "var(--fs-2xs)", marginTop: "var(--sp-1)" }}>
+              {wins
+                .slice(0, 5)
+                .map((x) => x.title)
+                .join(" · ")}
+              {wins.length > 5 ? " …" : ""}
+            </div>
+          </div>
+        )}
         <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
           {open.length === 0 ? (
             <div style={{ color: "var(--text-secondary)", fontSize: "var(--fs-sm)", padding: "var(--sp-2) 0" }}>
@@ -224,6 +261,7 @@ function CloseDayDialog({ onChange, onClose }: { onChange: () => void; onClose: 
           autoFocus
           onClick={async () => {
             await saveDay(true);
+            showToast(wins.length ? t("close.doneToast", { n: wins.length }) : t("close.closed"));
             onClose();
           }}
           style={{ marginTop: "var(--sp-4)" }}
