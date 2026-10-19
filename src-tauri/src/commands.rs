@@ -71,8 +71,9 @@ fn select_task_by_id(conn: &rusqlite::Connection, id: &str) -> Result<Option<Tas
         .map_err(|e| e.to_string())
 }
 
-/// Перенос задачи на дату: в прошлое = выполнена, в будущее (из прошлого) =
-/// актуальна. Общее для переноса и возврата из архива.
+/// Перенос задачи на дату: в прошлое — остаётся как была (галочка значит «я
+/// сделал», а не «дата прошла»), закрытая в будущее = снова актуальна.
+/// Общее для переноса и возврата из архива.
 /// Открытая задача, уехавшая с сегодня/прошлого на будущее, — это перенос:
 /// postpone_count растёт (SET в SQLite читает старую строку: date — прежняя).
 fn move_task_to_date(conn: &rusqlite::Connection, id: &str, new_date: i64) -> Result<(), String> {
@@ -80,10 +81,7 @@ fn move_task_to_date(conn: &rusqlite::Connection, id: &str, new_date: i64) -> Re
         "UPDATE tasks SET date = ?1, someday = 0, archived = 0,
            postpone_count = postpone_count
              + (is_done = 0 AND someday = 0 AND date <= ?2 AND ?1 > ?2),
-           is_done = CASE
-             WHEN ?1 < ?2 THEN 1
-             WHEN ?1 > ?2 AND is_done = 1 THEN 0
-             ELSE is_done END,
+           is_done = CASE WHEN ?1 > ?2 THEN 0 ELSE is_done END,
            updated_at = ?3 WHERE id = ?4",
         rusqlite::params![new_date, today_epoch_day(), now_ms(), id],
     )
@@ -92,8 +90,8 @@ fn move_task_to_date(conn: &rusqlite::Connection, id: &str, new_date: i64) -> Re
 }
 
 /// epoch-day «сегодня» по локальной дате машины (как toEpochDay на фронте:
-/// локальная дата, отсчёт от 1970-01-01). Нужен для правила «перенос задачи
-/// в прошлое = задача выполнена».
+/// локальная дата, отсчёт от 1970-01-01). Граница «прошлое/будущее» для
+/// переноса, архива и напоминаний.
 pub(crate) fn today_epoch_day() -> i64 {
     date_to_epoch(chrono::Local::now().date_naive())
 }
@@ -436,8 +434,6 @@ pub fn move_task(state: State<'_, Db>, id: String, new_date: i64) -> Result<(), 
         moved.date = new_date;
         check_time_overlap(&conn, &moved)?;
     }
-    // Перенос в прошлое = задача закрыта (выполнена); перенос в будущее из
-    // прошлого = снова актуальна (не выполнена). Сегодня не трогаем.
     move_task_to_date(&conn, &id, new_date)?;
     crate::notify::wake_scheduler();
     Ok(())
@@ -2022,6 +2018,28 @@ mod tests {
         write_task(&conn, &done).unwrap();
         move_task_to_date(&conn, "b", today + 1).unwrap();
         assert_eq!(count("b"), 0, "закрытая задача не переносится");
+    }
+
+    /// Перенос на прошлый день не ставит галочку: открытая остаётся открытой,
+    /// закрытая — закрытой (с прежним done_at).
+    #[test]
+    fn move_to_past_keeps_status() {
+        let conn = open(":memory:").expect("open test db");
+        let today = today_epoch_day();
+        let get = |id: &str| select_task_by_id(&conn, id).unwrap().unwrap();
+        write_task(&conn, &open_task("a", today)).unwrap();
+        move_task_to_date(&conn, "a", today - 2).unwrap();
+        let a = get("a");
+        assert_eq!((a.date, a.is_done, a.done_at), (today - 2, false, None));
+
+        let mut done = open_task("b", today);
+        done.is_done = true;
+        write_task(&conn, &done).unwrap();
+        let done_at = get("b").done_at;
+        move_task_to_date(&conn, "b", today - 1).unwrap();
+        let b = get("b");
+        assert!(b.is_done);
+        assert_eq!(b.done_at, done_at);
     }
 
     /// V15: done_at/dropped_at ведёт БД при любом писателе is_done; upsert

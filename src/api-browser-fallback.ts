@@ -102,7 +102,7 @@ export const browserApi = {
     return copy;
   },
   async moveTask(id: string, newDay: number): Promise<void> {
-    // Перенос в прошлое = задача выполнена; в будущее = снова актуальна.
+    // Перенос в прошлое статус не меняет; закрытая в будущее = снова актуальна.
     const today = todayEpochDay();
     save(K.tasks, load<Task>(K.tasks).map((t) => {
       if (t.id !== id) return t;
@@ -113,7 +113,7 @@ export const browserApi = {
       }
       // Перенос открытой задачи с сегодня/прошлого на будущее (ср. move_task_to_date).
       const postponed = !t.isDone && t.date <= today && newDay > today ? 1 : 0;
-      return withDone(t, { ...t, date: newDay, someday: false, archived: false, isDone: newDay < today ? true : newDay > today ? false : t.isDone, postponeCount: (t.postponeCount ?? 0) + postponed, notes: t.notes ?? "", updatedAt: Date.now() });
+      return withDone(t, { ...t, date: newDay, someday: false, archived: false, isDone: newDay > today ? false : t.isDone, postponeCount: (t.postponeCount ?? 0) + postponed, notes: t.notes ?? "", updatedAt: Date.now() });
     }));
   },
   async dropTask(id: string): Promise<void> {
@@ -169,9 +169,9 @@ export const browserApi = {
       .sort((a, b) => b.date - a.date || b.updatedAt - a.updatedAt);
   },
   async restoreArchived(id: string, date: number): Promise<void> {
-    // Возврат в прошлое = выполнена (иначе снова уйдёт в архив); в будущее = актуальна.
+    // Как moveTask: в прошлое статус не меняется; в будущее = актуальна.
     const today = todayEpochDay();
-    save(K.tasks, load<Task>(K.tasks).map((t) => (t.id === id ? { ...t, archived: false, date, someday: false, isDone: date < today ? true : date > today ? false : t.isDone, notes: t.notes ?? "", updatedAt: Date.now() } : t)));
+    save(K.tasks, load<Task>(K.tasks).map((t) => (t.id === id ? { ...t, archived: false, date, someday: false, isDone: date > today ? false : t.isDone, notes: t.notes ?? "", updatedAt: Date.now() } : t)));
   },
   async getSubtasks(taskId: string): Promise<Subtask[]> {
     return load<Subtask>(K.subs)
