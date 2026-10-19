@@ -1,0 +1,528 @@
+<!doctype html>
+<html lang="ru" data-theme="light-slate">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PlanWise — варианты</title>
+<!-- Throwaway prototype: compares day-logic variants on mock data. Not part of the app build. -->
+<link rel="stylesheet" href="../../../../General/UI/Universal%20UI/all.css">
+<style>
+  body { margin: 0; background: var(--bg-primary); color: var(--text-primary); font-family: var(--font-ui); font-size: var(--fs-base); }
+  button { font-family: inherit; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: var(--sp-4); box-sizing: border-box; }
+  .top { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; justify-content: space-between; margin-bottom: var(--sp-3); }
+  .top h1 { font-size: var(--fs-lg); margin: 0; }
+  .tabs { display: flex; flex-wrap: wrap; gap: var(--sp-1); margin-bottom: var(--sp-3); }
+  .card { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: var(--sp-3); margin-bottom: var(--sp-3); }
+  .info { display: grid; gap: var(--sp-1); font-size: var(--fs-sm); color: var(--text-secondary); }
+  .info b { color: var(--text-primary); }
+  .bar { margin-bottom: var(--sp-3); }
+  .row { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2); border-radius: var(--radius-md); flex-wrap: wrap; }
+  .row:hover { background: var(--bg-hover); }
+  .row .t { flex: 1; min-width: 160px; }
+  .done .t, .t.done { text-decoration: line-through; color: var(--text-muted); }
+  .dim { opacity: 0.45; }
+  .muted { color: var(--text-muted); font-size: var(--fs-sm); }
+  .line { border-top: 2px dashed var(--warning); margin: var(--sp-2) 0; padding-top: var(--sp-1); font-size: var(--fs-xs); color: var(--warning); }
+  .capture { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-bottom: var(--sp-1); align-items: center; }
+  .capture input[name=q] { flex: 1; min-width: 200px; }
+  input[type=text], input:not([type]), textarea { background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: var(--pad-control-y) var(--pad-control-x); font: inherit; box-sizing: border-box; }
+  textarea { width: 100%; min-height: 60px; }
+  .hint { font-size: var(--fs-xs); color: var(--text-muted); min-height: 1.3em; margin-bottom: var(--sp-3); }
+  .sec { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin: var(--sp-4) 0 var(--sp-1); }
+  .chip { display: inline-flex; align-items: center; gap: var(--sp-1); font-size: var(--fs-xs); padding: 2px var(--sp-2); border-radius: var(--radius-full); border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-secondary); cursor: pointer; font-family: inherit; }
+  .chip input { margin: 0; }
+  .w-H { border-left: 3px solid var(--danger); }
+  .w-M { border-left: 3px solid var(--warning); }
+  .w-S { border-left: 3px solid var(--success); }
+  .now { padding: var(--sp-5); text-align: center; border: 2px solid var(--accent); border-radius: var(--radius-xl); background: var(--accent-glow); margin-bottom: var(--sp-3); }
+  .now .big { font-size: var(--fs-xl); font-weight: 600; margin: var(--sp-2) 0 var(--sp-4); }
+  .actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); justify-content: center; }
+  .ask { width: 100%; display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; padding: var(--sp-2); border: 1px solid var(--warning); border-radius: var(--radius-md); }
+  .ask input { flex: 1; min-width: 180px; }
+  .week { display: grid; grid-template-columns: repeat(7, minmax(150px, 1fr)); gap: var(--sp-2); overflow-x: auto; padding-bottom: var(--sp-2); }
+  .col { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: var(--sp-2); min-height: 320px; }
+  .col.over { border-color: var(--danger); }
+  .col h3 { font-size: var(--fs-sm); margin: 0 0 var(--sp-1); }
+  .meter { font-size: var(--fs-xs); color: var(--text-secondary); margin-bottom: var(--sp-2); line-height: 1.6; }
+  .meter .x { color: var(--danger); font-weight: 700; }
+  .task { display: flex; gap: var(--sp-1); align-items: flex-start; flex-wrap: wrap; padding: var(--sp-1) var(--sp-2); margin-bottom: var(--sp-1); background: var(--bg-primary); border-radius: var(--radius-sm); font-size: var(--fs-sm); cursor: grab; }
+  .task .t { flex: 1; min-width: 80px; }
+  .slots { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--sp-3); margin-bottom: var(--sp-3); }
+  .slot { min-height: 150px; display: flex; flex-direction: column; justify-content: space-between; gap: var(--sp-3); background: var(--bg-secondary); border: 2px solid var(--accent); border-radius: var(--radius-xl); padding: var(--sp-4); }
+  .slot.empty { border-style: dashed; border-color: var(--border-color); color: var(--text-muted); }
+  .slot .big { font-size: var(--fs-md); font-weight: 600; }
+  .stack { display: flex; height: 14px; border-radius: var(--radius-full); overflow: hidden; background: var(--bg-tertiary); margin: var(--sp-1) 0; }
+  .stack span { display: block; height: 100%; }
+  .legend { display: flex; flex-wrap: wrap; gap: var(--sp-3); font-size: var(--fs-xs); color: var(--text-secondary); margin-bottom: var(--sp-2); }
+  .wk { display: grid; grid-template-columns: 70px 1fr 30px; gap: var(--sp-2); align-items: center; font-size: var(--fs-xs); color: var(--text-secondary); }
+  details summary { cursor: pointer; color: var(--text-secondary); font-size: var(--fs-sm); padding: var(--sp-2) 0; }
+  .foot { font-size: var(--fs-sm); color: var(--text-secondary); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <h1>PlanWise — тестовые варианты логики дня</h1>
+    <div>
+      <button class="btn-ghost" data-a="theme">Тема</button>
+      <button class="btn-ghost" data-a="reset">Сбросить вариант</button>
+    </div>
+  </div>
+  <div class="tabs" id="tabs"></div>
+  <div class="card info" id="info"></div>
+  <div id="app"></div>
+  <div class="card foot">
+    <b>Как сравнивать:</b> по 2–3 минуты на каждый вариант, как будто это твой понедельник. После каждого ответь себе:
+    стало спокойнее? понятно, что делать прямо сейчас? что раздражает? Данные у каждого варианта свои, «Сбросить вариант» возвращает начало.
+  </div>
+</div>
+<script>
+'use strict';
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+const VEC = {
+  visa: { i: '🎓', n: 'ВНЖ / Учёба', c: 'var(--chart-1)' },
+  cash: { i: '💰', n: 'Кэш / Релиз', c: 'var(--chart-2)' },
+  life: { i: '🌿', n: 'Здоровье / Быт', c: 'var(--chart-3)' },
+  opt: { i: '⚙️', n: 'Оптимизация', c: 'var(--warning)' },
+};
+const WT = { H: { n: 'Heavy', cap: 2, pts: 3 }, M: { n: 'Medium', cap: 3, pts: 2 }, S: { n: 'Micro', cap: Infinity, pts: 1 } };
+// shortcut: capacity and budget are mock constants; the real app learns them from history (layer 2 of the concept).
+const CAP = 5, BUDGET = 9;
+const DOW = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
+const DOW_ACC = ['воскресенье', 'понедельник', 'вторник', 'среду', 'четверг', 'пятницу', 'субботу'];
+const today = new Date(); today.setHours(0, 0, 0, 0);
+const dayDate = (d) => new Date(today.getTime() + d * 864e5);
+const dayLabel = (d) => d === 0 ? 'Сегодня' : d === 1 ? 'Завтра' : d === -1 ? 'Вчера' : `${DOW[dayDate(d).getDay()]} ${dayDate(d).getDate()}`;
+
+// Quick-capture parser (ru): date/time words are cut out of the title; no date means Inbox.
+const WD = { пн: 1, по: 1, вт: 2, ср: 3, чт: 4, че: 4, пт: 5, пя: 5, сб: 6, су: 6, вс: 0, во: 0 };
+function parse(text) {
+  let t = ` ${text.trim()} `, day = null, time = null, m;
+  if ((m = t.match(/\sв\s?(\d{1,2})(?::(\d{2}))?(?=\s)/i)) && +m[1] < 24) { time = `${m[1].padStart(2, '0')}:${m[2] || '00'}`; t = t.replace(m[0], ' '); }
+  if ((m = t.match(/\sпослезавтра(?=\s)/i))) { day = 2; t = t.replace(m[0], ' '); }
+  else if ((m = t.match(/\sзавтра(?=\s)/i))) { day = 1; t = t.replace(m[0], ' '); }
+  else if ((m = t.match(/\sсегодня(?=\s)/i))) { day = 0; t = t.replace(m[0], ' '); }
+  else if ((m = t.match(/\sчерез\s(\d{1,2})\sд(?:ень|ня|ней)(?=\s)/i))) { day = +m[1]; t = t.replace(m[0], ' '); }
+  else if ((m = t.match(/\s(?:в\s|во\s)?(пн|вт|ср|чт|пт|сб|вс|понедельник|вторник|среду|среда|четверг|пятницу|пятница|субботу|суббота|воскресенье)(?=\s)/i))) {
+    const wd = WD[m[1].toLowerCase().slice(0, 2)];
+    day = (wd - today.getDay() + 7) % 7 || 7; t = t.replace(m[0], ' ');
+  }
+  if (time && day === null) day = 0;
+  return { title: t.replace(/\s+/g, ' ').trim(), day, time };
+}
+[['Позвонить маме завтра в 18:00', ['Позвонить маме', 1, '18:00']],
+ ['идея про заметки со связями', ['идея про заметки со связями', null, null]],
+ ['отчёт через 3 дня', ['отчёт', 3, null]],
+ ['купить хлеб в 9', ['купить хлеб', 0, '09:00']]]
+  .forEach(([s, e]) => { const r = parse(s); console.assert(JSON.stringify([r.title, r.day, r.time]) === JSON.stringify(e), 'parse', s, r); });
+
+function seed() {
+  const T = (id, title, day, w, v, pp = 0, extra = {}) => ({ id, title, day, w, v, pp, st: 'open', some: false, time: null, ...extra });
+  return [
+    T(1, 'Подать документы на ВНЖ: собрать справки', 0, 'H', 'visa', 2),
+    T(2, 'Выпустить PlanWise 0.3', 0, 'H', 'cash'),
+    T(3, 'Рефакторинг настроек PlanWise', 0, 'M', 'opt'),
+    T(4, 'Купить продукты', 0, 'S', 'life'),
+    T(5, 'Ответить в чат по сделке', 0, 'S', 'cash', 0, { time: '12:00' }),
+    T(6, 'Тренировка', 0, 'M', 'life'),
+    T(7, 'Настроить хоткеи в Obsidian', 0, 'S', 'opt'),
+    T(8, 'Почистить закладки', 0, 'S', 'opt'),
+    T(9, 'Позвонить в банк', -1, 'S', 'life', 1),
+    T(10, 'Дочитать статью про RAG', -2, 'M', 'opt', 2),
+    T(11, 'Курс немецкого: урок 12', 1, 'M', 'visa'),
+    T(12, 'Перебрать дотфайлы', 1, 'M', 'opt'),
+    T(13, 'Счёт клиенту', 2, 'M', 'cash'),
+    T(14, 'Записаться к врачу', 3, 'S', 'life'),
+    T(15, 'Сравнить заметочники', 4, 'M', 'opt'),
+    T(16, 'Разобраться с налогами', 5, 'H', 'cash'),
+    T(17, 'Презентация для инвестора', 5, 'H', 'cash'),
+    T(18, 'идея: заметки со связями между словами', null, null, null),
+    T(19, 'спросить у Макса про хостинг', null, null, null),
+    T(20, 'Свой сайт-портфолио', null, 'H', 'cash', 0, { some: true }),
+  ];
+}
+const cycleInit = () => ({ tasks: seed(), phase: 'morning', picked: [], main: null, note: '', ask: null, moved: 0, pickedCount: 0 });
+
+const VARIANTS = {
+  A: {
+    name: 'A · Цикл дня', init: cycleInit, render: renderCycle, opts: {},
+    idea: 'План — гипотеза. Утром выбираешь реальное (черта ёмкости по твоей истории) и одно главное, днём видишь одно дело, вечером каждому хвосту — решение.',
+    cures: 'переоценку дня, копящиеся хвосты, вину при открытии, задачи-зомби.',
+    try: 'выбери больше 5 задач и поставь ★; во «Дне» жми «Сделано/Потом»; вечером перенеси «ВНЖ» на завтра — это её 3-й перенос.',
+    risk: 'утренний и вечерний ритуал может надоесть; ёмкость в штуках не видит, что задачи разные по тяжести.',
+  },
+  B: {
+    name: 'B · Энергобюджет', init: () => ({ tasks: seed(), hard: false, msg: '' }), render: renderEnergy,
+    idea: 'У задачи вес: Heavy (макс. 2 в день), Medium (макс. 3), Micro (без лимита). Перегруз видно в момент планирования.',
+    cures: 'переоценку дня, но в «тяжести», а не в штуках.',
+    try: 'перетащи третью Heavy в «Сегодня» или в день с налогами (там уже по две), затем включи «Жёстко»; меняй вес кликом по метке.',
+    risk: 'вес надо ставить при каждой записи (трение при захвате); лимиты одни на всех, а не твои.',
+  },
+  C: {
+    name: 'C · Шторы', init: () => ({ tasks: seed(), mode: 'table', slots: [1, 2, 6], flash: '' }), render: renderCurtain,
+    idea: 'Операционный стол: максимум 3 задачи на экране, всё остальное скрыто на складе.',
+    cures: 'перфекционизм и тревогу от длинного списка, перескакивание между делами.',
+    try: 'сделай задачу и нажми «Взять следующую»; запиши мысль прямо со стола; зайди на склад и верни задачу на стол.',
+    risk: 'срочное за шторой можно пропустить; 3 слота мало для дня из мелочей (бытовуха).',
+  },
+  D: {
+    name: 'D · Векторы', init: () => ({ tasks: seed() }), render: renderVectors,
+    idea: 'Каждая задача привязана к одной из 4 целей. Видно, куда реально ушёл день и неделя.',
+    cures: 'продуктивную прокрастинацию: много сделано, но не то.',
+    try: 'отметь 3 задачи ⚙️ и ни одной 🎓/💰 — появится предупреждение; посмотри неделю ниже.',
+    risk: 'ещё одна обязательная метка; задачи на стыке двух целей; превращается в «категории», которые уже есть.',
+  },
+  E: {
+    name: 'E · Гибрид (моё предложение)', init: cycleInit, render: renderCycle, opts: { energy: true, curtain: true, vectors: true },
+    idea: 'Цикл A + вес из B вместо счёта штук + штора C днём + векторы D в вечернем итоге. Вес и вектор не нужны при записи — ставятся утром, когда собираешь день.',
+    cures: 'всё сразу, не замедляя захват мысли.',
+    try: 'утром кликай по меткам веса/вектора, следи за очками и перегрузом; днём видно только 3 задачи; вечером — куда ушёл день.',
+    risk: 'самый сложный — проверь, не перегружен ли он для ежедневного использования.',
+  },
+};
+
+// ---------- state ----------
+const KEY = 'pw-proto-v1';
+let STORE = { tab: 'A', s: {} };
+try { STORE = JSON.parse(localStorage.getItem(KEY)) || STORE; } catch { /* storage unavailable: start fresh */ }
+if (!VARIANTS[STORE.tab]) STORE.tab = 'A';
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(STORE)); } catch { /* ignore */ } };
+const state = () => (STORE.s[STORE.tab] ||= VARIANTS[STORE.tab].init());
+const find = (s, id) => s.tasks.find((t) => t.id === id);
+const newTask = (s, title, day, extra = {}) => ({ id: Math.max(0, ...s.tasks.map((t) => t.id)) + 1, title, day, time: null, w: null, v: null, st: 'open', pp: 0, some: false, ...extra });
+
+// ---------- shared view helpers ----------
+const seg = (act, items, active) => `<div class="segmented-control">${items.map(([k, n]) => `<button type="button" data-a="${act}" data-id="${k}" class="${k === active ? 'active' : ''}">${n}</button>`).join('')}</div>`;
+const wChip = (t, click) => `<${click ? 'button type="button"' : 'span'} class="chip w-${t.w || 'none'}" ${click ? `data-a="cyclew" data-id="${t.id}"` : ''}>${t.w ? WT[t.w].n : 'вес?'}</${click ? 'button' : 'span'}>`;
+const vChip = (t, click) => `<${click ? 'button type="button"' : 'span'} class="chip" title="${t.v ? VEC[t.v].n : 'без вектора'}" ${click ? `data-a="cyclev" data-id="${t.id}"` : ''}>${t.v ? VEC[t.v].i : '·'}</${click ? 'button' : 'span'}>`;
+const ppBadge = (t) => t.pp ? `<span class="chip" title="Сколько раз переносилась">↻${t.pp}</span>` : '';
+const timeTag = (t) => t.time ? `<span class="muted">${t.time}</span>` : '';
+const radios = (name, keys, label, required) => keys.map((k, i) => `<label class="chip ${name === 'w' ? 'w-' + k : ''}"><input type="radio" name="${name}" value="${k}" ${required && i === 0 ? 'required' : ''}>${label(k)}</label>`).join('');
+const wRadios = () => radios('w', ['H', 'M', 'S'], (k) => WT[k].n, true);
+const vRadios = () => radios('v', Object.keys(VEC), (k) => `${VEC[k].i} ${VEC[k].n}`, true);
+const capForm = (kind, extra = '', ph = 'Запиши что угодно: «позвонить маме завтра в 18»') =>
+  `<form class="capture" data-f="${kind}"><input name="q" placeholder="${ph}" autocomplete="off">${extra}<button class="btn-primary">Записать</button></form><div class="hint">Без даты — во Входящие</div>`;
+const hint = (p, noInbox) => p.title ? `→ ${p.day === null ? (noInbox ? 'Сегодня' : 'Входящие') : dayLabel(p.day)}${p.time ? ', ' + p.time : ''} · «${p.title}»` : 'Без даты — во Входящие';
+
+function vecBar(list) {
+  const c = { visa: 0, cash: 0, life: 0, opt: 0 };
+  list.forEach((t) => { if (t.v) c[t.v]++; });
+  const n = list.length || 1;
+  return {
+    c,
+    bar: `<div class="stack">${Object.keys(VEC).map((k) => c[k] ? `<span style="width:${(c[k] / n) * 100}%;background:${VEC[k].c}" title="${VEC[k].n}: ${c[k]}"></span>` : '').join('')}</div>`,
+    legend: `<div class="legend">${Object.keys(VEC).map((k) => `<span>${VEC[k].i} ${VEC[k].n}: <b>${c[k]}</b></span>`).join('')}</div>`,
+    warn: c.opt >= 3 && c.visa + c.cash === 0
+      ? `<div class="alert-banner danger">День ушёл в «Оптимизацию»: ${c.opt} задачи, а на ВНЖ/Учёбу и Кэш — ноль. Похоже на прокрастинацию с продуктивным лицом.</div>` : '',
+  };
+}
+
+// ---------- A / E: day cycle ----------
+const tails = (s) => s.tasks.filter((t) => t.st === 'open' && !t.some && t.day !== null && t.day <= 0);
+function overFlags(P, o) {
+  if (!o.energy) return P.map((_, i) => i >= CAP);
+  let pts = 0;
+  return P.map((t) => (pts += WT[t.w || 'M'].pts) > BUDGET);
+}
+function renderCycle(s, o) {
+  const P = s.picked.map((id) => find(s, id)).filter(Boolean);
+  let h = `<div class="bar">${seg('phase', [['morning', '1 · Утро: собрать'], ['day', '2 · День'], ['evening', '3 · Вечер: закрыть']], s.phase === 'closed' ? 'evening' : s.phase)}</div>`;
+  if (s.phase === 'closed') return h + closedView(s, o);
+  h += capForm('cap');
+  if (s.phase === 'morning') h += morningView(s, o, P);
+  if (s.phase === 'day') h += dayView(s, o, P);
+  if (s.phase === 'evening') h += eveningView(s, o);
+  return h;
+}
+function cycleRow(s, o, t, picked) {
+  return `<div class="row ${o.energy ? 'w-' + (t.w || 'none') : ''}">
+    <input type="checkbox" data-a="pick" data-id="${t.id}" ${picked ? 'checked' : ''} aria-label="Выбрать на сегодня">
+    <span class="t">${esc(t.title)} ${timeTag(t)}</span>${ppBadge(t)}
+    ${o.energy ? wChip(t, true) : ''}${o.vectors ? vChip(t, true) : ''}
+    <button type="button" class="btn-ghost" data-a="main" data-id="${t.id}" title="Главное на сегодня">${s.main === t.id ? '★' : '☆'}</button></div>`;
+}
+function morningView(s, o, P) {
+  let h = '<div class="card">';
+  if (o.energy) {
+    const pts = P.reduce((a, t) => a + WT[t.w || 'M'].pts, 0), H = P.filter((t) => t.w === 'H').length, M = P.filter((t) => t.w === 'M').length;
+    h += `Очки <b>${pts}/${BUDGET}</b> (обычно закрываешь столько) · Heavy <b>${H}/2</b> · Medium <b>${M}/3</b> · Micro без лимита`;
+    const over = [pts > BUDGET && `очков ${pts} из ${BUDGET}`, H > 2 && `Heavy ${H} из 2`, M > 3 && `Medium ${M} из 3`].filter(Boolean);
+    if (over.length) h += `<div class="alert-banner danger" style="margin:var(--sp-2) 0 0">Перегруз: ${over.join(', ')}. Начать можно, но что-то из этого, скорее всего, уедет на завтра.</div>`;
+  } else {
+    h += `Выбрано <b>${P.length}</b> · по твоей истории в ${DOW_ACC[today.getDay()]} ты обычно закрываешь <b>~${CAP}</b>`;
+  }
+  h += '</div><div class="sec">Твой день</div>';
+  if (!P.length) h += '<p class="muted">Отметь задачи ниже. ★ — главное: если день сломается, его не жертвуем.</p>';
+  const over = overFlags(P, o);
+  P.forEach((t, i) => {
+    if (over[i] && !over[i - 1]) h += '<div class="line">черта: ниже — вряд ли сегодня</div>';
+    h += `<div class="${over[i] ? 'dim' : ''}">${cycleRow(s, o, t, true)}</div>`;
+  });
+  const free = s.tasks.filter((t) => t.st === 'open' && !t.some && !s.picked.includes(t.id));
+  [['Хвосты прошлых дней', (t) => t.day !== null && t.day < 0], ['Запланировано на сегодня', (t) => t.day === 0], ['Входящие', (t) => t.day === null]]
+    .forEach(([title, f]) => {
+      const L = free.filter(f);
+      if (L.length) h += `<div class="sec">${title} (${L.length})</div>${L.map((t) => cycleRow(s, o, t, false)).join('')}`;
+    });
+  return h + `<p><button class="btn-primary" data-a="phase" data-id="day" ${P.length ? '' : 'disabled'}>Начать день →</button></p>`;
+}
+function dayView(s, o, P) {
+  const open = P.filter((t) => t.st === 'open'), now = open[0];
+  let h = now
+    ? `<div class="now"><div class="sec">Сейчас ${now.id === s.main ? '· главное ★' : ''}</div><div class="big">${esc(now.title)}</div>
+       <div class="actions"><button class="btn-primary" data-a="done" data-id="${now.id}">Сделано</button><button class="btn-ghost" data-a="skip" data-id="${now.id}">Потом</button></div></div>`
+    : '<div class="now"><div class="big">Всё выбранное сделано</div><button class="btn-primary" data-a="phase" data-id="evening">Закрыть день</button></div>';
+  if (o.curtain) {
+    const q = open.slice(1, 3);
+    if (q.length) h += `<div class="sec">Дальше</div>${q.map((t) => `<div class="row"><span class="t">${esc(t.title)}</span></div>`).join('')}`;
+    if (open.length > 3) h += `<p class="muted">и ещё ${open.length - 3} в очереди</p>`;
+    const hidden = s.tasks.filter((t) => t.st === 'open' && !s.picked.includes(t.id));
+    h += `<details><summary>За шторой ${hidden.length} задач — приоткрыть</summary>${hidden.map((t) => `<div class="row dim"><span class="t">${esc(t.title)}</span><span class="muted">${t.some ? 'когда-нибудь' : t.day === null ? 'входящие' : dayLabel(t.day)}</span></div>`).join('')}</details>`;
+  } else {
+    const rest = P.filter((t) => t !== now), over = overFlags(P, o);
+    if (rest.length) h += '<div class="sec">План дня</div>';
+    rest.forEach((t) => {
+      const i = P.indexOf(t);
+      if (over[i] && !over[i - 1]) h += '<div class="line">черта ёмкости</div>';
+      h += `<div class="row ${over[i] ? 'dim' : ''}"><input type="checkbox" data-a="done" data-id="${t.id}" ${t.st === 'done' ? 'checked' : ''}><span class="t ${t.st === 'done' ? 'done' : ''}">${esc(t.title)}</span></div>`;
+    });
+    const other = s.tasks.filter((t) => t.st === 'open' && t.day === 0 && !s.picked.includes(t.id));
+    if (other.length) h += `<div class="sec">На сегодня, но не выбрано (${other.length})</div>${other.map((t) => `<div class="row dim"><span class="t">${esc(t.title)}</span></div>`).join('')}`;
+  }
+  const done = s.tasks.filter((t) => t.st === 'done' && t.doneToday);
+  if (done.length) h += `<div class="sec">Сделано сегодня (${done.length})</div>${done.map((t) => `<div class="row"><span class="t done">${esc(t.title)}</span></div>`).join('')}`;
+  return h + '<p><button class="btn-ghost" data-a="phase" data-id="evening">Вечер: закрыть день →</button></p>';
+}
+function eveningView(s, o) {
+  const done = s.tasks.filter((t) => t.st === 'done' && t.doneToday), tl = tails(s);
+  let h = `<div class="sec">Сделано (${done.length})</div>${done.map((t) => `<div class="row"><span class="t">✓ ${esc(t.title)}</span>${o.vectors ? vChip(t, false) : ''}</div>`).join('') || '<p class="muted">Пока ничего — и это тоже честный итог.</p>'}`;
+  h += `<form class="capture" data-f="unplanned"><input name="q" placeholder="Сделал вне плана? Одной строкой" autocomplete="off"><button class="btn-ghost">Добавить в сделанное</button></form>`;
+  if (o.vectors) { const v = vecBar(done); h += `<div class="sec">Куда ушёл день</div>${v.bar}${v.legend}${v.warn}`; }
+  h += `<div class="sec">Решить по хвостам (${tl.length})</div>`;
+  if (tl.length) h += '<p><button class="btn-ghost" data-a="alltails">Все хвосты на завтра (один тап)</button></p>';
+  tl.forEach((t) => {
+    h += `<div class="row"><span class="t">${esc(t.title)}</span>${ppBadge(t)}
+      <button class="btn-ghost" data-a="mv" data-id="${t.id}" data-d="1">Завтра</button>
+      <button class="btn-ghost" data-a="mv" data-id="${t.id}" data-d="w">На неделе</button>
+      <button class="btn-ghost" data-a="mv" data-id="${t.id}" data-d="s">Когда-нибудь</button>
+      <button class="btn-ghost" data-a="drop" data-id="${t.id}">Отпустить</button>`;
+    if (s.ask && s.ask.id === t.id) h += `<div class="ask">Это уже ${t.pp + 1}-й перенос. Какой первый шаг на 15 минут?
+      <input placeholder="например: найти список справок на сайте" autocomplete="off">
+      <button class="btn-primary" data-a="step" data-id="${t.id}">Сделать первым шагом</button>
+      <button class="btn-ghost" data-a="drop" data-id="${t.id}">Отпустить</button>
+      <button class="btn-ghost" data-a="force" data-id="${t.id}">Всё равно перенести</button></div>`;
+    h += '</div>';
+  });
+  h += `<div class="sec">Как прошёл день (необязательно)</div><textarea name="note" placeholder="Пара слов — это и есть заметка дня">${esc(s.note)}</textarea>`;
+  return h + `<p><button class="btn-primary" data-a="close" ${tl.length ? 'disabled' : ''}>${tl.length ? `Закрыть день (осталось решить: ${tl.length})` : 'Закрыть день'}</button></p>`;
+}
+function closedView(s, o) {
+  const done = s.tasks.filter((t) => t.st === 'done' && t.doneToday), dropped = s.tasks.filter((t) => t.dropToday).length;
+  let h = `<div class="card"><div class="big"><b>День закрыт.</b></div>
+    <p>Сделано <b>${done.length}</b> (утром выбрано ${s.pickedCount}) · перенесено ${s.moved} · отпущено ${dropped}. Все хвосты получили решение — голове больше нечего держать.</p>`;
+  if (s.note) h += `<p class="muted">Заметка дня: ${esc(s.note)}</p>`;
+  if (o.vectors) { const v = vecBar(done); h += v.bar + v.legend + v.warn; }
+  return h + '<button class="btn-primary" data-a="nextday">Следующий день (демо) →</button></div>';
+}
+function moveTail(s, t, d, force) {
+  if ((d === '1' || d === 'w') && !force && t.pp + 1 >= 3) { s.ask = { id: t.id, d }; return; }
+  if (d === 's') { t.some = true; t.day = null; } else { t.day = d === 'w' ? 3 : 1; t.pp++; }
+  s.moved++; s.ask = null; unpick(s, t.id);
+}
+function unpick(s, id) { s.picked = s.picked.filter((x) => x !== id); if (s.main === id) s.main = null; }
+
+// ---------- B: energy budget ----------
+const load = (s, day, excl) => {
+  const c = { H: 0, M: 0, S: 0 };
+  s.tasks.forEach((t) => { if (t.day === day && !t.some && t.st !== 'dropped' && t.w && t.id !== excl) c[t.w]++; });
+  return c;
+};
+const fits = (s, day, w, excl) => !w || load(s, day, excl)[w] < WT[w].cap;
+const refuse = (s, day, w) => { s.msg = `Не влезает в «${dayLabel(day)}»: там уже ${WT[w].cap} ${WT[w].n} из ${WT[w].cap}. Убери что-то или выбери другой день.`; };
+const dots = (n, cap) => `${'●'.repeat(Math.min(n, cap))}${'○'.repeat(Math.max(cap - n, 0))}${n > cap ? `<span class="x"> +${n - cap}</span>` : ''}`;
+function renderEnergy(s) {
+  let h = `<div class="bar">${seg('hard', [['0', 'Мягко: предупредить'], ['1', 'Жёстко: не пускать']], s.hard ? '1' : '0')}</div>`;
+  h += capForm('capB', wRadios(), 'Задача (дата словами: «в пт», «завтра»; без даты — сегодня)');
+  if (s.msg) h += `<div class="alert-banner danger">${esc(s.msg)}</div>`;
+  h += '<div class="week">';
+  for (let d = 0; d < 7; d++) {
+    const c = load(s, d, null), over = [c.H > 2 && `Heavy ${c.H}/2`, c.M > 3 && `Medium ${c.M}/3`].filter(Boolean);
+    h += `<div class="col ${over.length ? 'over' : ''}" data-day="${d}"><h3>${dayLabel(d)}</h3>
+      <div class="meter">Heavy ${dots(c.H, 2)}<br>Medium ${dots(c.M, 3)}<br>Micro ${c.S}</div>
+      ${over.length ? `<div class="alert-banner danger">Перегруз субстрата: ${over.join(', ')}</div>` : ''}
+      ${s.tasks.filter((t) => t.day === d && !t.some && t.st !== 'dropped').map((t) => `<div class="task w-${t.w || 'none'}" draggable="true" data-id="${t.id}">
+        <input type="checkbox" data-a="done" data-id="${t.id}" ${t.st === 'done' ? 'checked' : ''}><span class="t ${t.st === 'done' ? 'done' : ''}">${esc(t.title)}</span>${wChip(t, true)}</div>`).join('')}
+    </div>`;
+  }
+  return h + '</div><p class="muted">Перетаскивай задачи между днями. Хвосты прошлых дней и Входящие в этом варианте не показаны — он только про нагрузку.</p>';
+}
+
+// ---------- C: curtains ----------
+const freeSlot = (s) => s.slots.findIndex((id) => id === null || find(s, id).st !== 'open');
+function renderCurtain(s) {
+  const onTable = (t) => s.slots.includes(t.id) && t.st === 'open';
+  let h = `<div class="bar">${seg('mode', [['table', 'Операционный стол'], ['store', 'Склад']], s.mode)}</div>`;
+  if (s.flash) { h += `<div class="alert-banner info">${esc(s.flash)}</div>`; s.flash = ''; }
+  if (s.mode === 'table') {
+    h += capForm('capC', '', 'Мысль? Запиши — уйдёт на склад, не отвлекаясь');
+    h += '<div class="slots">' + s.slots.map((id, i) => {
+      const t = id === null ? null : find(s, id);
+      if (!t || t.st !== 'open') return `<div class="slot empty">${t ? `<span>✓ ${esc(t.title)}</span>` : '<span>Пустой слот</span>'}<button class="btn-ghost" data-a="takeNext" data-id="${i}">Взять следующую</button></div>`;
+      return `<div class="slot"><div class="big">${esc(t.title)}</div><div>${wChip(t, false)} ${vChip(t, false)} ${timeTag(t)}</div>
+        <div class="actions"><button class="btn-primary" data-a="done" data-id="${t.id}">Сделано</button><button class="btn-ghost" data-a="toStore" data-id="${i}">На склад</button></div></div>`;
+    }).join('') + '</div>';
+    const hidden = s.tasks.filter((t) => t.st === 'open' && !onTable(t)).length;
+    return h + `<p class="muted">За шторой ${hidden} задач. Их здесь нет специально: сейчас важны только эти три.</p>`;
+  }
+  h += capForm('capS');
+  const full = freeSlot(s) < 0, rest = s.tasks.filter((t) => t.st === 'open' && !onTable(t));
+  [['Хвосты', (t) => !t.some && t.day !== null && t.day < 0], ['Сегодня', (t) => t.day === 0], ['Завтра', (t) => t.day === 1], ['Неделя', (t) => t.day > 1],
+   ['Когда-нибудь', (t) => t.some], ['Входящие', (t) => !t.some && t.day === null]].forEach(([title, f]) => {
+    const L = rest.filter(f);
+    if (L.length) h += `<div class="sec">${title} (${L.length})</div>` + L.map((t) => `<div class="row"><span class="t">${esc(t.title)}</span>${t.day > 1 ? `<span class="muted">${dayLabel(t.day)}</span>` : ''}${wChip(t, false)}${vChip(t, false)}
+      <button class="btn-ghost" data-a="toTable" data-id="${t.id}" ${full ? 'disabled title="Стол занят: 3 из 3"' : ''}>На стол</button></div>`).join('');
+  });
+  return h;
+}
+
+// ---------- D: vectors ----------
+const HIST = [{ opt: 4, cash: 0, visa: 0, life: 2 }, { opt: 1, cash: 2, visa: 1, life: 1 }, { opt: 3, cash: 1, visa: 0, life: 1 },
+  { opt: 0, cash: 3, visa: 2, life: 1 }, { opt: 5, cash: 0, visa: 0, life: 0 }, { opt: 2, cash: 1, visa: 1, life: 2 }];
+function renderVectors(s) {
+  let h = capForm('capD', vRadios());
+  const list = s.tasks.filter((t) => !t.some && t.day !== null && t.day <= 0 && t.st !== 'dropped');
+  const done = list.filter((t) => t.st === 'done'), vd = vecBar(done), vp = vecBar(list);
+  h += `<div class="card"><div class="sec" style="margin-top:0">Сегодня сделано (${done.length})</div>${vd.bar}${vd.legend}${vd.warn}
+    <div class="sec">Запланировано (${list.length})</div>${vp.bar}${vp.legend}</div>`;
+  h += `<div class="sec">Сегодня и хвосты</div>${list.map((t) => `<div class="row"><input type="checkbox" data-a="done" data-id="${t.id}" ${t.st === 'done' ? 'checked' : ''}>
+    <span class="t ${t.st === 'done' ? 'done' : ''}">${esc(t.title)}</span>${t.day < 0 ? `<span class="muted">${dayLabel(t.day)}</span>` : ''}${vChip(t, true)}</div>`).join('')}`;
+  const days = HIST.map((c, i) => ({ c, d: i - HIST.length })).concat([{ c: vd.c, d: 0 }]);
+  h += '<div class="sec">Куда ушла неделя (прошлые дни — пример)</div><div class="card">' + days.map(({ c, d }) => {
+    const n = Object.values(c).reduce((a, b) => a + b, 0) || 1;
+    return `<div class="wk"><span>${dayLabel(d)}</span><div class="stack">${Object.keys(VEC).map((k) => c[k] ? `<span style="width:${(c[k] / n) * 100}%;background:${VEC[k].c}" title="${VEC[k].n}: ${c[k]}"></span>` : '').join('')}</div><span>${Object.values(c).reduce((a, b) => a + b, 0)}</span></div>`;
+  }).join('') + `<div class="legend" style="margin-top:var(--sp-2)">${Object.keys(VEC).map((k) => `<span>${VEC[k].i} ${VEC[k].n}</span>`).join('')}</div></div>`;
+  return h;
+}
+
+// ---------- events ----------
+function render() {
+  const v = VARIANTS[STORE.tab];
+  $('#tabs').innerHTML = Object.entries(VARIANTS).map(([k, x]) => `<button class="tab-item ${k === STORE.tab ? 'active' : ''}" data-a="tab" data-id="${k}">${x.name}</button>`).join('');
+  $('#info').innerHTML = `<div><b>Идея.</b> ${v.idea}</div><div><b>Лечит:</b> ${v.cures}</div><div><b>Попробуй:</b> ${v.try}</div><div><b>Риск:</b> ${v.risk}</div>`;
+  $('#app').innerHTML = v.render(state(), v.opts || {});
+  save();
+}
+const cycle = (arr, x) => arr[(arr.indexOf(x) + 1) % arr.length];
+
+document.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-a]');
+  if (!el) return;
+  const a = el.dataset.a, raw = el.dataset.id, id = Number(raw);
+  if (a === 'theme') { setTheme(document.documentElement.dataset.theme !== 'dark-slate'); return; }
+  if (a === 'tab') { STORE.tab = raw; render(); return; }
+  if (a === 'reset') { delete STORE.s[STORE.tab]; render(); return; }
+  const s = state(), t = find(s, id);
+  switch (a) {
+    case 'phase':
+      if (raw === 'day' && s.phase === 'morning') {
+        if (s.main) s.picked = [s.main, ...s.picked.filter((x) => x !== s.main)];
+        s.pickedCount = s.picked.length;
+      }
+      s.phase = raw; break;
+    case 'pick': if (s.picked.includes(id)) unpick(s, id); else s.picked.push(id); break;
+    case 'main': s.main = s.main === id ? null : id; if (!s.picked.includes(id)) s.picked.push(id); break;
+    case 'done': t.st = t.st === 'done' ? 'open' : 'done'; t.doneToday = t.st === 'done'; break;
+    case 'skip': s.picked = s.picked.filter((x) => x !== id).concat(id); break;
+    case 'mv': moveTail(s, t, el.dataset.d, false); break;
+    case 'force': moveTail(s, t, s.ask.d, true); break;
+    case 'drop': t.st = 'dropped'; t.dropToday = true; s.ask = null; unpick(s, id); break;
+    case 'step': {
+      const v = el.closest('.ask').querySelector('input').value.trim();
+      if (!v) { el.closest('.ask').querySelector('input').focus(); return; }
+      s.tasks.push(newTask(s, v, 1, { w: 'S', v: t.v }));
+      t.some = true; t.day = null; s.ask = null; s.moved++; unpick(s, id); break;
+    }
+    case 'alltails': tails(s).forEach((x) => moveTail(s, x, '1', true)); break;
+    case 'close': s.phase = 'closed'; break;
+    case 'nextday':
+      s.tasks.forEach((x) => { if (x.day !== null) x.day -= 1; x.doneToday = false; x.dropToday = false; });
+      Object.assign(s, { phase: 'morning', picked: [], main: null, note: '', ask: null, moved: 0, pickedCount: 0 }); break;
+    case 'cyclew':
+      if (STORE.tab === 'B') {
+        const w = cycle(['S', 'M', 'H'], t.w);
+        if (s.hard && !fits(s, t.day, w, t.id)) { refuse(s, t.day, w); break; }
+        t.w = w; s.msg = '';
+      } else t.w = cycle([null, 'S', 'M', 'H'], t.w);
+      break;
+    case 'cyclev': t.v = cycle(Object.keys(VEC), t.v); break;
+    case 'hard': s.hard = raw === '1'; s.msg = ''; break;
+    case 'mode': s.mode = raw; break;
+    case 'toStore': s.slots[id] = null; break;
+    case 'toTable': { const i = freeSlot(s); if (i >= 0) { s.slots[i] = id; s.mode = 'table'; } break; }
+    case 'takeNext': {
+      const next = s.tasks.find((x) => x.st === 'open' && !x.some && x.day === 0 && !s.slots.includes(x.id))
+        || s.tasks.find((x) => x.st === 'open' && !x.some && x.day !== null && x.day < 0 && !s.slots.includes(x.id));
+      if (next) s.slots[id] = next.id;
+      else s.flash = 'На сегодня на складе пусто. Можно отдохнуть или взять что-то из «Завтра» вручную.';
+      break;
+    }
+    default: return;
+  }
+  render();
+});
+
+document.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const f = e.target, kind = f.dataset.f, s = state(), fd = new FormData(f);
+  const p = parse(String(fd.get('q') || ''));
+  if (!p.title) return;
+  const t = newTask(s, p.title, p.day, { time: p.time, w: fd.get('w') || null, v: fd.get('v') || null });
+  if (kind === 'capB') {
+    if (t.day === null) t.day = 0;
+    if (s.hard && !fits(s, t.day, t.w, null)) { refuse(s, t.day, t.w); render(); return; }
+    s.msg = '';
+  }
+  if (kind === 'capC') s.flash = `Записано на склад: «${p.title}». Возвращаемся к столу.`;
+  if (kind === 'unplanned') Object.assign(t, { day: 0, st: 'done', doneToday: true });
+  s.tasks.push(t);
+  render();
+  const inp = document.querySelector(`form[data-f="${kind}"] input[name=q]`);
+  if (inp) inp.focus();
+});
+
+document.addEventListener('input', (e) => {
+  const el = e.target;
+  if (el.name === 'note') { state().note = el.value; save(); return; }
+  const f = el.closest('form');
+  if (el.name === 'q' && f && f.dataset.f !== 'unplanned' && f.nextElementSibling?.classList.contains('hint')) f.nextElementSibling.textContent = hint(parse(el.value), f.dataset.f === 'capB');
+});
+
+let dragId = null;
+document.addEventListener('dragstart', (e) => { const el = e.target.closest('[draggable]'); if (el) dragId = Number(el.dataset.id); });
+document.addEventListener('dragover', (e) => { if (e.target.closest('.col')) e.preventDefault(); });
+document.addEventListener('drop', (e) => {
+  const col = e.target.closest('.col');
+  if (!col || dragId === null) return;
+  e.preventDefault();
+  const s = state(), t = find(s, dragId), d = Number(col.dataset.day);
+  dragId = null;
+  if (!t || t.day === d) return;
+  if (s.hard && !fits(s, d, t.w, t.id)) { refuse(s, d, t.w); render(); return; }
+  t.day = d; s.msg = '';
+  render();
+});
+
+function setTheme(dark) {
+  document.documentElement.dataset.theme = dark ? 'dark-slate' : 'light-slate';
+  try { localStorage.setItem('pw-proto-theme', dark ? '1' : '0'); } catch { /* ignore */ }
+}
+let savedTheme = null;
+try { savedTheme = localStorage.getItem('pw-proto-theme'); } catch { /* ignore */ }
+setTheme(savedTheme === null ? matchMedia('(prefers-color-scheme: dark)').matches : savedTheme === '1');
+render();
+</script>
+</body>
+</html>
