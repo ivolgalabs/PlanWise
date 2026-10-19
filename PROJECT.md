@@ -1,5 +1,5 @@
 # PlanWise (daily-planner)
-**Current state:** `28f7ad5` 15.10.2026 · check: not recorded (line seeded 17.10.2026)
+**Current state:** `5da5005` 19.10.2026 · check: green (cargo test 39, npm build)
 Task planner: Tauri v2 + React 19 + TypeScript + zustand + SQLite (rusqlite) + @dnd-kit.
 Platforms: macOS (WidgetKit widget), Android (AlarmManager/Kotlin widgets). Web mode (browser, localStorage backend in `src/api.ts: browserApi`) — for development without Tauri.
 Current version: 0.2.4. Release notes of every version — `docs/HISTORY.md`.
