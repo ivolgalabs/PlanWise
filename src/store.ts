@@ -200,7 +200,7 @@ export const useStore = create<PlannerState>()(
       weekVertical: true,
       uiScale: 1.0,
       fontScale: 1.0,
-      archiveEnabled: true,
+      archiveEnabled: false,
       archivedTasks: [],
       colorSets: [],
       visibility: DEFAULT_VISIBILITY,
@@ -216,7 +216,7 @@ export const useStore = create<PlannerState>()(
       taskPatterns: [],
       sortMode: "time",
       preventOverlaps: true,
-      autoDonePastTime: true,
+      autoDonePastTime: false,
       autoSyncEnabled: false,
       autoSyncPath: "",
       autoSyncLastAt: 0,
@@ -272,8 +272,17 @@ export const useStore = create<PlannerState>()(
       name: "todo-settings",
       // version+migrate: без версии любое переименование поля в будущем молча
       // сбрасывало бы настройки у старых установок (zustand считает всё v0).
-      version: 1,
-      migrate: (persisted) => persisted as PlannerState,
+      version: 2,
+      // v2 (этап 1): авто-архив и авто-«сделано» выключены и у старых установок —
+      // хвосты остаются на своих днях, галочка значит «я сделал».
+      migrate: (persisted, version) => {
+        const p = persisted as PlannerState;
+        if (version < 2) {
+          p.archiveEnabled = false;
+          p.autoDonePastTime = false;
+        }
+        return p;
+      },
       // Сохраняем только настройки UI — без tasks и selectedDate.
       partialize: (s) => ({
         view: s.view,

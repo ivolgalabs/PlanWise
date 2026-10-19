@@ -174,6 +174,37 @@ mod tests {
         assert_eq!(default, 0);
     }
 
+    /// V15 на живой БД: закрытые до миграции задачи получают done_at = updated_at,
+    /// открытые — NULL; postpone_count = 0; таблица days создана.
+    #[test]
+    fn v15_backfills_done_at() {
+        let mut conn = Connection::open_in_memory().expect("open");
+        migrations::runner()
+            .set_target(refinery::Target::Version(14))
+            .run(&mut conn)
+            .expect("migrate to V14");
+        conn.execute_batch(
+            "INSERT INTO tasks (id, title, date, is_done, created_at, updated_at, device_id)
+             VALUES ('d', 'done', 0, 1, 0, 777, 'dev'), ('o', 'open', 0, 0, 0, 888, 'dev');",
+        )
+        .expect("insert V14 rows");
+        migrations::runner().run(&mut conn).expect("migrate to V15");
+        let row = |id: &str| -> (Option<i64>, i64) {
+            conn.query_row(
+                "SELECT done_at, postpone_count FROM tasks WHERE id = ?1",
+                [id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .expect("select")
+        };
+        assert_eq!(row("d"), (Some(777), 0));
+        assert_eq!(row("o"), (None, 0));
+        let days: i64 = conn
+            .query_row("SELECT COUNT(*) FROM days", [], |r| r.get(0))
+            .expect("days table");
+        assert_eq!(days, 0);
+    }
+
     /// V6: у tasks есть колонка archived с default 0.
     #[test]
     fn migrations_add_archived_column() {

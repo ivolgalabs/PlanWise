@@ -4,12 +4,19 @@
  * localStorage — чтобы UI можно было тестировать без сборки Rust.
  * Сортировки совпадают с commands.rs (sortOrder ASC).
  */
-import type { Task, ColorSet, Subtask } from "./api";
+import type { Task, ColorSet, Subtask, Day } from "./api";
 import { toEpochDay } from "./date";
 import { showToast } from "./toast";
 import { t } from "./i18n";
 
-const K = { tasks: "fb:tasks", sets: "fb:sets", subs: "fb:subtasks" };
+const K = { tasks: "fb:tasks", sets: "fb:sets", subs: "fb:subtasks", days: "fb:days" };
+
+/** doneAt/droppedAt — как триггеры V15: ставятся при закрытии, чистятся при снятии. */
+const withDone = (prev: Task | undefined, next: Task): Task => {
+  if (!next.isDone) return { ...next, doneAt: null, droppedAt: null };
+  if (prev?.isDone) return { ...next, doneAt: prev.doneAt ?? next.updatedAt, droppedAt: prev.droppedAt ?? null };
+  return { ...next, doneAt: Date.now(), droppedAt: next.droppedAt ?? null };
+};
 
 /** epoch-day «сегодня» по локальной дате (как toEpochDay на фронте). */
 const todayEpochDay = (): number => toEpochDay(new Date());
@@ -58,7 +65,8 @@ export const browserApi = {
     const id = task.id || crypto.randomUUID();
     // updatedAt ставим при каждом сохранении — как Rust-бэкенд (иначе
     // сортировка архива по updated_at разъезжается между режимами).
-    const rec: Task = { ...task, id, notes: task.notes ?? "", someday: task.someday ?? false, archived: task.archived ?? false, updatedAt: Date.now() };
+    const prev = load<Task>(K.tasks).find((t) => t.id === id);
+    const rec: Task = withDone(prev, { ...task, id, notes: task.notes ?? "", someday: task.someday ?? false, archived: task.archived ?? false, postponeCount: prev?.postponeCount ?? 0, updatedAt: Date.now() });
     const all = load<Task>(K.tasks).filter((t) => t.id !== id);
     all.push(rec);
     save(K.tasks, all);
@@ -103,8 +111,22 @@ export const browserApi = {
       if (t.someday) {
         return { ...t, dueEpochDay: newDay, date: 0, archived: false, notes: t.notes ?? "", updatedAt: Date.now() };
       }
-      return { ...t, date: newDay, someday: false, archived: false, isDone: newDay < today ? true : newDay > today ? false : t.isDone, notes: t.notes ?? "", updatedAt: Date.now() };
+      // Перенос открытой задачи с сегодня/прошлого на будущее (ср. move_task_to_date).
+      const postponed = !t.isDone && t.date <= today && newDay > today ? 1 : 0;
+      return withDone(t, { ...t, date: newDay, someday: false, archived: false, isDone: newDay < today ? true : newDay > today ? false : t.isDone, postponeCount: (t.postponeCount ?? 0) + postponed, notes: t.notes ?? "", updatedAt: Date.now() });
     }));
+  },
+  async dropTask(id: string): Promise<void> {
+    const now = Date.now();
+    save(K.tasks, load<Task>(K.tasks).map((t) => (t.id === id ? { ...t, isDone: true, droppedAt: now, doneAt: now, updatedAt: now } : t)));
+  },
+  async getDays(startDay: number, endDay: number): Promise<Day[]> {
+    return load<Day>(K.days).filter((d) => d.epochDay >= startDay && d.epochDay <= endDay).sort((a, b) => a.epochDay - b.epochDay);
+  },
+  async upsertDay(day: Day): Promise<Day> {
+    const rec: Day = { ...day, updatedAt: Date.now() };
+    save(K.days, [...load<Day>(K.days).filter((d) => d.epochDay !== day.epochDay), rec]);
+    return rec;
   },
   async getSomedayTasks(): Promise<Task[]> {
     return sortTasks(load<Task>(K.tasks).filter((t) => t.someday && !t.archived));

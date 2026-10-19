@@ -32,6 +32,25 @@ pub struct Task {
     pub travel_notify_minutes: Option<i32>, // напомнить за N мин до выезда; NULL = не напоминать
     #[serde(default)]
     pub due_epoch_day: Option<i64>, // «Когда-нибудь»: мягкий срок (epoch-day); NULL = без срока
+    #[serde(default)]
+    pub done_at: Option<i64>, // когда закрыта (epoch-ms); ведёт БД (триггер V15)
+    #[serde(default)]
+    pub dropped_at: Option<i64>, // «отпущена» (epoch-ms); такая задача и is_done = true
+    #[serde(default)]
+    pub postpone_count: i32, // сколько раз перенесена с сегодня/прошлого на будущее
+}
+
+/// День как страница: заметка «как прошёл день» и отметка «день закрыт».
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Day {
+    pub epoch_day: i64,
+    #[serde(default)]
+    pub note: String,
+    #[serde(default)]
+    pub closed_at: Option<i64>,
+    #[serde(default)]
+    pub updated_at: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

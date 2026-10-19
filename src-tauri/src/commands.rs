@@ -1,5 +1,5 @@
 use crate::db::Db;
-use crate::models::{Attachment, ColorSet, Subtask, Task};
+use crate::models::{Attachment, ColorSet, Day, Subtask, Task};
 use chrono::{Datelike, NaiveDate, Utc};
 use rusqlite::OptionalExtension;
 use serde::Deserialize;
@@ -12,7 +12,7 @@ fn now_ms() -> i64 {
 
 /// Колонки таблицы tasks — единый список для SELECT и INSERT: новая колонка
 /// добавляется в одном месте (маппинг в Task — см. task_from_row).
-pub(crate) const TASK_COLUMNS: &str = "id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes, someday, archived, travel_time, duration_minutes, difficulty, notify_minutes, travel_notify_minutes, due_epoch_day";
+pub(crate) const TASK_COLUMNS: &str = "id, title, date, is_done, color_set_id, sort_order, created_at, updated_at, device_id, time_minutes, notes, someday, archived, travel_time, duration_minutes, difficulty, notify_minutes, travel_notify_minutes, due_epoch_day, done_at, dropped_at, postpone_count";
 
 /// Маппинг строки tasks в Task (единый для всех выборок — колонки не разъезжаются).
 fn task_from_row(row: &rusqlite::Row) -> rusqlite::Result<Task> {
@@ -36,6 +36,9 @@ fn task_from_row(row: &rusqlite::Row) -> rusqlite::Result<Task> {
         notify_minutes: row.get(16)?,
         travel_notify_minutes: row.get(17)?,
         due_epoch_day: row.get(18)?,
+        done_at: row.get(19)?,
+        dropped_at: row.get(20)?,
+        postpone_count: row.get(21)?,
     })
 }
 
@@ -70,9 +73,13 @@ fn select_task_by_id(conn: &rusqlite::Connection, id: &str) -> Result<Option<Tas
 
 /// Перенос задачи на дату: в прошлое = выполнена, в будущее (из прошлого) =
 /// актуальна. Общее для переноса и возврата из архива.
+/// Открытая задача, уехавшая с сегодня/прошлого на будущее, — это перенос:
+/// postpone_count растёт (SET в SQLite читает старую строку: date — прежняя).
 fn move_task_to_date(conn: &rusqlite::Connection, id: &str, new_date: i64) -> Result<(), String> {
     conn.execute(
         "UPDATE tasks SET date = ?1, someday = 0, archived = 0,
+           postpone_count = postpone_count
+             + (is_done = 0 AND someday = 0 AND date <= ?2 AND ?1 > ?2),
            is_done = CASE
              WHEN ?1 < ?2 THEN 1
              WHEN ?1 > ?2 AND is_done = 1 THEN 0
@@ -180,13 +187,15 @@ pub fn upsert_task(state: State<'_, Db>, mut task: Task) -> Result<Task, String>
     Ok(task)
 }
 
-/// INSERT/UPDATE задачи — единый для upsert_task и duplicate_task (19 колонок
+/// INSERT/UPDATE задачи — единый для upsert_task и duplicate_task (22 колонки
 /// в одном месте; расхождение списка с TASK_COLUMNS ловит тест в db.rs).
+/// done_at/dropped_at/postpone_count при обновлении не трогаем: их ведёт БД
+/// (триггер V15) и move_task — устаревшая копия с фронта их не затрёт.
 pub(crate) fn write_task(conn: &rusqlite::Connection, task: &Task) -> Result<(), String> {
     conn.execute(
         &format!(
             "INSERT INTO tasks ({TASK_COLUMNS})
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)
              ON CONFLICT(id) DO UPDATE SET
                title=excluded.title, date=excluded.date, is_done=excluded.is_done,
                color_set_id=excluded.color_set_id, sort_order=excluded.sort_order,
@@ -218,6 +227,9 @@ pub(crate) fn write_task(conn: &rusqlite::Connection, task: &Task) -> Result<(),
             task.notify_minutes,
             task.travel_notify_minutes,
             task.due_epoch_day,
+            task.done_at,
+            task.dropped_at,
+            task.postpone_count,
         ],
     )
     .map_err(|e| e.to_string())?;
@@ -258,6 +270,9 @@ pub(crate) fn duplicate_task_conn(
     copy.id = Uuid::new_v4().to_string();
     copy.is_done = false;
     copy.archived = false;
+    copy.done_at = None;
+    copy.dropped_at = None;
+    copy.postpone_count = 0;
     copy.created_at = now_ms();
     copy.updated_at = now_ms();
     // Сортировка «сейчас» (как Date.now() на фронте у новых задач): копия
@@ -298,6 +313,7 @@ fn sanitize_task(task: &mut Task) {
     task.notify_minutes = task.notify_minutes.map(|n| n.clamp(0, 10_080));
     task.difficulty = task.difficulty.clamp(0, 3);
     task.due_epoch_day = task.due_epoch_day.map(|d| d.clamp(-719_162, 2_932_896));
+    task.postpone_count = task.postpone_count.max(0);
 }
 
 /// Проверка пересечения времени с другими задачами дня (настройка
@@ -601,6 +617,71 @@ pub fn restore_archived(state: State<'_, Db>, id: String, date: i64) -> Result<(
     Ok(())
 }
 
+/// «Отпустить» задачу: закрыта без выполнения — честный исход, не провал.
+/// is_done = 1, чтобы виджеты, напоминания и проверка наложений не считали её
+/// открытой; от «сделано» отличает dropped_at. Снятие галочки (upsert с
+/// isDone = false) возвращает задачу в работу — триггер V15 чистит dropped_at.
+#[tauri::command]
+pub fn drop_task(state: State<'_, Db>, id: String) -> Result<(), String> {
+    drop_task_conn(&state.lock(), &id)?;
+    crate::notify::wake_scheduler();
+    Ok(())
+}
+
+fn drop_task_conn(conn: &rusqlite::Connection, id: &str) -> Result<(), String> {
+    conn.execute(
+        "UPDATE tasks SET is_done = 1, dropped_at = ?1, updated_at = ?1 WHERE id = ?2",
+        rusqlite::params![now_ms(), id],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// ── Дни (заметка дня, закрытие дня) ─────────────────────────────────
+
+fn select_days(conn: &rusqlite::Connection, start: i64, end: i64) -> Result<Vec<Day>, String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT epoch_day, note, closed_at, updated_at FROM days
+             WHERE epoch_day BETWEEN ?1 AND ?2 ORDER BY epoch_day ASC",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([start, end], |r| {
+            Ok(Day {
+                epoch_day: r.get(0)?,
+                note: r.get(1)?,
+                closed_at: r.get(2)?,
+                updated_at: r.get(3)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<_, _>>().map_err(|e| e.to_string())
+}
+
+fn write_day(conn: &rusqlite::Connection, d: &Day) -> Result<(), String> {
+    conn.execute(
+        "INSERT INTO days (epoch_day, note, closed_at, updated_at) VALUES (?1, ?2, ?3, ?4)
+         ON CONFLICT(epoch_day) DO UPDATE SET
+           note = excluded.note, closed_at = excluded.closed_at, updated_at = excluded.updated_at",
+        rusqlite::params![d.epoch_day, d.note, d.closed_at, d.updated_at],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_days(state: State<'_, Db>, start_day: i64, end_day: i64) -> Result<Vec<Day>, String> {
+    select_days(&state.lock(), start_day, end_day)
+}
+
+#[tauri::command]
+pub fn upsert_day(state: State<'_, Db>, mut day: Day) -> Result<Day, String> {
+    day.updated_at = now_ms();
+    write_day(&state.lock(), &day)?;
+    Ok(day)
+}
+
 // ── Подзадачи ───────────────────────────────────────────────────────
 
 /// Подзадачи задачи (общее для get_subtasks и duplicate_task).
@@ -836,6 +917,7 @@ fn export_doc(
         "tasks": tasks,
         "subtasks": subs,
         "attachments": atts,
+        "days": select_days(conn, i64::MIN, i64::MAX)?,
     });
     // Хеш содержимого (без метки времени): автоэкспорт сравнивает его с прошлым
     // и не переписывает файл без изменений — иначе каждая правка гоняла бы
@@ -870,6 +952,8 @@ struct BackupDoc {
     subtasks: Vec<Subtask>,
     #[serde(default)]
     attachments: Vec<serde_json::Value>,
+    #[serde(default)]
+    days: Vec<Day>,
 }
 
 #[tauri::command]
@@ -919,6 +1003,7 @@ struct PreparedImport {
     tasks: Vec<Task>,
     subtasks: Vec<Subtask>,
     attachments: Vec<PreparedAttachment>,
+    days: Vec<Day>,
 }
 
 /// Имя файла вложения из бэкапа: ровно «основа.расширение», части непустые.
@@ -1013,6 +1098,7 @@ fn prepare_import(json: &str) -> Result<PreparedImport, String> {
         tasks: doc.tasks,
         subtasks: doc.subtasks,
         attachments,
+        days: doc.days,
     })
 }
 
@@ -1050,6 +1136,11 @@ fn apply_import(
         .map_err(|e| e.to_string())?;
     tx.execute("DELETE FROM color_sets", [])
         .map_err(|e| e.to_string())?;
+    tx.execute("DELETE FROM days", [])
+        .map_err(|e| e.to_string())?;
+    for d in &p.days {
+        write_day(&tx, d)?;
+    }
 
     for s in &p.color_sets {
         tx.execute(
@@ -1062,13 +1153,14 @@ fn apply_import(
         tx.execute(
             &format!(
                 "INSERT INTO tasks ({TASK_COLUMNS})
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)",
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)",
             ),
             rusqlite::params![
                 t.id, t.title, t.date, t.is_done as i64, t.color_set_id, t.sort_order,
                 t.created_at, t.updated_at, t.device_id, t.time_minutes, t.notes,
                 t.someday as i64, t.archived as i64, t.travel_time, t.duration_minutes,
-                t.difficulty, t.notify_minutes, t.travel_notify_minutes, t.due_epoch_day
+                t.difficulty, t.notify_minutes, t.travel_notify_minutes, t.due_epoch_day,
+                t.done_at, t.dropped_at, t.postpone_count
             ],
         )
         .map_err(|e| e.to_string())?;
@@ -1802,7 +1894,7 @@ mod tests {
         conn.execute(
             &format!(
                 "INSERT INTO tasks ({TASK_COLUMNS})
-                 VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19)"
+                 VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22)"
             ),
             rusqlite::params![
                 "t1",
@@ -1823,7 +1915,10 @@ mod tests {
                 2,
                 Some(15),
                 Some(10),
-                Some(20_010)
+                Some(20_010),
+                None::<i64>,
+                None::<i64>,
+                3
             ],
         )
         .unwrap();
@@ -1833,6 +1928,13 @@ mod tests {
             [],
         )
         .unwrap();
+        let day = Day {
+            epoch_day: 20_000,
+            note: "спокойный день".into(),
+            closed_at: Some(5),
+            updated_at: 5,
+        };
+        write_day(&conn, &day).unwrap();
 
         let dir = test_files_dir();
         let json = export_to_string(&conn, &dir).expect("export");
@@ -1857,6 +1959,11 @@ mod tests {
         assert_eq!(task.difficulty, 2);
         assert_eq!(task.time_minutes, Some(600));
         assert_eq!(task.color_set_id.as_deref(), Some("cs1"));
+        assert_eq!(task.postpone_count, 3);
+        let days = select_days(&conn2, 0, 30_000).expect("days");
+        assert_eq!(days.len(), 1);
+        assert_eq!(days[0].note, "спокойный день");
+        assert_eq!(days[0].closed_at, Some(5));
         let subs: i64 = conn2
             .query_row(
                 "SELECT COUNT(*) FROM subtasks WHERE task_id = 't1'",
@@ -1874,6 +1981,95 @@ mod tests {
             .unwrap();
         assert_eq!(sets, 1);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn open_task(id: &str, date: i64) -> Task {
+        Task {
+            id: id.into(),
+            title: id.into(),
+            date,
+            updated_at: 123,
+            ..Default::default()
+        }
+    }
+
+    /// V15: перенос открытой задачи с сегодня/прошлого на будущее считается;
+    /// будущее → будущее, сегодня → сегодня и перенос закрытой — нет.
+    #[test]
+    fn move_counts_postpones() {
+        let conn = open(":memory:").expect("open test db");
+        let today = today_epoch_day();
+        write_task(&conn, &open_task("a", today - 1)).unwrap();
+        let count = |id: &str| {
+            select_task_by_id(&conn, id)
+                .unwrap()
+                .unwrap()
+                .postpone_count
+        };
+
+        move_task_to_date(&conn, "a", today + 1).unwrap();
+        assert_eq!(count("a"), 1, "хвост вчера → завтра");
+        move_task_to_date(&conn, "a", today + 3).unwrap();
+        assert_eq!(count("a"), 1, "будущее → будущее не перенос");
+        move_task_to_date(&conn, "a", today).unwrap();
+        move_task_to_date(&conn, "a", today).unwrap();
+        assert_eq!(count("a"), 1, "на сегодня — не перенос");
+        move_task_to_date(&conn, "a", today + 1).unwrap();
+        assert_eq!(count("a"), 2, "сегодня → завтра");
+
+        let mut done = open_task("b", today);
+        done.is_done = true;
+        write_task(&conn, &done).unwrap();
+        move_task_to_date(&conn, "b", today + 1).unwrap();
+        assert_eq!(count("b"), 0, "закрытая задача не переносится");
+    }
+
+    /// V15: done_at/dropped_at ведёт БД при любом писателе is_done; upsert
+    /// с фронта (устаревшая копия) их не затирает.
+    #[test]
+    fn done_and_dropped_timestamps_follow_is_done() {
+        let conn = open(":memory:").expect("open test db");
+        let get = |id: &str| select_task_by_id(&conn, id).unwrap().unwrap();
+        let mut t = open_task("a", 20_000);
+        write_task(&conn, &t).unwrap();
+        assert_eq!(get("a").done_at, None);
+
+        t.is_done = true;
+        write_task(&conn, &t).unwrap();
+        let done_at = get("a").done_at.expect("галочка ставит done_at");
+        assert!(
+            done_at > 1_700_000_000_000,
+            "epoch-ms сейчас, а не updated_at"
+        );
+        assert_eq!(get("a").dropped_at, None);
+
+        t.is_done = false;
+        write_task(&conn, &t).unwrap();
+        assert_eq!(get("a").done_at, None, "снятая галочка чистит done_at");
+
+        drop_task_conn(&conn, "a").unwrap();
+        let dropped = get("a");
+        assert!(dropped.is_done && dropped.dropped_at.is_some() && dropped.done_at.is_some());
+        // Фронт пересохраняет задачу со старыми полями — отметки остаются.
+        t.is_done = true;
+        t.title = "новое имя".into();
+        write_task(&conn, &t).unwrap();
+        assert!(get("a").dropped_at.is_some());
+
+        t.is_done = false;
+        write_task(&conn, &t).unwrap();
+        let back = get("a");
+        assert_eq!(
+            (back.done_at, back.dropped_at),
+            (None, None),
+            "вернули в работу"
+        );
+
+        // Закрытая задача без done_at (старый бэкап, виджет) — оценка по updated_at.
+        let mut old = open_task("b", 20_000);
+        old.is_done = true;
+        write_task(&conn, &old).unwrap();
+        assert_eq!(get("b").done_at, Some(123));
     }
 
     /// Старый бэкап (v1, без notes/someday/archived) импортируется с дефолтами.

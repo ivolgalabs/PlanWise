@@ -32,6 +32,20 @@ export interface Task {
   travelNotifyMinutes?: number | null;
   /** «Когда-нибудь»: мягкий срок (epoch-day); null = без срока. */
   dueEpochDay?: number | null;
+  /** V15, ведёт БД: когда закрыта (epoch-ms); null = открыта. */
+  doneAt?: number | null;
+  /** «Отпущена» (epoch-ms): закрыта без выполнения, isDone тоже true. */
+  droppedAt?: number | null;
+  /** Сколько раз переносилась с сегодня/прошлого на будущее. */
+  postponeCount?: number;
+}
+
+/** День как страница: заметка и отметка «день закрыт». */
+export interface Day {
+  epochDay: number;
+  note: string;
+  closedAt: number | null;
+  updatedAt: number;
 }
 
 export interface ColorSet {
@@ -134,6 +148,12 @@ export const api = {
     const d = toEpochDay(date);
     return isTauri() ? invoke<void>("restore_archived", { id, date: d }) : browserApi.restoreArchived(id, d);
   },
+  /** Отпустить задачу: закрыта без выполнения (isDone + droppedAt). */
+  dropTask: (id: string) => (isTauri() ? invoke<void>("drop_task", { id }) : browserApi.dropTask(id)),
+  /** Дни (заметка, закрытие) в диапазоне epoch-day включительно. */
+  getDays: (startDay: number, endDay: number) =>
+    isTauri() ? invoke<Day[]>("get_days", { startDay, endDay }) : browserApi.getDays(startDay, endDay),
+  upsertDay: (day: Day) => (isTauri() ? invoke<Day>("upsert_day", { day }) : browserApi.upsertDay(day)),
   getSubtasks: (taskId: string) => (isTauri() ? invoke<Subtask[]>("get_subtasks", { taskId }) : browserApi.getSubtasks(taskId)),
   upsertSubtask: (sub: Partial<Subtask> & { taskId: string; title: string }) => {
     const s = { id: sub.id ?? "", taskId: sub.taskId, title: sub.title, isDone: sub.isDone ?? false, sortOrder: sub.sortOrder ?? Date.now(), createdAt: sub.createdAt ?? 0 };
