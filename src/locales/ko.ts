@@ -228,6 +228,7 @@ const ko: Dict = {
   "day.dragToDate": "{date}(으)로 끌기",
   "day.noTasks": "작업이 없습니다. 아래에 입력해 추가하세요.",
   "day.allDone": "오늘 할 일을 모두 끝냈습니다.",
+  "day.tails": "지난 날의 남은 일: {n}개. '하루 마감'에서 정리하세요.",
   "day.addTaskPh": "+ 작업 추가",
   "day.addPh": "+ 추가",
   "weekShift.title": "다음 주로 옮기기(+7일)",

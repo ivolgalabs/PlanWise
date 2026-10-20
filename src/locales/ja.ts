@@ -228,6 +228,7 @@ const ja: Dict = {
   "day.dragToDate": "{date} へドラッグ",
   "day.noTasks": "タスクはありません。下に入力して追加できます。",
   "day.allDone": "今日の分はすべて終わりました。",
+  "day.tails": "前の日からの持ち越し：{n}件。「一日を締める」で整理しましょう。",
   "day.addTaskPh": "+ タスクを追加",
   "day.addPh": "+ 追加",
   "weekShift.title": "次の週へ移動（+7 日）",

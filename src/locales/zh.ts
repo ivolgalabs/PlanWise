@@ -228,6 +228,7 @@ const zh: Dict = {
   "day.dragToDate": "拖到 {date}",
   "day.noTasks": "没有任务。在下方输入即可添加。",
   "day.allDone": "今天的事都做完了。",
+  "day.tails": "前几天遗留：{n} 项。在“结束今天”中处理。",
   "day.addTaskPh": "+ 添加任务",
   "day.addPh": "+ 添加",
   "weekShift.title": "移到下一周（+7 天）",

@@ -228,6 +228,7 @@ const fr: Dict = {
   "day.dragToDate": "Glissez vers le {date}",
   "day.noTasks": "Aucune tâche. Écrivez ci-dessous pour en ajouter.",
   "day.allDone": "Tout est fait pour aujourd'hui.",
+  "day.tails": "Restes des jours précédents : {n}. Triez-les dans «Clôturer la journée».",
   "day.addTaskPh": "+ ajouter une tâche",
   "day.addPh": "+ ajouter",
   "weekShift.title": "Déplacer à la semaine suivante (+7 jours)",

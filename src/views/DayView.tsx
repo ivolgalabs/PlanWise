@@ -182,6 +182,8 @@ function DayTasksArea({
     disabled: !panelNarrow,
   });
   const today = isToday(day);
+  // Открытые задачи прошлых дней в колонке дня не видны — только в «Закрыть день».
+  const tails = allTasks.filter((x) => !x.isDone && !x.someday && !x.archived && x.date < epochDay).length;
   const dayKey = `${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`;
   // На мобильном правая панель скрыта — «Когда-нибудь» и «Архив» показываем
   // здесь, внизу дня (раскрытие архива — по кнопке, чтобы не раздувать день).
@@ -237,9 +239,11 @@ function DayTasksArea({
             {t("day.noTasks")}
           </p>
         )}
-        {today && dayTasks.length > 0 && dayTasks.every((x) => x.isDone) &&
-          !allTasks.some((x) => !x.isDone && !x.someday && !x.archived && x.date < epochDay) && (
+        {today && dayTasks.length > 0 && dayTasks.every((x) => x.isDone) && tails === 0 && (
           <p style={{ color: "var(--accent-text)", fontSize: "var(--fs-base)" }}>{t("day.allDone")}</p>
+        )}
+        {today && tails > 0 && (
+          <p style={{ color: "var(--text-secondary)", fontSize: "var(--fs-sm)" }}>{t("day.tails", { n: tails })}</p>
         )}
         {dayTasks.map((t) => (
           <TaskCard
