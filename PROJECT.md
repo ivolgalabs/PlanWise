@@ -1,5 +1,5 @@
 # PlanWise (daily-planner)
-**Current state:** `d874fa3` 19.10.2026 · check: green (cargo test 43, tsc, npm build; Android 0.3.1 built and run on Pixel 7 Pro)
+**Current state:** `dff2c50` 20.10.2026 · check: green (cargo test 43 at 0.3.1, tsc, npm build; Android 0.3.2 built and run on Pixel 7 Pro)
 Task planner: Tauri v2 + React 19 + TypeScript + zustand + SQLite (rusqlite) + @dnd-kit.
 Platforms: macOS (WidgetKit widget), Android (AlarmManager/Kotlin widgets). Web mode (browser, localStorage backend in `src/api.ts: browserApi`) — for development without Tauri.
 Current version: 0.3.2 (Android arm64 + universal in `Ready-made versions of applications/PlanWise/android/0.3.2`; macOS not rebuilt, latest 0.2.3). Release notes of every version — `docs/HISTORY.md`.
