@@ -4,7 +4,7 @@ import type { Task } from "../api";
 import { api } from "../api";
 import { quickTask } from "../quickAdd";
 import { TaskCard } from "../components/TaskCard";
-import { CloseDayButton, UsualLoad } from "../components/CloseDayDialog";
+import { CloseDayButton, UsualLoad, doneToday } from "../components/CloseDayDialog";
 import { SomedayColumn } from "../components/SomedayColumn";
 import { ArchivePanel } from "../components/ArchivePanel";
 import { AddTaskModal } from "../components/AddTaskModal";
@@ -183,6 +183,7 @@ function DayTasksArea({
   });
   const today = isToday(day);
   // Открытые задачи прошлых дней в колонке дня не видны — только в «Закрыть день».
+  const doneN = today ? doneToday(allTasks, epochDay).length : 0;
   const tails = allTasks.filter((x) => !x.isDone && !x.someday && !x.archived && x.date < epochDay).length;
   const dayKey = `${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`;
   // На мобильном правая панель скрыта — «Когда-нибудь» и «Архив» показываем
@@ -241,6 +242,9 @@ function DayTasksArea({
         )}
         {today && dayTasks.length > 0 && dayTasks.every((x) => x.isDone) && tails === 0 && (
           <p style={{ color: "var(--accent-text)", fontSize: "var(--fs-base)" }}>{t("day.allDone")}</p>
+        )}
+        {doneN > 0 && (
+          <p style={{ color: "var(--accent-text)", fontSize: "var(--fs-sm)" }}>{t("close.done", { n: doneN })}</p>
         )}
         {today && tails > 0 && (
           <p style={{ color: "var(--text-secondary)", fontSize: "var(--fs-sm)" }}>{t("day.tails", { n: tails })}</p>

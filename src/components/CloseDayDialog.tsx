@@ -40,7 +40,7 @@ export function UsualLoad() {
 const errText = (e: unknown) => String(e instanceof Error ? e.message : e);
 
 /** Закрытые сегодня (по локальному дню `done_at`), без «отпущенных». */
-const doneToday = (tasks: Task[], todayEd: number) =>
+export const doneToday = (tasks: Task[], todayEd: number) =>
   tasks.filter((x) => x.isDone && !x.droppedAt && x.doneAt && toEpochDay(new Date(x.doneAt)) === todayEd);
 
 /** Кнопка «Закрыть день» (у сегодняшней колонки) + диалог разбора: у каждой
