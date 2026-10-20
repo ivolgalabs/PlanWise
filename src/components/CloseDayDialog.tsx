@@ -62,7 +62,9 @@ export function CloseDayButton({ onChange, compact = false }: { onChange: () => 
   // Утром, пока нечего закрывать и нечего отмечать, кнопка — шум: прячем.
   const hasOpen = tasks.some((x) => !x.isDone && !x.someday && !x.archived && x.date <= todayEd);
   if (!closed && !hasOpen && doneToday(tasks, todayEd).length === 0) return null;
-  const label = closed ? t("close.closed") : t("close.button");
+  // Новая открытая задача после закрытия дня — день снова можно закрыть.
+  const isClosed = closed && !hasOpen;
+  const label = isClosed ? t("close.closed") : t("close.button");
   return (
     <>
       <button
@@ -73,7 +75,7 @@ export function CloseDayButton({ onChange, compact = false }: { onChange: () => 
         onClick={() => setOpen(true)}
         style={{ flexShrink: 0, alignSelf: "center", fontSize: "var(--fs-2xs)" }}
       >
-        {compact ? "✓" : closed ? label : `✓ ${label}`}
+        {compact ? "✓" : isClosed ? label : `✓ ${label}`}
       </button>
       {open && (
         <CloseDayDialog

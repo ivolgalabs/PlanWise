@@ -237,7 +237,8 @@ function DayTasksArea({
             {t("day.noTasks")}
           </p>
         )}
-        {today && dayTasks.length > 0 && dayTasks.every((x) => x.isDone) && (
+        {today && dayTasks.length > 0 && dayTasks.every((x) => x.isDone) &&
+          !allTasks.some((x) => !x.isDone && !x.someday && !x.archived && x.date < epochDay) && (
           <p style={{ color: "var(--accent-text)", fontSize: "var(--fs-base)" }}>{t("day.allDone")}</p>
         )}
         {dayTasks.map((t) => (
