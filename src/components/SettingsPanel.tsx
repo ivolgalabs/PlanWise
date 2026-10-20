@@ -832,7 +832,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
           />
 
           {/* ── Оформление: статус + вкладки (стандартные / свой выбор) ── */}
-          <section className="settings-section">
+          <section className="settings-section theme-section">
             <div className="theme-status">
               <div className="theme-status-head">
                 <div>

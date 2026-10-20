@@ -25,10 +25,9 @@ export function SomedayColumn({ tasks, onChange, stretch = false }: Props) {
   const { t } = useI18n();
   const { setNodeRef, isOver } = useDroppable({ id: somedayZoneId });
   const sortMode = useStore((s) => s.sortMode);
-  // Явный выбор пользователя; пока его нет, пустой список свёрнут в одну строку.
-  const [collapsedByUser, setCollapsedByUser] = useState<boolean | null>(null);
+  // По умолчанию свёрнуто (счётчик рядом с заголовком); разворачивает пользователь.
+  const [collapsed, setCollapsedByUser] = useState(true);
   const items = sortSomedayTasks(tasks, sortMode);
-  const collapsed = collapsedByUser ?? items.length === 0;
 
   return (
     <div

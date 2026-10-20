@@ -47,6 +47,8 @@ export const doneToday = (tasks: Task[], todayEd: number) =>
  *  открытой задачи сегодня и прошлых дней — завтра / когда-нибудь / отпустить,
  *  внизу заметка дня. После ↻3 «Завтра» заблокировано: пора отпустить или
  *  решить иначе. Действия применяются сразу; «Закрыть день» ставит closed_at. */
+export const OPEN_CLOSE_DAY = "pw-open-close-day";
+
 export function CloseDayButton({ onChange, compact = false }: { onChange: () => void; compact?: boolean }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
@@ -59,6 +61,12 @@ export function CloseDayButton({ onChange, compact = false }: { onChange: () => 
       .then((d) => setClosed(!!d[0]?.closedAt))
       .catch((e) => showToast(errText(e)));
   useEffect(() => void refresh(), [todayEd]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Строка «Хвосты с прошлых дней» в DayView открывает этот же диалог.
+  useEffect(() => {
+    const h = () => setOpen(true);
+    window.addEventListener(OPEN_CLOSE_DAY, h);
+    return () => window.removeEventListener(OPEN_CLOSE_DAY, h);
+  }, []);
   // Утром, пока нечего закрывать и нечего отмечать, кнопка — шум: прячем.
   const hasOpen = tasks.some((x) => !x.isDone && !x.someday && !x.archived && x.date <= todayEd);
   if (!closed && !hasOpen && doneToday(tasks, todayEd).length === 0) return null;

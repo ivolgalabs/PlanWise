@@ -4,7 +4,7 @@ import type { Task } from "../api";
 import { api } from "../api";
 import { quickTask } from "../quickAdd";
 import { TaskCard } from "../components/TaskCard";
-import { CloseDayButton, UsualLoad, doneToday } from "../components/CloseDayDialog";
+import { CloseDayButton, OPEN_CLOSE_DAY, UsualLoad, doneToday } from "../components/CloseDayDialog";
 import { SomedayColumn } from "../components/SomedayColumn";
 import { ArchivePanel } from "../components/ArchivePanel";
 import { AddTaskModal } from "../components/AddTaskModal";
@@ -247,7 +247,22 @@ function DayTasksArea({
           <p style={{ color: "var(--accent-text)", fontSize: "var(--fs-sm)" }}>{t("close.done", { n: doneN })}</p>
         )}
         {today && tails > 0 && (
-          <p style={{ color: "var(--text-secondary)", fontSize: "var(--fs-sm)" }}>{t("day.tails", { n: tails })}</p>
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new Event(OPEN_CLOSE_DAY))}
+            style={{
+              background: "none",
+              border: "none",
+              padding: 0,
+              textAlign: "left",
+              cursor: "pointer",
+              color: "var(--text-secondary)",
+              fontSize: "var(--fs-sm)",
+              textDecoration: "underline dotted",
+            }}
+          >
+            {t("day.tails", { n: tails })}
+          </button>
         )}
         {dayTasks.map((t) => (
           <TaskCard

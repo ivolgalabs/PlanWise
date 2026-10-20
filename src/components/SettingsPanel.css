@@ -39,7 +39,9 @@
 }
 
 .settings-body {
-  padding: var(--sp-6);
+  /* Верхнего отступа нет: его даёт липкая лента вкладок, иначе при скролле
+     над лентой остаётся щель, в которой проезжает контент. */
+  padding: 0 var(--sp-6) var(--sp-6);
   overflow-y: auto;
   /* Без min-height:0 flex-элемент не сжимается ниже содержимого — при
      увеличенном масштабе/шрифте окно настроек обрезалось снизу, а скролл
@@ -318,6 +320,17 @@
    «Списком/Сеткой» бесполезен: неделя принудительно списком. Доступность
    пункта управляется из SettingsPanel (JS по matchMedia), здесь — ничего. */
 
+/* «Оформление»: внутри уже есть свои карточки — внешняя рамка секции давала
+   «карточку в карточке» с разной шириной и слипшимися блоками. */
+.settings-section.theme-section {
+  background: transparent;
+  border: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
 /* Блоки секции «Оформление» (канон UUI theme-status) — как и секции настроек,
    светлее основного фона (secondary), а не темнее (tertiary). */
 .settings-window .theme-status,
@@ -359,7 +372,9 @@
 .settings-tabs {
   display: flex;
   gap: var(--sp-2);
-  padding: 0 var(--sp-2) var(--sp-4);
+  padding: var(--sp-4) 0;
+  margin: 0 calc(-1 * var(--sp-6));
+  padding-inline: var(--sp-6);
   overflow-x: auto;
   scrollbar-width: none;
   flex-shrink: 0;
@@ -375,6 +390,11 @@
   .settings-tabs {
     flex-wrap: wrap;
     overflow-x: visible;
+  }
+  /* Растягиваем вкладки по строке: ряды ровные, без сиротливой последней. */
+  .settings-tab {
+    flex: 1 1 auto;
+    text-align: center;
   }
 }
 .settings-tab {
