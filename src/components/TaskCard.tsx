@@ -375,15 +375,6 @@ export const TaskCard = memo(function TaskCard({
   const taskSet = colorSets.find((s) => s.id === task.colorSetId);
   const setHex = taskSet ? argbToHex(taskSet.color) : undefined;
 
-  // Приоритет задачи — цветной маркер в строке (не редактируется здесь,
-  // меняется в карточке). Цвета — глобальные CSS-переменные приоритета
-  // (themes.css), адаптируются к теме как остальная палитра.
-  const PRIO_META: Record<number, { label: string; color: string }> = {
-    1: { label: t("task.low"), color: "var(--prio-low)" },
-    2: { label: t("task.medium"), color: "var(--prio-med)" },
-    3: { label: t("task.high"), color: "var(--prio-high)" },
-  };
-  const prioMeta = PRIO_META[task.difficulty ?? 0];
 
   // Время показываем, только если его запросил родитель И настройка
   // «Время задач» включена.
@@ -441,18 +432,13 @@ export const TaskCard = memo(function TaskCard({
 
   // Цветная точка приоритета. В compact-сетке — в строке времени (ровно с
   // бейджем); в остальных видах — в ряду задачи, по центру.
-  const prioDot = prioMeta ? (
+  const prioDot = task.difficulty === 3 ? (
     <span
-      title={t("task.priority", { label: prioMeta.label })}
-      style={{
-        width: 8,
-        height: 8,
-        borderRadius: "50%",
-        background: prioMeta.color,
-        flexShrink: 0,
-        marginRight: "var(--sp-1)",
-      }}
-    />
+      title={t("form.focus")}
+      style={{ color: "var(--accent-text)", fontSize: "var(--fs-sm)", lineHeight: 1, flexShrink: 0, marginRight: "var(--sp-1)" }}
+    >
+      ★
+    </span>
   ) : null;
 
   // Блок времени (точка приоритета + бейдж + мета). Приоритет всегда рядом
@@ -463,7 +449,7 @@ export const TaskCard = memo(function TaskCard({
   // Строка времени над текстом — только в компактной сетке; вне её — одна
   // строка меты под текстом (metaLine ниже).
   const showTimeRow =
-    compact && (prioMeta != null || task.timeMinutes != null || due != null || postponeBadge != null || repeatBadge != null);
+    compact && (prioDot != null || task.timeMinutes != null || due != null || postponeBadge != null || repeatBadge != null);
   // Выравнивание элемента строки по центру ПЕРВОЙ строки текста в компактной
   // сетке: строка «шапки» (время/приоритет, shift) + фактический padding
   // текста (padTop, в em — меняется со шрифтом) + пол-разницы высот. Центр

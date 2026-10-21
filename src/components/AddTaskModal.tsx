@@ -12,16 +12,6 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { DatePickerModal } from "./DatePickerModal";
 import { useI18n, t, type TKey } from "../i18n";
 
-/** Уровни приоритета: 0 = не задан, 1 = низкий, 2 = средний, 3 = высокий.
- *  Цвета — глобальные CSS-переменные приоритета (themes.css).
- *  Подписи — ключи словаря (собираются при рендере, язык переключается сразу). */
-const PRIO: { v: number; labelKey: TKey | null; color: string }[] = [
-  { v: 0, labelKey: null, color: "" },
-  { v: 1, labelKey: "task.low", color: "var(--prio-low)" },
-  { v: 2, labelKey: "task.medium", color: "var(--prio-med)" },
-  { v: 3, labelKey: "task.high", color: "var(--prio-high)" },
-];
-
 /** Лимит вложения (совпадает с Rust: 25 МБ на команду) — отсекаем файлы
  *  сразу при выборе, чтобы не читать в base64 то, что всё равно не сохранится. */
 const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
@@ -43,7 +33,7 @@ const NOTIFY_OPTS: { v: number; label: TKey }[] = [
 ];
 
 /** Поля карточки, которые прячутся за кнопкой «+ …», пока не заполнены. */
-type Field = "time" | "priority" | "repeat" | "notify" | "color" | "note" | "files" | "steps";
+type Field = "time" | "repeat" | "notify" | "color" | "note" | "files" | "steps";
 
 interface FieldsProps {
   /** День, на который добавляется задача (для создания) или день задачи. */
@@ -225,7 +215,6 @@ export function TaskFormFields({
   const postponed = editing ? (initial?.postponeCount ?? 0) : 0;
   const has: Record<Field, boolean> = {
     time: time != null || duration != null || travel != null,
-    priority: priority > 0,
     repeat: repeat != null,
     notify: notify != null || customNotify,
     color: color != null,
@@ -240,7 +229,6 @@ export function TaskFormFields({
     { f: "steps", label: "form.subtasks", ok: true },
     { f: "repeat", label: "form.repeat", ok: !templateMode && !initial?.someday },
     { f: "notify", label: "form.notify", ok: true },
-    { f: "priority", label: "form.priority", ok: true },
     { f: "color", label: "form.color", ok: true },
     { f: "note", label: "task.note", ok: true },
     { f: "files", label: "form.files", ok: !templateMode },
@@ -465,6 +453,13 @@ export function TaskFormFields({
         }}
       />
 
+      {/* ★ «Главное»: один тап вместо трёх уровней приоритета (difficulty=3). */}
+      <div style={fieldRow}>
+        <button type="button" className="text-chip" aria-pressed={priority === 3} onClick={() => setPriority(priority === 3 ? 0 : 3)}>
+          {priority === 3 ? "★" : "☆"} {t("form.focus")}
+        </button>
+      </div>
+
       {/* «Когда»: перенос одним тапом вместо кнопки «Перенести» с календарём.
           Применяется при «Сохранить». */}
       {editing && (
@@ -519,46 +514,6 @@ export function TaskFormFields({
       </div>
       )}
 
-      {/* Приоритет — явные кнопки с подписями («без приоритета» — ✕ поля). */}
-      {show("priority") && (
-      <div style={fieldRow}>
-        <span style={labelStyle}>{t("form.priority")}</span>
-        {clearBtn("priority", () => setPriority(0))}
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-2)" }}>
-          {PRIO.filter((p) => p.v > 0).map((p) => (
-            <button
-              key={p.v}
-              type="button"
-              onClick={() => setPriority(p.v)}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "var(--sp-2)",
-                fontSize: "var(--fs-2xs)",
-                padding: "4px 8px",
-                cursor: "pointer",
-                borderRadius: "var(--radius-md)",
-                border: `1px solid ${priority === p.v ? COLORS.accent : "var(--border-color)"}`,
-                background: priority === p.v ? "color-mix(in srgb, var(--text-primary) 6%, transparent)" : "transparent",
-                color: COLORS.text,
-              }}
-              title={p.labelKey ? t(p.labelKey) : "—"}
-            >
-              <span
-                style={{
-                  width: 9,
-                  height: 9,
-                  borderRadius: "50%",
-                  background: p.color || COLORS.muted,
-                  display: "inline-block",
-                }}
-              />
-              {p.labelKey ? t(p.labelKey) : "—"}
-            </button>
-          ))}
-        </div>
-      </div>
-      )}
 
       {/* «Когда-нибудь»: мягкий срок — сделать в течение недели/месяца/к дате. */}
       {editing && initial?.someday && (

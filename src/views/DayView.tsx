@@ -4,7 +4,7 @@ import type { Task } from "../api";
 import { api } from "../api";
 import { quickTask } from "../quickAdd";
 import { TaskCard } from "../components/TaskCard";
-import { CloseDayButton, OPEN_CLOSE_DAY, UsualLoad, doneToday } from "../components/CloseDayDialog";
+import { CloseDayButton, OPEN_CLOSE_DAY, useUsualLoad, doneToday } from "../components/CloseDayDialog";
 import { SomedayColumn } from "../components/SomedayColumn";
 import { ArchivePanel } from "../components/ArchivePanel";
 import { AddTaskModal } from "../components/AddTaskModal";
@@ -193,6 +193,42 @@ function DayTasksArea({
   const [archiveOpen, setArchiveOpen] = useState(false);
   // Расширенное окно добавления: время, приоритет, длительность, категория.
   const [addOpen, setAddOpen] = useState(false);
+  // «Главное дня» — только у сегодняшнего дня и по настройке; статус и черта — всегда у сегодня.
+  const usual = useUsualLoad(today);
+  const focusOn = today && visibility.focus;
+  const focus = focusOn ? dayTasks.filter((x) => x.difficulty === 3) : [];
+  const rest = focusOn ? dayTasks.filter((x) => x.difficulty !== 3) : dayTasks;
+  const focusDone = focus.filter((x) => x.isDone).length;
+  const [askHidden, setAskHidden] = useState(false);
+  // Подсказка «что главное»: застрявшие и задачи со временем — первыми.
+  const suggest = rest
+    .filter((x) => !x.isDone)
+    .sort((a, b) => (b.postponeCount ?? 0) - (a.postponeCount ?? 0) || (a.timeMinutes == null ? 1 : 0) - (b.timeMinutes == null ? 1 : 0))
+    .slice(0, 3);
+  const setFocus = async (x: Task) => {
+    try {
+      await api.upsertTask({ ...x, difficulty: 3 });
+    } catch (e) {
+      showToast(t("err.saveTask", { error: String(e) }));
+    }
+    onChange();
+  };
+  // Черта «обычно успеваете до сюда»: после usual-й задачи (главное считается), если задач больше.
+  const lineAt = today && usual > 0 && dayTasks.length > usual ? Math.max(usual - focus.length, 0) : -1;
+  const statusParts = [
+    doneN > 0 && <span key="d" style={{ color: "var(--accent-text)" }}>{t("day.statDone", { n: doneN })}</span>,
+    tails > 0 && (
+      <button
+        key="t"
+        type="button"
+        onClick={() => window.dispatchEvent(new Event(OPEN_CLOSE_DAY))}
+        style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "inherit", font: "inherit", textDecoration: "underline dotted" }}
+      >
+        {t("day.statTails", { n: tails })}
+      </button>
+    ),
+    usual > 0 && dayTasks.length > 0 && <span key="u">{t("day.statLoad", { n: dayTasks.length, u: usual })}</span>,
+  ].filter(Boolean);
   // Шаблон задач: кнопка создаёт задачу на этот день с параметрами шаблона.
   const addPattern = async (p: TaskPattern) => {
     await createTaskFromPattern(p, toEpochDay(day));
@@ -231,7 +267,6 @@ function DayTasksArea({
           {today && " ●"}
         </h2>
         {today && <CloseDayButton onChange={onChange} />}
-        {today && <UsualLoad />}
       </div>
 
       <div>
@@ -243,34 +278,56 @@ function DayTasksArea({
         {today && dayTasks.length > 0 && dayTasks.every((x) => x.isDone) && tails === 0 && (
           <p style={{ color: "var(--accent-text)", fontSize: "var(--fs-base)" }}>{t("day.allDone")}</p>
         )}
-        {doneN > 0 && (
-          <p style={{ color: "var(--accent-text)", fontSize: "var(--fs-sm)" }}>{t("close.done", { n: doneN })}</p>
+        {today && statusParts.length > 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-2)", fontSize: "var(--fs-sm)", color: "var(--text-secondary)", marginBottom: "var(--sp-3)" }}>
+            {statusParts.map((p, i) => (
+              <span key={i}>
+                {i > 0 && <span aria-hidden="true">· </span>}
+                {p}
+              </span>
+            ))}
+          </div>
         )}
-        {today && tails > 0 && (
-          <button
-            type="button"
-            onClick={() => window.dispatchEvent(new Event(OPEN_CLOSE_DAY))}
-            style={{
-              background: "none",
-              border: "none",
-              padding: 0,
-              textAlign: "left",
-              cursor: "pointer",
-              color: "var(--text-secondary)",
-              fontSize: "var(--fs-sm)",
-              textDecoration: "underline dotted",
-            }}
-          >
-            {t("day.tails", { n: tails })}
-          </button>
+        {focus.length > 0 && (
+          <div style={{ border: "1px solid var(--border-color)", borderRadius: "var(--radius-md)", background: accentTint(0.06), padding: "var(--sp-2) var(--sp-3)", marginBottom: "var(--sp-3)" }}>
+            <div style={{ fontSize: "var(--fs-sm)", fontWeight: 600, color: "var(--accent-text)" }}>
+              ★ {t("day.focusTitle", { done: focusDone, total: focus.length })}
+              {focus.length > 3 && <span style={{ fontWeight: 400, color: "var(--text-secondary)" }}> · {t("day.focusMany", { n: focus.length })}</span>}
+            </div>
+            {focus.map((x) => (
+              <TaskCard key={x.id} task={x} onChange={onChange} onCreateNext={createNext} />
+            ))}
+            {focusDone === focus.length && (
+              <div style={{ fontSize: "var(--fs-sm)", color: "var(--accent-text)" }}>{t("day.focusDone")}</div>
+            )}
+          </div>
         )}
-        {dayTasks.map((t) => (
-          <TaskCard
-            key={t.id}
-            task={t}
-            onChange={onChange}
-            onCreateNext={createNext}
-          />
+        {focusOn && focus.length === 0 && !askHidden && suggest.length > 0 && (
+          <div style={{ marginBottom: "var(--sp-3)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)", fontSize: "var(--fs-sm)", color: "var(--text-secondary)" }}>
+              <span>★ {t("day.focusAsk")}</span>
+              <button type="button" className="text-chip" onClick={() => setAskHidden(true)}>{t("day.focusLater")}</button>
+            </div>
+            <div className="chip-group" style={{ marginTop: "var(--sp-2)" }}>
+              {suggest.map((x) => (
+                <button key={x.id} type="button" className="text-chip" onClick={() => setFocus(x)}>
+                  ☆ {x.title.length > 28 ? x.title.slice(0, 27) + "…" : x.title}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {rest.map((x, i) => (
+          <div key={x.id}>
+            {i === lineAt && (
+              <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)", color: "var(--text-secondary)", fontSize: "var(--fs-2xs)", margin: "var(--sp-2) 0" }}>
+                <span style={{ flex: 1, borderTop: "1px dashed var(--border-color)" }} />
+                {t("day.usualLine")}
+                <span style={{ flex: 1, borderTop: "1px dashed var(--border-color)" }} />
+              </div>
+            )}
+            <TaskCard task={x} onChange={onChange} onCreateNext={createNext} />
+          </div>
         ))}
       </div>
 

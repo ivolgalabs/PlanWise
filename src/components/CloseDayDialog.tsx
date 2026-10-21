@@ -13,10 +13,10 @@ const POSTPONE_LIMIT = 3;
 
 /** «Обычно закрываешь N в день»: среднее по дням с закрытиями за 14 дней.
  *  Только после двух недель истории (есть закрытие старше 14 дней в окне 28). */
-export function UsualLoad() {
-  const { t } = useI18n();
+export function useUsualLoad(enabled = true) {
   const [n, setN] = useState(0);
   useEffect(() => {
+    if (!enabled) return;
     const end = new Date();
     const start = new Date();
     start.setDate(end.getDate() - 28);
@@ -32,9 +32,8 @@ export function UsualLoad() {
         if (days.size) setN(Math.round(recent.length / days.size));
       })
       .catch((e) => showToast(errText(e)));
-  }, []);
-  if (n < 1) return null;
-  return <span style={{ fontSize: "var(--fs-sm)", color: "var(--text-secondary)" }}>{t("close.usual", { n })}</span>;
+  }, [enabled]);
+  return n;
 }
 
 const errText = (e: unknown) => String(e instanceof Error ? e.message : e);

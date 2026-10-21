@@ -1474,6 +1474,7 @@ export function SettingsPanel({ onClose, onSetsChanged, onTasksChanged, onResetU
               ["subtasks", t("settings.visSubtasks")],
               ["notes", t("settings.visNotes")],
               ["someday", t("settings.visSomeday")],
+              ["focus", t("settings.visFocus")],
             ] as [keyof VisibilityState, string][]).map(([k, label]) => (
               <Toggle key={k} checked={visibility[k]} onChange={(v) => setVisibility(k, v)} label={label} />
             ))}
