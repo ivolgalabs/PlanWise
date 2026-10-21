@@ -205,6 +205,8 @@ export function TaskDndContext({ children, onChange }: TaskDndContextProps) {
     if (task) {
       // Задача → «Когда-нибудь» (вся колонка): снять привязку ко дню.
       if (over === somedayZoneId) {
+        // Уже в «Позже»: set_someday стёр бы мягкий срок (due_epoch_day).
+        if (task.someday) return;
         try {
           await api.setSomeday(task.id);
         } catch (err) {
