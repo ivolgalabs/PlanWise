@@ -137,6 +137,14 @@ body {
   margin: 0.15em var(--sp-2) var(--sp-2) calc(var(--sp-4) + 2px);
 }
 
+/* Телефон: строка добавления липнет к низу дня — мысль записывается без прокрутки. */
+.add-row-sticky {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  background: var(--bg-primary);
+}
+
 /* Шестерёнка «Настроить» у поля добавления — при наведении или фокусе.
    visibility, а не display: ряд не прыгает по ширине. */
 .add-row:not(:hover):not(:focus-within) .add-row-gear {
@@ -265,6 +273,16 @@ input[type="checkbox"] {
 .round-check input:checked + span {
   background: var(--cat);
   color: var(--bg-primary);
+}
+/* Отклик на отметку: кружок «подпрыгивает» один раз (класс ставит TaskCard на клик). */
+@keyframes check-pop {
+  50% { transform: scale(1.3); }
+}
+.round-check.check-pop span {
+  animation: check-pop var(--duration-slow) var(--ease-standard);
+}
+@media (prefers-reduced-motion: reduce) {
+  .round-check.check-pop span { animation: none; }
 }
 .round-check input:focus-visible + span {
   outline: 2px solid var(--accent);

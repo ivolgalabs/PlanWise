@@ -197,7 +197,11 @@ function DayTasksArea({
   const usual = useUsualLoad(today);
   const focusOn = today && visibility.focus;
   const focus = focusOn ? dayTasks.filter((x) => x.difficulty === 3) : [];
-  const rest = focusOn ? dayTasks.filter((x) => x.difficulty !== 3) : dayTasks;
+  const restAll = focusOn ? dayTasks.filter((x) => x.difficulty !== 3) : dayTasks;
+  // Сделанное — отдельной группой под открытым: видно движение, открытое не тонет.
+  const rest = restAll.filter((x) => !x.isDone);
+  const doneRest = restAll.filter((x) => x.isDone);
+  const [doneOpen, setDoneOpen] = useState(true);
   const focusDone = focus.filter((x) => x.isDone).length;
   const [askHidden, setAskHidden] = useState(false);
   // Подсказка «что главное»: застрявшие и задачи со временем — первыми.
@@ -329,6 +333,23 @@ function DayTasksArea({
             <TaskCard task={x} onChange={onChange} onCreateNext={createNext} />
           </div>
         ))}
+        {doneRest.length > 0 && (
+          <>
+            {rest.length > 0 && (
+              <button
+                type="button"
+                className="text-chip"
+                aria-expanded={doneOpen}
+                onClick={() => setDoneOpen((v) => !v)}
+                style={{ margin: "var(--sp-2) var(--sp-1)" }}
+              >
+                {doneOpen ? "▾" : "▸"} {t("day.doneGroup", { n: doneRest.length })}
+              </button>
+            )}
+            {(doneOpen || rest.length === 0) &&
+              doneRest.map((x) => <TaskCard key={x.id} task={x} onChange={onChange} onCreateNext={createNext} />)}
+          </>
+        )}
       </div>
 
       {/* Inline-поле ввода — крупное. Форма: кнопка «Далее/Готово» мобильной
@@ -337,7 +358,7 @@ function DayTasksArea({
           Ряд отделён от задач полной линией сверху (на ряду, а не на input —
           чтобы линия шла и под шестерёнкой, и кнопка не наезжала на задачи). */}
       <div
-        className="add-row"
+        className={`add-row${panelNarrow ? " add-row-sticky" : ""}`}
         style={{
           display: "flex",
           alignItems: "center",
@@ -433,7 +454,7 @@ function DayTasksArea({
               onClose={() => setArchiveOpen(false)}
               onChange={onChange}
             />
-          ) : (
+          ) : archivedTasks.length > 0 && (
             <button
               className="text-chip"
               onClick={() => setArchiveOpen(true)}

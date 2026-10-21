@@ -197,6 +197,7 @@ const zh: Dict = {
   "form.focus": "\u91cd\u70b9",
   "settings.visFocus": "\u4eca\u65e5\u91cd\u70b9",
   "day.statDone": "\u5df2\u5b8c\u6210 {n}",
+  "day.doneGroup": "\u5df2\u5b8c\u6210 ({n})",
   "day.statTails": "\u9057\u7559 {n}",
   "day.statLoad": "{n} / \u5e73\u65f6 {u} \u9879",
   "day.focusTitle": "\u91cd\u70b9 \u00b7 {done}/{total}",

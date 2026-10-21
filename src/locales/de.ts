@@ -197,6 +197,7 @@ const de: Dict = {
   "form.focus": "Wichtig",
   "settings.visFocus": "Tagesfokus",
   "day.statDone": "erledigt {n}",
+  "day.doneGroup": "Erledigt ({n})",
   "day.statTails": "Reste {n}",
   "day.statLoad": "{n} von üblichen {u}",
   "day.focusTitle": "Wichtig · {done}/{total}",

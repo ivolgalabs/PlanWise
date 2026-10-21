@@ -76,6 +76,7 @@ export const TaskCard = memo(function TaskCard({
   const { t } = useI18n();
   const [title, setTitle] = useState(task.title);
   const [editing, editingSetter] = useState(false);
+  const [pop, setPop] = useState(false); // отклик на отметку: класс check-pop на ~400 мс
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   // Точка начала тапа по строке: по ней отличаем осознанный тап от сдвига
   // при прокрутке (см. обработчик клика строки ниже).
@@ -325,6 +326,10 @@ export const TaskCard = memo(function TaskCard({
   };
 
   const toggleDone = async () => {
+    if (!task.isDone) {
+      setPop(true);
+      setTimeout(() => setPop(false), 400);
+    }
     try {
       await api.upsertTask({ ...task, isDone: !task.isDone });
       onChange();
@@ -609,7 +614,7 @@ export const TaskCard = memo(function TaskCard({
         </span>
       )}
       <label
-        className={`checkbox-hit${compact ? "" : " round-check"}`}
+        className={`checkbox-hit${compact ? "" : " round-check"}${pop ? " check-pop" : ""}`}
         ref={checkRef}
         title={task.isDone ? t("task.markUndone") : t("task.markDone")}
         style={{

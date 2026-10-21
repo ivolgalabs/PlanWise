@@ -197,6 +197,7 @@ const ja: Dict = {
   "form.focus": "\u6700\u91cd\u8981",
   "settings.visFocus": "\u4eca\u65e5\u306e\u6700\u91cd\u8981",
   "day.statDone": "\u5b8c\u4e86 {n}",
+  "day.doneGroup": "\u5b8c\u4e86 ({n})",
   "day.statTails": "\u6301\u3061\u8d8a\u3057 {n}",
   "day.statLoad": "\u901a\u5e38 {u} \u4ef6\u4e2d {n} \u4ef6",
   "day.focusTitle": "\u6700\u91cd\u8981 \u00b7 {done}/{total}",

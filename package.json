@@ -1,7 +1,7 @@
 {
   "name": "planwise",
   "private": true,
-  "version": "0.4.0",
+  "version": "0.4.2",
   "description": "Minimalist high-performance offline task planner on Tauri v2, Rust and SQLite",
   "author": "Ivolga Labs <support@ivolgalabs.com>",
   "license": "Apache-2.0",

@@ -197,6 +197,7 @@ const ko: Dict = {
   "form.focus": "\ud575\uc2ec",
   "settings.visFocus": "\uc624\ub298\uc758 \ud575\uc2ec",
   "day.statDone": "\uc644\ub8cc {n}",
+  "day.doneGroup": "\uc644\ub8cc ({n})",
   "day.statTails": "\uc774\uc6d4 {n}",
   "day.statLoad": "\ud3c9\uc18c {u}\uac1c \uc911 {n}\uac1c",
   "day.focusTitle": "\ud575\uc2ec \u00b7 {done}/{total}",

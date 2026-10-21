@@ -134,7 +134,7 @@ export function WeekViewVertical({ tasks, archivedTasks, mobileSections, anchor,
                 onClose={() => setArchiveOpen(false)}
                 onChange={onChange}
               />
-            ) : (
+            ) : archivedTasks.length > 0 && (
               <button
                 className="text-chip"
                 onClick={() => setArchiveOpen(true)}

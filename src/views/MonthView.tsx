@@ -11,6 +11,7 @@ import { useSubtasks } from "../useSubtasks";
 import { TaskFormFields } from "../components/AddTaskModal";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Icon } from "../components/Icon";
+import { PeriodSummary } from "../components/PeriodSummary";
 import { useI18n } from "../i18n";
 
 interface Props {
@@ -96,25 +97,6 @@ export function MonthView({ tasks, onSelectDay, onSelectWeek, onChange }: Props)
     return mondayFirst ? monFirst : [monFirst[6]!, ...monFirst.slice(0, 6)];
   }, [lang, mondayFirst]);
 
-  // Сводка видимого месяца: сделано / отпущено / застряло (↻3) и сделанное по категориям.
-  const summary = useMemo(() => {
-    const anchor = monthDate ?? selectedDate;
-    let done = 0;
-    let dropped = 0;
-    let stuck = 0;
-    const byCat = new Map<string, number>();
-    for (const x of tasks) {
-      if (x.someday || x.archived || !isSameMonth(fromEpochDay(x.date), anchor)) continue;
-      if (x.droppedAt) dropped++;
-      else if (x.isDone) {
-        done++;
-        const k = !x.colorSetId || x.colorSetId === "cs-none" ? "" : x.colorSetId;
-        byCat.set(k, (byCat.get(k) ?? 0) + 1);
-      } else if ((x.postponeCount ?? 0) >= 3) stuck++;
-    }
-    return { done, dropped, stuck, byCat: [...byCat.entries()].sort((a, b) => b[1] - a[1]) };
-  }, [tasks, monthDate, selectedDate]);
-
   const openDay = (d: Date) => {
     setMenuDay(null);
     onSelectDay(d);
@@ -155,38 +137,7 @@ export function MonthView({ tasks, onSelectDay, onSelectWeek, onChange }: Props)
   return (
     <>
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, padding: "var(--sp-4)" }}>
-      {summary.done + summary.dropped + summary.stuck > 0 && (
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            alignItems: "center",
-            gap: "var(--sp-1) var(--sp-4)",
-            padding: "0 var(--sp-2) var(--sp-2)",
-            fontSize: "var(--fs-sm)",
-            color: COLORS.muted,
-          }}
-        >
-          <span>{t("month.done")} <b style={{ color: COLORS.text }}>{summary.done}</b></span>
-          <span>{t("month.dropped")} <b style={{ color: COLORS.text }}>{summary.dropped}</b></span>
-          {summary.stuck > 0 && (
-            <span style={{ color: "var(--danger)" }}>{t("month.stuck")} <b>{summary.stuck}</b></span>
-          )}
-          {summary.byCat.map(([key, n]) => (
-            <span key={key || "_none"} style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
-              <span
-                style={{
-                  width: 7,
-                  height: 7,
-                  borderRadius: "50%",
-                  background: key === "" ? COLORS.muted : (setHex(colorSets, key) ?? COLORS.muted),
-                }}
-              />
-              {n}
-            </span>
-          ))}
-        </div>
-      )}
+      <PeriodSummary tasks={tasks} inPeriod={(d) => isSameMonth(fromEpochDay(d), monthDate ?? selectedDate)} />
       <div style={{ display: "flex" }}>
         {weekdays.map((w, i) => (
           <div

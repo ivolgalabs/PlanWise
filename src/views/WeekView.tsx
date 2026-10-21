@@ -1,7 +1,8 @@
 import { useEffect } from "react";
 import type { Task } from "../api";
-import { weekDays, tasksForDay } from "../date";
+import { weekDays, tasksForDay, toEpochDay } from "../date";
 import { DayColumn } from "../components/DayColumn";
+import { PeriodSummary } from "../components/PeriodSummary";
 import { WeekShiftZone } from "../components/WeekShiftZone";
 import { WeekViewVertical } from "./WeekViewVertical";
 import { useStore } from "../store";
@@ -34,6 +35,8 @@ export function WeekView({ tasks, archivedTasks, onChange }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const days = weekDays(weekDate ?? selectedDate, mondayFirst);
+  const weekStart = toEpochDay(days[0]!);
+  const weekEnd = toEpochDay(days[6]!);
 
   // В узком окне принудительно вертикальный список — сетка из 7 узких колонок
   // нечитаема. useMediaQuery реагирует на ресайз окна (общий listener).
@@ -54,6 +57,7 @@ export function WeekView({ tasks, archivedTasks, onChange }: Props) {
             контенту недели (flex:1 у WeekViewVertical не работает без
             flex-контекста) и внутренний скролл не появляется. */}
         <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+          <PeriodSummary tasks={tasks} inPeriod={(d) => d >= weekStart && d <= weekEnd} />
           {effectiveVertical ? (
             <WeekViewVertical
               tasks={tasks}

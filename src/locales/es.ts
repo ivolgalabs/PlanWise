@@ -197,6 +197,7 @@ const es: Dict = {
   "form.focus": "Lo principal",
   "settings.visFocus": "Lo principal del día",
   "day.statDone": "hecho {n}",
+  "day.doneGroup": "Hecho ({n})",
   "day.statTails": "pendientes {n}",
   "day.statLoad": "{n} de las habituales {u}",
   "day.focusTitle": "Lo principal · {done}/{total}",
