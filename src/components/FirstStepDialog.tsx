@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { api } from "../api";
 import type { Task } from "../api";
@@ -19,6 +19,7 @@ export const needsFirstStep = (task: Task, newDay: number, today = toEpochDay(ne
 export function FirstStepDialog({ task, onClose, onChange }: { task: Task; onClose: () => void; onChange: () => void }) {
   const { t } = useI18n();
   const [step, setStep] = useState("");
+  const busy = useRef(false); // двойной Enter/тап не должен создать шаг дважды
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -27,6 +28,8 @@ export function FirstStepDialog({ task, onClose, onChange }: { task: Task; onClo
   }, [onClose]);
 
   const run = async (fn: () => Promise<unknown>, toast?: string) => {
+    if (busy.current) return;
+    busy.current = true;
     try {
       await fn();
       if (toast) showToast(toast);

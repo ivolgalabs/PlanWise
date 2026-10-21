@@ -217,8 +217,9 @@ function DayTasksArea({
     }
     onChange();
   };
-  // Черта «обычно успеваете до сюда»: после usual-й задачи (главное считается), если задач больше.
-  const lineAt = today && usual > 0 && dayTasks.length > usual ? Math.max(usual - focus.length, 0) : -1;
+  // Черта «обычно успеваете до сюда»: сделанное и главное уже сверху и считаются в usual,
+  // поэтому черта стоит после (usual − главное − сделанное) открытых, если задач больше.
+  const lineAt = today && usual > 0 && dayTasks.length > usual ? Math.max(usual - focus.length - doneRest.length, 0) : -1;
   const statusParts = [
     doneN > 0 && <span key="d" style={{ color: "var(--accent-text)" }}>{t("day.statDone", { n: doneN })}</span>,
     tails > 0 && (

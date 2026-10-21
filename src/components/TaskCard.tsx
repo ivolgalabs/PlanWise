@@ -53,6 +53,9 @@ function taskEquals(a: Task, b: Task): boolean {
   );
 }
 
+/** Задачи, только что отмеченные сделанными: карточка перемонтируется в группе «Сделано» и подхватывает отклик. */
+const popIds = new Set<string>();
+
 /**
  * Строка задачи: чекбокс + текст + время (ТОЛЬКО отображение) + цветной маркер
  * приоритета и линия категории. Клик/тап по тексту — редактирование текста
@@ -76,7 +79,17 @@ export const TaskCard = memo(function TaskCard({
   const { t } = useI18n();
   const [title, setTitle] = useState(task.title);
   const [editing, editingSetter] = useState(false);
-  const [pop, setPop] = useState(false); // отклик на отметку: класс check-pop на ~400 мс
+  // Отклик на отметку: класс check-pop на ~400 мс. Карточка при отметке переезжает в группу «Сделано»
+  // (перемонтируется), поэтому флаг живёт в popIds, а не только в состоянии.
+  const [pop, setPop] = useState(() => popIds.has(task.id));
+  useEffect(() => {
+    if (!pop) return;
+    const h = setTimeout(() => {
+      popIds.delete(task.id);
+      setPop(false);
+    }, 400);
+    return () => clearTimeout(h);
+  }, [pop, task.id]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   // Точка начала тапа по строке: по ней отличаем осознанный тап от сдвига
   // при прокрутке (см. обработчик клика строки ниже).
@@ -327,8 +340,8 @@ export const TaskCard = memo(function TaskCard({
 
   const toggleDone = async () => {
     if (!task.isDone) {
+      popIds.add(task.id);
       setPop(true);
-      setTimeout(() => setPop(false), 400);
     }
     try {
       await api.upsertTask({ ...task, isDone: !task.isDone });
