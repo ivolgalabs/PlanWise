@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="ru" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PlanWise — Фокус дня (прототип v3)</title>
+<style>
+  /* Повторяет текущие экраны 0.3.4; новое описано в плане docs/reports/2026-10-20-focus-plan.md */
+  body { margin: 0; background: var(--bg-primary); color: var(--text-primary); font-family: var(--font-sans, system-ui, sans-serif); }
+  button { font: inherit; color: inherit; }
+  .proto { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 12px; font-size: 12px; color: var(--text-muted); border-bottom: 1px dashed var(--border-color); }
+  .proto label { display: inline-flex; gap: 4px; align-items: center; }
+  .proto button { border: 1px solid var(--border-color); background: transparent; border-radius: 6px; padding: 2px 8px; cursor: pointer; }
+  .app { max-width: 560px; margin: 0 auto; padding: 0 var(--sp-3) 90px; box-sizing: border-box; }
+  .topbar { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-3) 0; font-weight: 700; }
+  .topbar .ic { color: var(--text-secondary); font-weight: 400; }
+  .switch { display: inline-flex; background: var(--bg-secondary); border-radius: var(--radius-md); padding: 3px; gap: 2px; }
+  .switch button { border: none; background: transparent; padding: 6px 10px; border-radius: 6px; cursor: pointer; color: var(--text-secondary); font-size: var(--fs-sm); }
+  .switch button.on { background: var(--bg-primary); color: var(--text-primary); font-weight: 700; }
+  .dayhead { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; margin: var(--sp-4) 0 var(--sp-1); }
+  .dayhead h1 { font-size: var(--fs-lg); margin: 0; color: var(--accent-text); }
+  .btn { border: 1px solid var(--border-color); background: var(--bg-primary); border-radius: var(--radius-md); padding: 5px 10px; font-size: var(--fs-sm); cursor: pointer; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent, #fff); }
+  .btn.small { padding: 4px 9px; font-size: var(--fs-xs); }
+  .status { font-size: var(--fs-sm); color: var(--text-secondary); margin: var(--sp-1) 0 var(--sp-3); display: flex; flex-wrap: wrap; gap: 0 6px; }
+  .status b { color: var(--text-primary); }
+  .status .link { background: none; border: none; padding: 0; cursor: pointer; text-decoration: underline dotted; color: inherit; }
+  .new { outline: 1px dashed var(--accent); outline-offset: 3px; border-radius: 4px; }
+  .block { border: 1px solid var(--accent); border-radius: var(--radius-md); padding: var(--sp-2) var(--sp-2) var(--sp-1); margin-bottom: var(--sp-3); }
+  .block h2, .grp { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); margin: 0 0 var(--sp-1) 4px; font-weight: 600; }
+  .hint { font-size: var(--fs-sm); color: var(--text-secondary); margin: 4px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: var(--sp-2) 4px; }
+  .chip { border: 1px solid var(--border-color); border-radius: 14px; padding: 4px 10px; background: transparent; cursor: pointer; font-size: var(--fs-sm); }
+  .chip.on { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent, #fff); }
+  .chip i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; }
+  /* Строка задачи как в 0.3.4 */
+  .row { display: flex; align-items: center; gap: var(--sp-2); padding: 8px 4px 8px 0; border-bottom: 1px solid var(--border-color); border-left: 3px solid transparent; transition: transform .15s; }
+  .row .grip { color: var(--text-muted); font-size: 12px; width: 18px; text-align: center; letter-spacing: -2px; }
+  .row input { width: 18px; height: 18px; accent-color: var(--accent); flex-shrink: 0; margin: 0; }
+  .row .t, .row2 .t { flex: 1; min-width: 0; }
+  .row.done .t .title { text-decoration: line-through; color: var(--text-muted); }
+  .row.pop, .row2.pop { transform: scale(1.02); }
+  .pill { display: inline-block; font-size: var(--fs-2xs); background: var(--bg-secondary); color: var(--text-secondary); border-radius: 6px; padding: 1px 6px; margin: 3px 4px 0 0; }
+  .pill.tail { color: var(--accent-text); }
+  .icon-btn { background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 18px; padding: 2px 6px; }
+  .icon-btn.on { color: var(--accent); }
+  /* Новая строка задачи: круглая галочка в цвете категории, мета одной строкой текста,
+     ручка и ☆ — по наведению (десктоп); на телефоне ручки нет, тап по строке = карточка */
+  .row2 { display: flex; align-items: center; gap: 4px; padding: 7px 4px 7px 0; border-bottom: 1px solid var(--border-color); cursor: pointer; border-radius: var(--radius-sm); transition: transform .15s, background .15s; }
+  .grip2 { width: 14px; flex-shrink: 0; color: var(--text-muted); font-size: 11px; letter-spacing: -2px; text-align: center; cursor: grab; }
+  .ck { width: 36px; height: 36px; flex-shrink: 0; border: none; background: none; padding: 0; display: grid; place-items: center; cursor: pointer; }
+  .ck span { width: 21px; height: 21px; box-sizing: border-box; border-radius: 50%; border: 2px solid var(--c); color: transparent; font-size: 12px; display: grid; place-items: center; transition: background .15s; }
+  .ck[aria-pressed="true"] span { background: var(--c); color: var(--bg-primary); }
+  .ck.big span { width: 26px; height: 26px; font-size: 14px; }
+  .row2 .title { font-size: var(--fs-md); line-height: 1.35; overflow-wrap: anywhere; }
+  .row2.done .title { text-decoration: line-through; color: var(--text-muted); }
+  .meta { display: flex; flex-wrap: wrap; align-items: center; font-size: var(--fs-xs); color: var(--text-muted); margin-top: 1px; }
+  .meta .dot { margin: 0 5px; opacity: .6; }
+  .meta .tm { color: var(--accent-text); font-variant-numeric: tabular-nums; font-weight: 600; }
+  .meta .warn { color: var(--warning); }
+  .meta .sub { border: none; background: none; padding: 0; color: inherit; font-size: inherit; cursor: pointer; text-decoration: underline dotted; }
+  .st { background: none; border: none; font-size: 20px; color: var(--text-muted); cursor: pointer; padding: 4px 6px; opacity: .45; flex-shrink: 0; }
+  .st.on { color: var(--accent); opacity: 1; }
+  .subs { padding: 0 0 6px 52px; display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-sm); color: var(--text-secondary); }
+  .subs label { display: flex; gap: 8px; align-items: center; }
+  @media (hover: hover) {
+    .row2:hover { background: var(--bg-secondary); }
+    .row2 .grip2 { opacity: 0; }
+    .row2:hover .grip2 { opacity: .6; }
+    .row2 .st:not(.on) { opacity: 0; }
+    .row2:hover .st:not(.on) { opacity: .5; }
+  }
+  @media (hover: none) { .grip2 { display: none; } }
+  .line { display: flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: var(--fs-2xs); margin: 6px 0; }
+  .line::before, .line::after { content: ""; flex: 1; border-top: 1px dashed var(--border-color); }
+  .fold { background: none; border: none; padding: var(--sp-2) 0; cursor: pointer; color: var(--accent-text); font-weight: 700; font-size: var(--fs-sm); }
+  .addbar { position: fixed; left: 0; right: 0; bottom: 0; background: var(--bg-primary); border-top: 1px solid var(--border-color); padding: 8px 12px; }
+  .addbar form { max-width: 560px; margin: 0 auto; display: flex; gap: 8px; }
+  .addbar input { flex: 1; min-width: 0; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary); border-radius: var(--radius-md); padding: 9px 12px; font-size: var(--fs-sm); }
+  .ov { position: fixed; inset: 0; background: rgba(0,0,0,.5); display: none; align-items: center; justify-content: center; z-index: 10; padding: 12px; }
+  .ov.show { display: flex; }
+  .dlg { background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-lg, 12px); width: 100%; max-width: 440px; max-height: 90vh; overflow: auto; padding: var(--sp-4); box-sizing: border-box; }
+  .dlg h3 { margin: 0 0 var(--sp-2); font-size: var(--fs-md); }
+  .dlg .item { padding: var(--sp-2) 0; border-bottom: 1px solid var(--border-color); }
+  .dlg .acts { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+  .dlg textarea, .dlg input[type=text] { width: 100%; box-sizing: border-box; background: transparent; color: var(--text-primary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 8px; font: inherit; margin-top: var(--sp-2); }
+  /* Новая карточка: лист снизу на телефоне, окно по центру на десктопе */
+  .ov.sheet { align-items: flex-end; padding: 0; }
+  .ov.sheet .dlg { max-width: 560px; border-radius: var(--radius-xl, 16px) var(--radius-xl, 16px) 0 0; max-height: 92vh; padding-top: 8px; padding-bottom: 0; animation: up .2s ease-out; }
+  @media (min-width: 700px) { .ov.sheet { align-items: center; padding: 12px; } .ov.sheet .dlg { border-radius: var(--radius-xl, 16px); } }
+  @keyframes up { from { transform: translateY(40px); opacity: .4; } }
+  @media (prefers-reduced-motion: reduce) { .ov.sheet .dlg { animation: none; } .row, .row2 { transition: none; } }
+  .grab { width: 36px; height: 4px; border-radius: 2px; background: var(--border-color); margin: 0 auto 8px; }
+  .cardh { display: flex; align-items: flex-start; gap: 2px; }
+  .dlg .ttl { flex: 1; border: none; margin: 0; padding: 5px 0; font-size: var(--fs-lg); font-weight: 600; resize: none; line-height: 1.3; }
+  .sub-h { margin: 0 0 4px 38px; }
+  .when { margin: 8px 0 10px; }
+  .prop { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-top: 1px solid var(--border-color); flex-wrap: wrap; font-size: var(--fs-sm); }
+  .prop .pi { width: 24px; text-align: center; color: var(--text-secondary); }
+  .prop input[type=time], .prop select { background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 5px 8px; font: inherit; }
+  .prop .x { margin-left: auto; font-size: 14px; }
+  .chips.mini { margin: 0; gap: 4px; }
+  .chips.mini .chip { padding: 3px 9px; font-size: var(--fs-xs); }
+  .seg { display: inline-flex; background: var(--bg-secondary); border-radius: var(--radius-md); padding: 2px; }
+  .seg button { border: none; background: none; padding: 4px 10px; border-radius: 6px; cursor: pointer; font-size: var(--fs-xs); color: var(--text-secondary); }
+  .seg button.on { background: var(--bg-primary); color: var(--text-primary); font-weight: 600; }
+  .steps label { display: flex; gap: 8px; align-items: center; padding: 4px 0 4px 6px; font-size: var(--fs-sm); }
+  .dlg .stepin { border-style: dashed; margin-top: 4px; }
+  .dlg .note { border: none; background: var(--bg-secondary); }
+  .cardf { display: flex; align-items: center; gap: 6px; position: sticky; bottom: 0; background: var(--bg-primary); padding: 10px 0 12px; margin-top: 8px; border-top: 1px solid var(--border-color); }
+  .big { font-size: 34px; font-weight: 700; color: var(--accent-text); margin: var(--sp-2) 0; }
+  .muted { color: var(--text-muted); font-size: var(--fs-xs); }
+  .wsum { font-size: var(--fs-sm); color: var(--text-secondary); margin: var(--sp-3) 0; }
+  .wsum b { color: var(--text-primary); }
+  .wday { font-weight: 700; color: var(--text-secondary); margin: var(--sp-3) 0 var(--sp-1); font-size: var(--fs-sm); }
+  .wday.today { color: var(--accent-text); }
+  .toast { position: fixed; bottom: 70px; left: 50%; transform: translateX(-50%); background: var(--text-primary); color: var(--bg-primary); padding: 8px 14px; border-radius: 18px; font-size: 13px; z-index: 20; }
+</style>
+</head>
+<body>
+<div class="proto">
+  Прототип v3 · <button data-act="reset">Сброс</button>
+  <label><input type="checkbox" data-opt="focus" checked> «Главное дня»</label>
+  <label><input type="checkbox" data-opt="history" checked> есть история (черта)</label>
+  <label><input type="checkbox" data-opt="cards" checked> новые карточки</label>
+  <label><input type="checkbox" data-opt="marks"> показать новое</label>
+  <button data-act="theme">тема</button>
+</div>
+<div class="app" id="app"></div>
+<div class="addbar" id="addbar"><form id="addform"><input id="addinput" placeholder="Добавить: «завтра созвон в 15»" enterkeyhint="done"><button class="btn primary">+</button></form></div>
+<div class="ov" id="ov"><div class="dlg" id="dlg"></div></div>
+<script type="module">
+import "universal-ui/tokens.css";
+import "universal-ui/themes.css";
+import "universal-ui/typography.css";
+
+// Данные в памяти, «Сброс» возвращает исходный день. Цвета — данные категорий (как ARGB в БД).
+const CAT = { work: "#C9A87C", personal: "#7EB8C4", sport: "#E8A87C" };
+const CATN = { work: "Работа", personal: "Личное", sport: "Спорт" };
+const REP = { day: "день", week: "неделю", month: "месяц" };
+const REMIND = { 10: "за 10 мин (как в настройках)", 30: "за 30 мин", 60: "за час" };
+const USUAL = 5, LIMIT = 3;
+const seed = () => [
+  { id: 1, title: "Отчёт по проекту", cat: "work", p: 2, from: "вс" },
+  { id: 2, title: "Позвонить в банк", cat: "personal", p: 0, from: "пн" },
+  { id: 3, title: "Созвон с командой", cat: "work", time: "10:00–10:30", remind: "10" },
+  { id: 4, title: "Тренировка", cat: "sport", time: "19:00–20:00", rep: "week" },
+  { id: 5, title: "Купить подарок маме", cat: "personal", note: "Книга или тёплый шарф" },
+  { id: 6, title: "Разобрать почту", cat: "work", p: 1 },
+  { id: 7, title: "Записаться к врачу", cat: "personal" },
+  { id: 8, title: "Подготовить презентацию", cat: "work", subs: [{ t: "Собрать цифры", d: true }, { t: "Набросать слайды" }, { t: "Прогнать вслух" }] },
+  { id: 9, title: "Полить цветы", done: true, rep: "week" },
+  { id: 10, title: "Выпить витамины", done: true, rep: "day" },
+].map((x) => ({ p: 0, star: false, done: false, ...x }));
+const S = { tasks: seed(), view: "day", focus: true, history: true, cards: true, marks: false, hintOff: false, doneOpen: false, nextId: 100, later: [], tomorrow: [], edit: null };
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const today = () => S.tasks.filter((x) => !x.from);
+const tails = () => S.tasks.filter((x) => x.from && !x.done);
+const mark = (on) => (S.marks && on ? " new" : "");
+const col = (x) => CAT[x.cat] || "var(--text-muted)";
+const mins = (s) => { const [h, m] = s.split(":"); return +h * 60 + +m; };
+const hhmm = (n) => `${String(Math.floor(n / 60) % 24).padStart(2, "0")}:${String(n % 60).padStart(2, "0")}`;
+
+const row = (x) => (S.cards ? rowNew(x) : rowOld(x));
+function rowOld(x) {
+  const pills = [x.time && `<span class="pill">${x.time}</span>`, x.rep && `<span class="pill">⟳</span>`, x.p && `<span class="pill">↻${x.p}</span>`, x.from && `<span class="pill tail">с ${x.from}</span>`].filter(Boolean).join("");
+  const star = S.focus && !x.done ? `<button class="icon-btn ${x.star ? "on" : ""}${mark(true)}" data-star="${x.id}" aria-label="Главное">${x.star ? "★" : "☆"}</button>` : "";
+  return `<div class="row ${x.done ? "done" : ""}" id="r${x.id}" style="border-left-color:${x.cat && !x.done ? CAT[x.cat] : "transparent"}">
+    <span class="grip">⋮⋮</span><input type="checkbox" data-done="${x.id}" ${x.done ? "checked" : ""} aria-label="Готово">
+    <div class="t"><span class="title">${esc(x.title)}</span><div>${pills}</div></div>${star}<button class="icon-btn" data-edit="${x.id}" aria-label="Изменить">✎</button></div>`;
+}
+function rowNew(x) {
+  const subs = x.subs || [], sd = subs.filter((s) => s.d).length;
+  const meta = [
+    x.time && `<span class="tm">${x.time}</span>`,
+    x.rep && `<span title="Каждый ${REP[x.rep]}">⟳</span>`,
+    x.p && `<span class="${x.p >= 2 ? "warn" : ""}" title="Переносили ${x.p} раз">↻${x.p}</span>`,
+    x.from && `<span>с ${x.from}</span>`,
+    subs.length && `<button class="sub" data-subs="${x.id}" aria-expanded="${!!x.subsOpen}">шаги ${sd}/${subs.length}</button>`,
+    x.note && `<span title="${esc(x.note)}">заметка</span>`,
+  ].filter(Boolean).join('<span class="dot">·</span>');
+  const star = S.focus && !x.done ? `<button class="st${x.star ? " on" : ""}" data-star="${x.id}" aria-label="Главное" aria-pressed="${x.star}">${x.star ? "★" : "☆"}</button>` : "";
+  return `<div class="row2${x.done ? " done" : ""}" id="r${x.id}" data-open="${x.id}">
+    <span class="grip2" title="Перетащить">⋮⋮</span>
+    <button class="ck" data-ck="${x.id}" style="--c:${col(x)}" aria-label="Готово" aria-pressed="${x.done}"><span>✓</span></button>
+    <div class="t"><div class="title">${esc(x.title)}</div>${meta ? `<div class="meta">${meta}</div>` : ""}</div>${star}</div>
+    ${x.subsOpen && subs.length ? `<div class="subs">${subs.map((s, i) => `<label><input type="checkbox" data-subck="${x.id}:${i}" ${s.d ? "checked" : ""}><span>${esc(s.t)}</span></label>`).join("")}</div>` : ""}`;
+}
+
+function dayView() {
+  const all = [...tails(), ...today()];
+  const open = all.filter((x) => !x.done), done = all.filter((x) => x.done);
+  const stars = S.focus ? all.filter((x) => x.star) : [];
+  const rest = open.filter((x) => !S.focus || !x.star);
+  let h = `<div class="dayhead"><h1>Вторник, 20 Октября</h1><button class="btn" data-act="close">✓ Закрыть день</button></div>
+    <div class="status${mark(true)}">сделано <b>${done.length}</b> ·
+      ${tails().length ? `<button class="link" data-act="close">хвосты <b>${tails().length}</b></button> ·` : ""}
+      <span>${S.history ? `задач <b>${open.length}</b>${open.length > USUAL ? `, обычно ${USUAL}` : ""}` : `задач <b>${open.length}</b>`}</span></div>`;
+  if (S.focus) {
+    if (stars.length) {
+      const sd = stars.filter((x) => x.done).length;
+      h += `<div class="block${mark(true)}"><h2>Главное · ${sd}/${stars.length}</h2>${stars.map(row).join("")}
+        ${sd === stars.length ? `<p class="hint">✓ Главное сделано. Остальное — по желанию, день уже удался.</p>` : ""}
+        ${stars.length > LIMIT ? `<p class="hint">${stars.length} главных — многовато. Что из этого может подождать?</p>` : ""}</div>`;
+    } else if (!S.hintOff && open.length) {
+      const sug = [...open.filter((x) => x.from || x.p), ...open.filter((x) => x.time)].slice(0, 3);
+      h += `<div class="block${mark(true)}"><h2>Главное</h2><p class="hint">Что главное сегодня? Отметьте ☆ у 1–3 задач — остальное будет бонусом.</p>
+        <div class="chips">${sug.map((x) => `<button class="chip" data-star="${x.id}">☆ ${esc(x.title)}</button>`).join("")}<button class="chip" data-act="hintoff">не сейчас</button></div></div>`;
+    }
+  }
+  const cut = S.history && open.length > USUAL ? Math.max(0, USUAL - stars.filter((x) => !x.done).length) : -1;
+  h += rest.map((x, i) => (i === cut ? `<div class="line${mark(true)}">обычно вы успеваете до сюда</div>` : "") + row(x)).join("");
+  const d = done.filter((x) => !x.star || !S.focus);
+  if (d.length) h += `<button class="fold${mark(true)}" data-act="fold">${S.doneOpen ? "▾" : "▸"} Сделано ${d.length}</button>${S.doneOpen ? d.map(row).join("") : ""}`;
+  h += `<p class="muted" style="margin-top:16px">▸ Позже ${3 + S.later.length}</p>`;
+  return h;
+}
+
+function weekView() {
+  const all = [...tails(), ...today()];
+  const dn = all.filter((x) => x.done).length;
+  return `<div class="wsum${mark(true)}">Неделя: сделано <b>${dn + 5}</b> · отпущено <b>1</b> · застряло <b>${all.filter((x) => x.p >= 2 && !x.done).length}</b></div>
+    <div class="wday">✓ Пн, 19</div>${tails().filter((x) => x.from === "пн").map(row).join("")}
+    <div class="wday today">Вт, 20 · ${dn}/${all.length} <button class="btn small" data-act="close">✓ Закрыть день</button></div>${today().map(row).join("")}
+    <div class="wday">Ср, 21</div>${row({ id: 50, title: "Стоматолог", cat: "personal", time: "15:00", p: 0 })}${S.tomorrow.map(row).join("")}
+    <div class="wday">Чт, 22</div>${row({ id: 51, title: "Сдать отчёт", cat: "work", p: 0 })}`;
+}
+
+function render() {
+  $("#app").innerHTML = `<div class="topbar"><span class="ic">‹</span>${S.view === "day" ? "20 Октября" : "19–25 Октябрь"}<span class="ic">›</span><span class="ic">📅</span><span class="ic">⚙</span></div>
+    <div style="display:flex;align-items:center;gap:12px"><div class="switch">${["day:День", "week:Неделя", "month:Месяц"].map((v) => { const [k, n] = v.split(":"); return `<button class="${S.view === k ? "on" : ""}" data-view="${k}">${n}</button>`; }).join("")}</div><span class="ic">🔍</span></div>
+    ${S.view === "day" ? dayView() : S.view === "week" ? weekView() : `<p class="hint" style="margin-top:24px">Месяц не меняется.</p>`}`;
+  $("#addbar").classList.toggle("new", S.marks);
+}
+
+const toast = (m) => { const d = document.createElement("div"); d.className = "toast"; d.textContent = m; document.body.append(d); setTimeout(() => d.remove(), 2000); };
+const dlg = (h, sheet = false) => { $("#ov").classList.toggle("sheet", sheet); $("#dlg").innerHTML = h; $("#ov").classList.add("show"); };
+const closeDlg = () => { S.edit = null; $("#ov").classList.remove("show", "sheet"); };
+const cardOpen = () => S.edit && $("#ov").classList.contains("sheet");
+const find = (id) => [...S.tasks, ...S.tomorrow].find((x) => x.id === +id);
+const remove = (x) => { S.tasks = S.tasks.filter((t) => t !== x); S.tomorrow = S.tomorrow.filter((t) => t !== x); };
+
+// Карточка задачи: всегда видно только название, «когда», категорию, шаги и заметку;
+// заданные свойства — строками, незаданные — чипами «+ время», «+ повтор»…
+function card(x) {
+  if (!x) return toast("Демо-строка: откройте задачу на сегодня");
+  S.edit = { x, snap: JSON.parse(JSON.stringify(x)), more: false, del: false };
+  drawCard();
+}
+function drawCard() {
+  const { x } = S.edit, subs = x.subs || [], sd = subs.filter((s) => s.d).length;
+  const where = x.from ? "tail" : S.tomorrow.includes(x) ? "tom" : "today";
+  const [st, en] = (x.time || "").split("–");
+  const dur = st && en ? mins(en) - mins(st) : 0;
+  const plus = [
+    !x.time && `<button class="chip" data-add="time">+ время</button>`,
+    !x.rep && `<button class="chip" data-add="rep">+ повтор</button>`,
+    x.time && !x.remind && `<button class="chip" data-add="remind">+ напоминание</button>`,
+    `<button class="chip" data-add="file">+ файл</button>`,
+  ].filter(Boolean).join("");
+  dlg(`<div class="grab"></div>
+    <div class="cardh">
+      <button class="ck big" data-ck="${x.id}" style="--c:${col(x)}" aria-label="Готово" aria-pressed="${x.done}"><span>✓</span></button>
+      <textarea class="ttl" data-f="title" rows="2" aria-label="Название">${esc(x.title)}</textarea>
+      ${S.focus ? `<button class="st on" data-star="${x.id}" aria-label="Главное" aria-pressed="${x.star}" style="opacity:${x.star ? 1 : .5}">${x.star ? "★" : "☆"}</button>` : ""}
+    </div>
+    <div class="muted sub-h">${where === "tail" ? `Хвост с ${x.from}` : where === "tom" ? "Среда, 21 октября" : "Вторник, 20 октября"}${x.p ? ` · переносили ${x.p} раз${x.p > 1 && x.p < 5 ? "а" : ""}` : ""}</div>
+    <div class="chips when">${[["today", "Сегодня"], ["tom", "Завтра"], ["later", "Позже"], ["date", "📅 Дата"]].map(([k, n]) => `<button class="chip${where === k ? " on" : ""}" data-when="${k}">${n}</button>`).join("")}</div>
+    ${x.time ? `<div class="prop"><span class="pi">🕐</span><input type="time" data-f="start" value="${st}" aria-label="Начало"><span class="chips mini">${[15, 30, 60, 120].map((m) => `<button class="chip${dur === m ? " on" : ""}" data-dur="${m}">${m < 60 ? m + "м" : m / 60 + "ч"}</button>`).join("")}</span><button class="icon-btn x" data-rm="time" aria-label="Убрать время">✕</button></div>` : ""}
+    ${x.time && x.remind ? `<div class="prop"><span class="pi">🔔</span><select data-f="remind" aria-label="Напоминание">${Object.entries(REMIND).map(([k, n]) => `<option value="${k}"${x.remind === k ? " selected" : ""}>${n}</option>`).join("")}</select><button class="icon-btn x" data-rm="remind" aria-label="Без напоминания">✕</button></div>` : ""}
+    ${x.rep ? `<div class="prop"><span class="pi">⟳</span>каждый <span class="seg">${Object.entries(REP).map(([k, n]) => `<button class="${x.rep === k ? "on" : ""}" data-rep="${k}">${n}</button>`).join("")}</span><button class="icon-btn x" data-rm="rep" aria-label="Не повторять">✕</button></div>` : ""}
+    <div class="prop"><span class="pi" style="color:${col(x)}">●</span><span class="chips mini">${Object.entries(CATN).map(([k, n]) => `<button class="chip${x.cat === k ? " on" : ""}" data-cat="${k}"><i style="background:${CAT[k]}"></i>${n}</button>`).join("")}<button class="chip${!x.cat ? " on" : ""}" data-cat="">без</button></span></div>
+    <div class="prop" style="display:block"><div class="grp" style="margin:0">Шаги${subs.length ? ` · ${sd}/${subs.length}` : ""}</div>
+      ${x.p >= 2 && !subs.length ? `<p class="hint">Застряла? Разбейте на шаги по 5–15 минут — первый можно сделать сразу.</p>` : ""}
+      <div class="steps">${subs.map((s, i) => `<label><input type="checkbox" data-subck="${x.id}:${i}" ${s.d ? "checked" : ""}><span>${esc(s.t)}</span></label>`).join("")}</div>
+      <input type="text" class="stepin" data-f="newstep" placeholder="+ шаг (Enter)" enterkeyhint="enter"></div>
+    <textarea class="note" data-f="note" rows="2" placeholder="Заметка…">${esc(x.note || "")}</textarea>
+    <div class="chips" style="margin-left:0">${plus}</div>
+    <div class="cardf"><button class="icon-btn" data-act="more" aria-label="Ещё" aria-expanded="${S.edit.more}">⋯</button>
+      ${S.edit.more ? `<button class="btn small" data-act="dup">Дублировать</button><button class="btn small" data-act="del">${S.edit.del ? "Точно удалить?" : "Удалить"}</button>` : ""}
+      <span style="flex:1"></span><button class="btn" data-act="cardx">Отмена</button><button class="btn primary" data-act="cardok">Готово</button></div>`, true);
+}
+const refresh = () => { render(); if (cardOpen()) drawCard(); };
+
+function closeDay() {
+  const all = [...tails(), ...today()];
+  const done = all.filter((x) => x.done), open = all.filter((x) => !x.done), stars = all.filter((x) => x.star);
+  const btn = (x) => `<div class="item"><div>${x.star ? "★ " : ""}${esc(x.title)} ${x.p ? `<span class="pill">↻${x.p}</span>` : ""}</div>
+    <div class="acts"><button class="btn small" data-tom="${x.id}">Завтра</button><button class="btn small" data-later="${x.id}">Позже</button><button class="btn small" data-drop="${x.id}">Отпустить</button></div></div>`;
+  dlg(`<h3>Закрыть день</h3>
+    <div style="color:var(--accent-text)">Сегодня сделано: ${done.length}</div><div class="muted">${done.map((x) => esc(x.title)).join(" · ") || "—"}</div>
+    ${S.focus && stars.length ? `<p class="hint${mark(true)}" style="margin:8px 0 0">Главное: ${stars.filter((x) => x.done).length} из ${stars.length}</p>` : ""}
+    ${open.length ? `<div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px"><b>Не сделано (${open.length})</b><button class="btn small${mark(true)}" data-act="alltom">Всё на завтра</button></div>
+      ${[...open.filter((x) => x.star), ...open.filter((x) => !x.star)].map(btn).join("")}` : `<p class="hint">Всё закрыто.</p>`}
+    <textarea rows="2" placeholder="Заметка дня (по желанию)"></textarea>
+    <div class="acts" style="margin-top:12px"><button class="btn primary" data-act="finish" style="flex:1">Закрыть день</button><button class="btn" data-act="x">Отмена</button></div>`);
+}
+
+function moveTomorrow(x) {
+  if (x.p >= 2) return stuck(x);
+  x.p++; delete x.from; remove(x); S.tomorrow.push(x); return true;
+}
+function stuck(x) {
+  S.edit = null;
+  dlg(`<h3>Уже 3-й перенос</h3><p><b>${esc(x.title)}</b></p>
+    <p class="hint" style="margin:0">Обычно это значит, что задача большая или уже не нужна. Какой первый шаг на 5–15 минут?</p>
+    <input type="text" id="step" placeholder="например: открыть файл и набросать план">
+    <div class="acts" style="margin-top:10px"><button class="btn primary" data-step="${x.id}">Сделать первым шагом на завтра</button>
+    <button class="btn" data-later="${x.id}">В «Позже»</button><button class="btn" data-drop="${x.id}">Отпустить</button></div>
+    <p class="muted" style="margin-top:8px">Исходная задача уйдёт в «Позже» и не потеряется.</p>`);
+  return false;
+}
+function toggleDone(x, on) {
+  x.done = on; refresh();
+  const r = $("#r" + x.id); if (r && on) { r.classList.add("pop"); setTimeout(() => r.classList.remove("pop"), 160); }
+}
+
+document.addEventListener("click", (e) => {
+  const t = e.target.closest("button,[data-view]");
+  const r = e.target.closest("[data-open]");
+  if (!t && r && !e.target.closest("input,label,textarea,select")) return card(find(r.dataset.open));
+  if (!t) return;
+  const d = t.dataset, x = S.edit?.x;
+  if (d.view) { S.view = d.view; render(); }
+  else if (d.act === "reset") { Object.assign(S, { tasks: seed(), hintOff: false, tomorrow: [], later: [] }); closeDlg(); render(); }
+  else if (d.act === "theme") { const h = document.documentElement; h.dataset.theme = h.dataset.theme === "dark" ? "light" : "dark"; }
+  else if (d.act === "hintoff") { S.hintOff = true; render(); }
+  else if (d.act === "fold") { S.doneOpen = !S.doneOpen; render(); }
+  else if (d.act === "close") closeDay();
+  else if (d.act === "x") closeDlg();
+  else if (d.act === "cardok") { closeDlg(); render(); }
+  else if (d.act === "cardx") { for (const k of Object.keys(x)) delete x[k]; Object.assign(x, S.edit.snap); closeDlg(); render(); }
+  else if (d.act === "more") { S.edit.more = !S.edit.more; S.edit.del = false; drawCard(); }
+  else if (d.act === "dup") { S.tasks.push({ ...JSON.parse(JSON.stringify(x)), id: S.nextId++, done: false, p: 0, from: undefined }); closeDlg(); render(); toast("Копия — на сегодня"); }
+  else if (d.act === "del") { if (!S.edit.del) { S.edit.del = true; drawCard(); } else { remove(x); closeDlg(); render(); toast("Удалено"); } }
+  else if (d.act === "alltom") { const open = [...tails(), ...today()].filter((y) => !y.done); const stuckOnes = open.filter((y) => y.p >= 2); open.filter((y) => y.p < 2).forEach(moveTomorrow); toast(stuckOnes.length ? `На завтра. Осталось решить: ${stuckOnes.length}` : "Всё на завтра"); closeDay(); render(); }
+  else if (d.act === "finish") { const all = [...tails(), ...today()]; const dn = all.filter((y) => y.done).length, st = all.filter((y) => y.star); dlg(`<h3>День закрыт</h3><div class="big">✓ ${dn}</div><p>${st.length && st.every((y) => y.done) ? "Главное сделано — хороший день." : dn ? "Сегодня дело сдвинулось вперёд." : "Бывают дни для другого — это нормально."}</p><p class="muted">${S.focus && st.length ? `Главное: ${st.filter((y) => y.done).length} из ${st.length} · ` : ""}на завтра: ${S.tomorrow.length + 2}</p><div class="acts"><button class="btn primary" data-act="x">Хорошо</button></div>`); }
+  else if (d.when) {
+    if (d.when === "today") { if (x.from || S.tomorrow.includes(x)) { remove(x); delete x.from; S.tasks.push(x); toast("На сегодня"); } closeDlg(); render(); }
+    else if (d.when === "tom") { if (S.tomorrow.includes(x)) { closeDlg(); return; } if (moveTomorrow(x)) { closeDlg(); render(); toast("На завтра"); } else render(); }
+    else if (d.when === "later") { remove(x); S.later.push(x); closeDlg(); render(); toast("В «Позже»"); }
+    else toast("Откроется выбор даты — как сейчас");
+  }
+  else if (d.add) { if (d.add === "time") x.time = "12:00"; else if (d.add === "rep") x.rep = "day"; else if (d.add === "remind") x.remind = "10"; else return toast("Выбор файла — как сейчас"); drawCard(); }
+  else if (d.rm) { delete x[d.rm]; if (d.rm === "time") delete x.remind; refresh(); }
+  else if (d.dur) { const s = x.time.split("–")[0]; x.time = `${s}–${hhmm(mins(s) + +d.dur)}`; refresh(); }
+  else if (d.rep) { x.rep = d.rep; refresh(); }
+  else if ("cat" in d) { x.cat = d.cat || undefined; refresh(); }
+  else if (d.ck) { const y = find(d.ck); if (y) toggleDone(y, !y.done); }
+  else if (d.subs) { const y = find(d.subs); y.subsOpen = !y.subsOpen; render(); }
+  else if (d.star) { const y = find(d.star); if (y) { y.star = !y.star; refresh(); } }
+  else if (d.edit) card(find(d.edit));
+  else if (d.tom) { const y = find(d.tom); if (moveTomorrow(y)) { closeDay(); render(); } }
+  else if (d.later) { const y = find(d.later); remove(y); S.later.push(y); toast("В «Позже»"); closeDay(); render(); }
+  else if (d.drop) { remove(find(d.drop)); toast("Отпущено — это тоже решение"); closeDay(); render(); }
+  else if (d.step) { const y = find(d.step); const s = ($("#step").value || "первый шаг").trim(); remove(y); S.later.push(y); S.tomorrow.push({ id: S.nextId++, title: `${y.title}: ${s}`, cat: y.cat, p: 0, star: y.star, done: false }); toast("Первый шаг — на завтра, задача — в «Позже»"); closeDay(); render(); }
+});
+document.addEventListener("change", (e) => {
+  const d = e.target.dataset, x = S.edit?.x;
+  if (d.opt) { S[d.opt] = e.target.checked; render(); }
+  else if (d.done) toggleDone(find(d.done), e.target.checked);
+  else if (d.subck) { const [id, i] = d.subck.split(":"); find(id).subs[+i].d = e.target.checked; refresh(); }
+  else if (d.f === "start" && e.target.value) { const [s, en] = x.time.split("–"); x.time = en ? `${e.target.value}–${hhmm(mins(e.target.value) + mins(en) - mins(s))}` : e.target.value; render(); }
+  else if (d.f === "remind") { x.remind = e.target.value; }
+});
+document.addEventListener("input", (e) => {
+  const d = e.target.dataset, x = S.edit?.x;
+  if (d.f === "title") { x.title = e.target.value; render(); }
+  else if (d.f === "note") { x.note = e.target.value; render(); }
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && $("#ov").classList.contains("show")) { cardOpen() ? $('[data-act="cardx"]').click() : closeDlg(); }
+  if (e.key !== "Enter" || e.target.dataset.f !== "newstep") return;
+  const v = e.target.value.trim(); if (!v) return;
+  const x = S.edit.x; (x.subs ||= []).push({ t: v }); refresh(); $(".stepin").focus();
+});
+$("#ov").addEventListener("click", (e) => { if (e.target.id === "ov") { closeDlg(); render(); } });
+$("#addform").addEventListener("submit", (e) => {
+  e.preventDefault(); const v = $("#addinput").value.trim(); if (!v) return;
+  const tom = /^завтра\s+/i.test(v), title = v.replace(/^завтра\s+/i, "").replace(/\s+в\s+(\d{1,2})(:\d{2})?$/i, "");
+  const time = (v.match(/\s+в\s+(\d{1,2})(:\d{2})?$/i) || []).slice(1).join("");
+  const x = { id: S.nextId++, title, p: 0, star: false, done: false, time: time ? (time.includes(":") ? time : time + ":00") : undefined };
+  if (tom) S.tomorrow.push(x); else S.tasks.push(x);
+  $("#addinput").value = ""; toast(tom ? `«${title}» — на завтра` : `«${title}» — на сегодня`); render();
+});
+render();
+</script>
+</body>
+</html>
