@@ -229,6 +229,121 @@ input[type="checkbox"] {
   margin: 0;
 }
 
+/* === Строка задачи вне сетки недели (.task-row): круглая галочка в цвете
+   категории (--cat) вместо полосы слева, мета одной строкой под текстом,
+   ручка и ✎ — только при наведении/фокусе. --row-text-x — край текста задачи:
+   по нему выровнены заметка и подзадачи. */
+.task-row {
+  --row-text-x: calc(var(--sp-2) + 20px + 36px + 6px);
+}
+.round-check {
+  position: relative;
+  min-width: 36px;
+  min-height: 36px;
+}
+.round-check input[type="checkbox"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+.round-check span {
+  width: 20px;
+  height: 20px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 2px solid var(--cat);
+  display: grid;
+  place-items: center;
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+  color: transparent;
+  transition: background var(--duration-fast) var(--ease-standard);
+}
+.round-check input:checked + span {
+  background: var(--cat);
+  color: var(--bg-primary);
+}
+.round-check input:focus-visible + span {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.task-row .task-drag-hint,
+.task-row .task-edit-btn {
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+.task-row .task-line:hover .task-drag-hint,
+.task-row .task-line:focus-within .task-drag-hint,
+.task-row .task-line:hover .task-edit-btn,
+.task-row .task-line:focus-within .task-edit-btn {
+  opacity: 1;
+}
+.task-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  overflow: hidden;
+  white-space: nowrap;
+  margin: -0.2em 0 0.3em;
+  font-size: var(--fs-xs);
+  line-height: 1.3;
+  color: var(--text-muted);
+}
+.task-meta > span {
+  flex-shrink: 0;
+}
+.task-meta .sep {
+  margin: 0 var(--sp-1);
+  opacity: 0.6;
+}
+.task-meta .tm {
+  color: var(--accent-text);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.task-meta .tm.conflict,
+.task-meta .stuck {
+  color: var(--danger);
+}
+.task-row .task-note {
+  margin-left: calc(var(--row-text-x) - 13px - var(--sp-2));
+}
+.task-row .subtasks-area {
+  margin-left: var(--row-text-x);
+}
+.subtasks-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.subtasks-toggle:hover {
+  color: var(--text-primary);
+}
+/* Палец: строку берут долгим нажатием — без выделения текста и системного
+   меню; текст только для чтения не перехватывает касание у строки. */
+.task-line[data-long-press] {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.task-line[data-long-press] textarea {
+  pointer-events: none;
+}
+@media (pointer: coarse) {
+  .task-row {
+    --row-text-x: calc(var(--sp-2) + 36px + 6px);
+  }
+}
+
 /* === Inline-поле ввода === */
 .inline-input {
   border-bottom: 1px solid var(--border-color);
@@ -735,3 +850,61 @@ input[type="checkbox"] {
   accent-color: var(--accent);
 }
 
+
+/* === Карточка задачи: диалог по центру (десктоп) / лист снизу (телефон) === */
+.task-sheet {
+  box-sizing: border-box;
+  width: 460px;
+  max-width: 92vw;
+  max-height: 85vh;
+  overflow-y: auto;
+  padding: var(--sp-8);
+  border-radius: var(--radius-md);
+}
+.chip-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+.chip-group .text-chip,
+.task-sheet .text-chip {
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+}
+.task-sheet .text-chip[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+.field-clear { margin-left: calc(-1 * var(--sp-1)); }
+.steps-hint {
+  font-size: var(--fs-2xs);
+  color: var(--text-muted);
+  margin-bottom: var(--sp-2);
+}
+.card-postponed {
+  font-size: var(--fs-2xs);
+  color: var(--text-muted);
+  margin-bottom: var(--sp-5);
+}
+.card-postponed.stuck { color: var(--danger); }
+/* Футер липнет к низу листа: «Сохранить» всегда под пальцем. */
+.card-footer {
+  position: sticky;
+  bottom: calc(-1 * var(--sp-8));
+  display: flex;
+  gap: var(--sp-2);
+  padding: var(--sp-3) 0 0;
+}
+@media (max-width: 560px) {
+  .task-sheet-overlay { align-items: flex-end; }
+  .task-sheet {
+    width: 100%;
+    max-width: 100%;
+    max-height: 92vh;
+    padding: var(--sp-5);
+    padding-bottom: calc(var(--sp-5) + env(safe-area-inset-bottom, 0px));
+    border-radius: var(--radius-2xl) var(--radius-2xl) 0 0;
+  }
+  .card-footer { bottom: calc(-1 * var(--sp-5)); }
+}

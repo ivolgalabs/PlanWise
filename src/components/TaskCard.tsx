@@ -167,6 +167,10 @@ export const TaskCard = memo(function TaskCard({
   const fingerOnly = useMediaQuery("(pointer: coarse)");
   // Мобильный компактный ряд (только вне компактной сетки недели).
   const mobileRow = isTouch && !compact;
+  // Палец вне сетки недели: ручки нет — строку берут долгим нажатием
+  // (RowTouchSensor в drag.tsx ждёт дольше по data-long-press), короткий
+  // тап открывает карточку. Узкое окно с мышью сохраняет ручку.
+  const pressDrag = fingerOnly && !compact;
 
   // Перетаскивание задачи через dnd-kit. data.task читается в onDragEnd.
   // transform НЕ применяется к строке: перемещение показывает DragOverlay
@@ -186,6 +190,14 @@ export const TaskCard = memo(function TaskCard({
   const { setNodeRef: setDropRef, isOver: isDropTarget } = useDroppable({
     id: taskIdZone(task.id),
   });
+  // Отпускание пальца на месте после перетаскивания даёт обычный click —
+  // он не должен открывать карточку.
+  const dragEndedAt = useRef(0);
+  const wasDragging = useRef(false);
+  useEffect(() => {
+    if (wasDragging.current && !isDragging) dragEndedAt.current = Date.now();
+    wasDragging.current = isDragging;
+  }, [isDragging]);
 
   // Синхронизируем локальный title, если задача изменилась извне.
   useEffect(() => {
@@ -391,9 +403,7 @@ export const TaskCard = memo(function TaskCard({
   // Время в строке — ТОЛЬКО отображение (изменение — в карточке задачи).
   // Бейдж: при длительности — диапазон «09:00–10:30» (стартовое время в нём
   // уже есть, отдельно не дублируется), без неё — «09:00». Мета: выезд.
-  const timeMeta: string[] = [];
   const travel = travelTimeText(task);
-  if (travel) timeMeta.push(travel);
   const timeText = taskTimeRange(task);
   // Статичный «бейдж» времени: выглядит как раньше, но это не кнопка —
   // клик открывает карточку, где время настраивается. Без времени бейджа нет:
@@ -450,7 +460,10 @@ export const TaskCard = memo(function TaskCard({
   // compact (сетка недели): строка времени НАД текстом, с отступом сверху
   // (иначе прижимается к предыдущей задаче). Не-compact (День, список):
   // в ряду с текстом.
-  const showTimeRow = !mobileRow && (compact ? (prioMeta != null || task.timeMinutes != null || due != null) : ((effectiveShowTime && timeText != null) || prioMeta != null || due != null)) || (!mobileRow && (postponeBadge != null || repeatBadge != null));
+  // Строка времени над текстом — только в компактной сетке; вне её — одна
+  // строка меты под текстом (metaLine ниже).
+  const showTimeRow =
+    compact && (prioMeta != null || task.timeMinutes != null || due != null || postponeBadge != null || repeatBadge != null);
   // Выравнивание элемента строки по центру ПЕРВОЙ строки текста в компактной
   // сетке: строка «шапки» (время/приоритет, shift) + фактический padding
   // текста (padTop, в em — меняется со шрифтом) + пол-разницы высот. Центр
@@ -465,54 +478,64 @@ export const TaskCard = memo(function TaskCard({
         flexWrap: "wrap",
         alignItems: "center",
         gap: "var(--sp-2)",
-        ...(compact
-          ? {
-              // Отступы в em: масштабируются вместе со шрифтом (он растёт с
-              // шириной окна и настройкой «масштаб шрифта»). Фиксированные px
-              // при крупном шрифте визуально схлопывались — текст задачи
-              // «прилипал» к соседней.
-              marginBottom: "0.15em",
-              // Отступ от предыдущей задачи в колонке.
-              marginTop: "0.3em",
-            }
-          : {
-              // День/список: ряд с текстом. flexShrink:0 + nowrap — мета
-              // не переносится второй строкой (иначе ряд «разъезжается»).
-              flexShrink: 0,
-            }),
+        // Отступы в em: масштабируются вместе со шрифтом (он растёт с
+        // шириной окна и настройкой «масштаб шрифта»). Фиксированные px
+        // при крупном шрифте визуально схлопывались — текст задачи
+        // «прилипал» к соседней. marginTop — отступ от предыдущей задачи.
+        marginBottom: "0.15em",
+        marginTop: "0.3em",
       }}
     >
       {prioDot}
       {effectiveShowTime && timeBadge}
-      {timeMeta.length > 0 && !compact && (
-        <span
-          style={{
-            fontSize: "var(--fs-2xs)",
-            color: COLORS.muted,
-            lineHeight: 1.2,
-            whiteSpace: "nowrap",
-          }}
-        >
-          {timeMeta.join(" · ")}
-        </span>
-      )}
       {dueBadge}
       {postponeBadge}
       {repeatBadge}
     </div>
   ) : null;
 
+  // Вне сетки: ОДНА строка меты под текстом — время · выезд · срок · ⟳ · ↻N
+  // (тихий текст вместо ряда бейджей; приоритет — точкой в начале).
+  const metaItems: React.ReactNode[] = [];
+  if (effectiveShowTime && timeText) {
+    metaItems.push(
+      <span
+        key="tm"
+        className={`tm${timeConflict ? " conflict" : ""}`}
+        title={timeConflict ? t("task.timeConflict") : undefined}
+      >
+        {timeText}
+      </span>,
+    );
+    if (travel) metaItems.push(<span key="tr">{travel}</span>);
+  }
+  if (due != null) metaItems.push(<span key="due" title={t("task.dueSoft")}>{dueEpochLabel(due)}</span>);
+  if (task.repeat) metaItems.push(<span key="rep" title={t(`repeat.${task.repeat}` as const)}>⟳</span>);
+  if (postponed > 0) {
+    metaItems.push(
+      <span key="pp" className={postponed >= 3 ? "stuck" : undefined} title={`↻${postponed}`}>
+        ↻{postponed}
+      </span>,
+    );
+  }
+  const metaLine =
+    prioDot || metaItems.length > 0 ? (
+      <div className="task-meta">
+        {prioDot}
+        {metaItems.flatMap((it, i) => (i === 0 ? [it] : [<span key={`s${i}`} className="sep">·</span>, it]))}
+      </div>
+    ) : null;
+
   return (
     <div
-      className="task-block"
+      className={`task-block${compact ? "" : " task-row"}`}
       ref={setDropRef}
       style={{
         background: isDropTarget ? accentTint(0.08) : undefined,
         borderRadius: isDropTarget ? "var(--radius-sm)" : undefined,
-        // Цветная линия категории слева — на весь блок (задача + подзадачи):
-        // сразу видно, к какой категории относится задача.
-        borderLeft: `3px solid ${setHex ?? "transparent"}`,
-        paddingLeft: 4,
+        // Сетка недели: цветная линия категории слева на весь блок. Вне сетки
+        // категорию несёт цвет круглой галочки — полоса убрана.
+        ...(compact ? { borderLeft: `3px solid ${setHex ?? "transparent"}`, paddingLeft: 4 } : null),
       }}
     >
     <div
@@ -535,6 +558,8 @@ export const TaskCard = memo(function TaskCard({
         borderRadius: "var(--radius-sm)",
       }}
       title={timeConflict ? t("task.timeConflict") : undefined}
+      data-long-press={pressDrag || undefined}
+      onContextMenu={pressDrag ? (e) => e.preventDefault() : undefined}
       onPointerDown={(e) => {
         // Начало жеста: точку запоминаем, чтобы отличить тап от сдвига.
         tapStart.current = { x: e.clientX, y: e.clientY };
@@ -550,6 +575,7 @@ export const TaskCard = memo(function TaskCard({
         const start = tapStart.current;
         tapStart.current = null;
         if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > TAP_SLOP_PX) return;
+        if (Date.now() - dragEndedAt.current < 400) return;
         // Телефон: осознанный тап по строке открывает КАРТОЧКУ — кнопка «✎» тут
         // всего 20-24px и палец по ней промахивается, а фокус в тексте означает
         // мгновенно выехавшую клавиатуру. На таче поле текста readOnly (fingerOnly),
@@ -565,35 +591,39 @@ export const TaskCard = memo(function TaskCard({
         el.select();
       }}
       {...attributes}
+      // Палец: listeners на всей строке (долгое нажатие), ручки нет.
+      {...(pressDrag ? listeners : null)}
     >
       {/* Ручка перетаскивания: ТОЛЬКО на ней listeners, чтобы клики по
-          чекбоксу внутри строки работали. */}
-      <span
-        className="task-drag-hint"
-        title={t("task.dragHint")}
-        ref={handleRef}
-        {...listeners}
-        style={{
-          flexShrink: 0,
-          width: compact ? 16 : 20,
-          marginRight: "var(--sp-2)",
-          // В компактной сетке ряд выровнен по тексту; центр ручки совпадает
-          // с центром первой строки текста (см. alignTop).
-          marginTop: alignTop(metrics.handleH),
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: COLORS.secondary,
-          opacity: 0.75,
-          cursor: "grab",
-          userSelect: "none",
-          touchAction: "none",
-        }}
-      >
-        <Icon name="drag" size={16} />
-      </span>
+          чекбоксу внутри строки работали. Вне сетки — видна при наведении. */}
+      {!pressDrag && (
+        <span
+          className="task-drag-hint"
+          title={t("task.dragHint")}
+          ref={handleRef}
+          {...listeners}
+          style={{
+            flexShrink: 0,
+            width: compact ? 16 : 20,
+            marginRight: compact ? "var(--sp-2)" : 0,
+            // В компактной сетке ряд выровнен по тексту; центр ручки совпадает
+            // с центром первой строки текста (см. alignTop).
+            marginTop: alignTop(metrics.handleH),
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: COLORS.secondary,
+            opacity: compact ? 0.75 : undefined,
+            cursor: "grab",
+            userSelect: "none",
+            touchAction: "none",
+          }}
+        >
+          <Icon name="drag" size={16} />
+        </span>
+      )}
       <label
-        className="checkbox-hit"
+        className={`checkbox-hit${compact ? "" : " round-check"}`}
         ref={checkRef}
         title={task.isDone ? t("task.markUndone") : t("task.markDone")}
         style={{
@@ -601,6 +631,8 @@ export const TaskCard = memo(function TaskCard({
           // попадает в центр первой строки текста. Сдвиг input внутри label
           // (flex-центрирование) давал чекбокс на ~5px ниже текста.
           marginTop: alignTop(metrics.checkH),
+          // Круглая галочка вне сетки окрашена в цвет категории.
+          ...(compact ? null : ({ "--cat": setHex ?? "var(--text-muted)" } as React.CSSProperties)),
         }}
       >
         <input
@@ -611,6 +643,7 @@ export const TaskCard = memo(function TaskCard({
             flexShrink: 0,
           }}
         />
+        {!compact && <span aria-hidden="true">✓</span>}
       </label>
       {/* Цветной маркер приоритета — в строке времени (рядом с бейджем),
           см. timeRow; из ряда задачи убран, чтобы не дублироваться. */}
@@ -622,8 +655,8 @@ export const TaskCard = memo(function TaskCard({
           flex: 1,
           minWidth: 0,
           display: "flex",
-          flexDirection: compact ? "column" : "row",
-          alignItems: compact ? "flex-start" : "center",
+          flexDirection: "column",
+          alignItems: compact ? "flex-start" : "stretch",
         }}
       >
         {/* compact (сетка недели): приоритет + время НАД текстом задачи —
@@ -666,7 +699,7 @@ export const TaskCard = memo(function TaskCard({
             // элемента ломает высоту колонки — бейдж времени вылетал за
             // нижнюю границу строки и налезал на блок подзадач. Высоту
             // textarea всегда задаёт growTitle (style.height), flex не нужен.
-            flex: compact ? "0 0 auto" : "1 1 auto",
+            flex: "0 0 auto",
             width: "100%",
             fontSize: "inherit",
             border: "none",
@@ -684,38 +717,8 @@ export const TaskCard = memo(function TaskCard({
             textDecoration: task.isDone ? "line-through" : "none",
           }}
         />
-        {/* Не-compact (День, вертикальная неделя): время — в ряду с текстом. */}
-        {!compact && timeRow}
-        {mobileRow && effectiveShowTime && (timeText != null || prioDot || timeMeta.length > 0 || postponeBadge || repeatBadge) && (
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              alignItems: "center",
-              gap: "var(--sp-2)",
-              margin: "1px 0 2px",
-              maxWidth: "100%",
-            }}
-          >
-            {prioDot}
-            {timeBadge}
-            {postponeBadge}
-            {repeatBadge}
-            {timeMeta.length > 0 && (
-              <span
-                style={{
-                  fontSize: "var(--fs-2xs)",
-                  color: COLORS.muted,
-                  lineHeight: 1.2,
-                  whiteSpace: "normal",
-                  wordBreak: "break-word",
-                }}
-              >
-                {timeMeta.join(" · ")}
-              </span>
-            )}
-          </div>
-        )}
+        {/* Не-compact (День, вертикальная неделя, «Позже»): мета под текстом. */}
+        {!compact && metaLine}
         {/* Компактная сетка недели: заметка остаётся под текстом (в колонке
             она не сжимается). Вне сетки — отдельный блок с иконкой ниже. */}
         {visibility.notes && task.notes && compact && (
@@ -737,9 +740,11 @@ export const TaskCard = memo(function TaskCard({
           временем, приоритетом, категорией и т.д.). Клик/тап по тексту —
           редактирование текста прямо в строке. class icon-btn: свайп по
           кнопке не переключает вид. */}
+      {/* На таче вне сетки кнопки нет: тап по строке и так открывает карточку. */}
+      {!mobileRow && (
       <button
         type="button"
-        className="icon-btn"
+        className={`icon-btn${compact ? "" : " task-edit-btn"}`}
         ref={editRef}
         onClick={() => setCardOpen(true)}
         title={t("task.edit")}
@@ -756,6 +761,7 @@ export const TaskCard = memo(function TaskCard({
       >
         <Icon name="edit" size={compact ? 12 : 14} />
       </button>
+      )}
     </div>
     {/* Заметка — под строкой, отдельным блоком с иконкой: в ряду с текстом
         (flex-row) она сжималась к правому краю и терялась, теперь видно, что
@@ -770,7 +776,7 @@ export const TaskCard = memo(function TaskCard({
         Текст подзадачи редактируется прямо в строке; карточка родительской
         задачи открывается кнопкой «✎» выше. */}
     {visibility.subtasks && (
-      <SubtaskList taskId={task.id} />
+      <SubtaskList taskId={task.id} collapsible={!compact} />
     )}
     {/* Карточка задачи: окно с полными настройками (время, приоритет,
         длительность, выезд, уведомление, категория, заметка, подзадачи,

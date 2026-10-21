@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { openPath } from "@tauri-apps/plugin-opener";
 import type { Attachment, Subtask, Task } from "../api";
 import { api } from "../api";
-import { toEpochDay, dueEpochLabel } from "../date";
+import { toEpochDay, fromEpochDay, dueEpochLabel } from "../date";
 import { useStore } from "../store";
 import { COLORS, argbToHex } from "../theme";
 import { TimePicker, DurationSelect } from "./TimePicker";
@@ -41,6 +41,9 @@ const NOTIFY_OPTS: { v: number; label: TKey }[] = [
   { v: 1440, label: "form.notify1440" },
   { v: -2, label: "form.notifyCustom" },
 ];
+
+/** Поля карточки, которые прячутся за кнопкой «+ …», пока не заполнены. */
+type Field = "time" | "priority" | "repeat" | "notify" | "color" | "note" | "files" | "steps";
 
 interface FieldsProps {
   /** День, на который добавляется задача (для создания) или день задачи. */
@@ -96,7 +99,7 @@ export function TaskFormFields({
   initialSubs,
   onCollect,
 }: FieldsProps) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   // В режиме шаблона это НЕ редактирование задачи: без «Перенести»/«Удалить»,
   // без файлов и авто-выполнения, подзадачи — простые тексты (как при создании).
   const editing = initial !== undefined && !templateMode;
@@ -120,6 +123,13 @@ export function TaskFormFields({
   const [error, setError] = useState("");
   const [confirmDel, setConfirmDel] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
+  // «Когда»: выбранный, но не сохранённый день (epoch) или «Позже»; null — без
+  // изменений. Перенос — в submit ПОСЛЕ записи полей: upsert со старым
+  // initial.date иначе откатил бы перенос.
+  const [when, setWhen] = useState<number | "someday" | null>(null);
+  const [moreOpen, setMoreOpen] = useState(false);
+  // Поля, раскрытые кнопкой «+ …»; заполненные видны всегда.
+  const [opened, setOpened] = useState<ReadonlySet<Field>>(new Set());
   // Подзадачи: при создании и в шаблоне — тексты, которые сохранятся вместе
   // с задачей/шаблоном; при редактировании — реальные подзадачи задачи
   // (чекбоксы, удаление, добавление сразу).
@@ -210,6 +220,58 @@ export function TaskFormFields({
   const { colorSets } = useStore();
   const sets = colorSets.filter((s) => s.id !== "cs-none");
 
+  // Прогрессивное раскрытие: карточка показывает только заданное, остальное —
+  // кнопками «+ Время», «+ Повтор»… (меньше решений на экране за раз).
+  const postponed = editing ? (initial?.postponeCount ?? 0) : 0;
+  const has: Record<Field, boolean> = {
+    time: time != null || duration != null || travel != null,
+    priority: priority > 0,
+    repeat: repeat != null,
+    notify: notify != null || customNotify,
+    color: color != null,
+    note: notes !== "",
+    files: attachments.length > 0 || pendingFiles.length > 0,
+    // Застрявшей задаче (↻≥2) шаги открыты сразу — с подсказкой разбить её.
+    steps: subItems.length > 0 || subs.length > 0 || postponed >= 2,
+  };
+  const show = (f: Field) => has[f] || opened.has(f);
+  const addable: { f: Field; label: TKey; ok: boolean }[] = [
+    { f: "time", label: "form.time", ok: true },
+    { f: "steps", label: "form.subtasks", ok: true },
+    { f: "repeat", label: "form.repeat", ok: !templateMode && !initial?.someday },
+    { f: "notify", label: "form.notify", ok: true },
+    { f: "priority", label: "form.priority", ok: true },
+    { f: "color", label: "form.color", ok: true },
+    { f: "note", label: "task.note", ok: true },
+    { f: "files", label: "form.files", ok: !templateMode },
+  ];
+  const hidden = addable.filter((a) => a.ok && !show(a.f));
+  // ✕ у раскрытого поля: сбросить значение и снова спрятать за «+».
+  const clearBtn = (f: Field, clear: () => void) => (
+    <button
+      type="button"
+      className="chip-btn field-clear"
+      title={t("common.remove")}
+      aria-label={t("common.remove")}
+      onClick={() => {
+        clear();
+        setOpened((s) => {
+          const n = new Set(s);
+          n.delete(f);
+          return n;
+        });
+      }}
+    >
+      <Icon name="close" size={12} />
+    </button>
+  );
+  // «Когда» в карточке задачи: Сегодня / Завтра / Позже / дата.
+  const todayEpoch = toEpochDay(new Date());
+  const origWhen: number | "someday" = initial?.someday ? "someday" : (initial?.date ?? todayEpoch);
+  const curWhen = when ?? origWhen;
+  const pickWhen = (v: number | "someday") => setWhen(v === origWhen ? null : v);
+  const customDay = typeof curWhen === "number" && curWhen !== todayEpoch && curWhen !== todayEpoch + 1;
+
   const notifySelectValue = () => {
     if (notify == null) return -1;
     if (NOTIFY_OPTS.some((o) => o.v === notify)) return notify;
@@ -256,6 +318,10 @@ export function TaskFormFields({
         }
         await api.upsertTask({ ...initial, ...payload, repeat });
         onChange?.();
+        // Перенос после записи полей. Ошибка (лимит переносов) — в форме,
+        // правки уже сохранены и список обновлён выше.
+        if (when === "someday") await api.setSomeday(initial.id);
+        else if (when !== null) await api.moveTask(initial.id, fromEpochDay(when));
       } else {
         // Новая задача + подзадачи + файлы. Сначала создаём задачу (id нужен
         // для вложений), потом прикрепляем выбранные файлы.
@@ -399,11 +465,48 @@ export function TaskFormFields({
         }}
       />
 
+      {/* «Когда»: перенос одним тапом вместо кнопки «Перенести» с календарём.
+          Применяется при «Сохранить». */}
+      {editing && (
+        <div style={fieldRow}>
+          <span style={labelStyle}>{t("form.when")}</span>
+          <div className="chip-group">
+            {([
+              [todayEpoch, t("common.today")],
+              [todayEpoch + 1, t("close.tomorrow")],
+              ["someday", t("common.someday")],
+            ] as const).map(([v, label]) => (
+              <button key={String(v)} type="button" className="text-chip" aria-pressed={curWhen === v} onClick={() => pickWhen(v)}>
+                {label}
+              </button>
+            ))}
+            <button
+              type="button"
+              className="text-chip"
+              aria-pressed={customDay}
+              title={t("form.moveTitle")}
+              onClick={() => setMoveOpen(true)}
+            >
+              {customDay
+                ? fromEpochDay(curWhen).toLocaleDateString(lang, { day: "numeric", month: "short" })
+                : t("form.dueDate")}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Время + длительность + выезд — одним пикером (системные часы/селекты).
           Бейдж — слева, как у остальных полей; само меню пикера открывается
           по центру карточки (см. TimePicker). */}
+      {show("time") && (
       <div style={fieldRow}>
         <span style={labelStyle}>{t("form.time")}</span>
+        {clearBtn("time", () => {
+          setTime(null);
+          setDuration(null);
+          setTravel(null);
+          setTravelNotify(null);
+        })}
         <TimePicker
           value={time}
           onChange={setTime}
@@ -414,12 +517,15 @@ export function TaskFormFields({
           large
         />
       </div>
+      )}
 
-      {/* Приоритет — явные кнопки с подписями. */}
+      {/* Приоритет — явные кнопки с подписями («без приоритета» — ✕ поля). */}
+      {show("priority") && (
       <div style={fieldRow}>
         <span style={labelStyle}>{t("form.priority")}</span>
+        {clearBtn("priority", () => setPriority(0))}
         <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-2)" }}>
-          {PRIO.map((p) => (
+          {PRIO.filter((p) => p.v > 0).map((p) => (
             <button
               key={p.v}
               type="button"
@@ -452,6 +558,7 @@ export function TaskFormFields({
           ))}
         </div>
       </div>
+      )}
 
       {/* «Когда-нибудь»: мягкий срок — сделать в течение недели/месяца/к дате. */}
       {editing && initial?.someday && (
@@ -470,9 +577,10 @@ export function TaskFormFields({
           </div>
         </div>
       )}
-      {!templateMode && !initial?.someday && (
+      {!templateMode && !initial?.someday && show("repeat") && (
         <div style={fieldRow}>
           <span style={labelStyle}>{t("form.repeat")}</span>
+          {clearBtn("repeat", () => setRepeat(null))}
           <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-2)" }}>
             {([null, "daily", "weekly", "monthly"] as const).map((r) => (
               <button
@@ -502,8 +610,13 @@ export function TaskFormFields({
 
       {/* Своё уведомление задачи: по умолчанию / не уведомлять / за N минут /
           своё значение системными часами. Подзадачи наследуют уведомление. */}
+      {show("notify") && (
       <div style={fieldRow}>
         <span style={labelStyle}>{t("form.notify")}</span>
+        {clearBtn("notify", () => {
+          setNotify(null);
+          setCustomNotify(false);
+        })}
         <select
           value={notifySelectValue()}
           onChange={(e) => {
@@ -552,6 +665,7 @@ export function TaskFormFields({
           </span>
         )}
       </div>
+      )}
 
       {/* «До выезда»: напомнить за N минут ДО момента выезда (раньше, чем
           «Пора выезжать» в сам выезд). Виден только когда задан выезд. */}
@@ -584,26 +698,11 @@ export function TaskFormFields({
         </div>
       )}
 
-      {/* Категория — свотчи с подписями. */}
+      {/* Категория — свотчи с подписями («без категории» — ✕ поля). */}
+      {show("color") && (
       <div style={fieldRow}>
         <span style={labelStyle}>{t("form.color")}</span>
-        <button
-          type="button"
-          onClick={() => setColor(null)}
-          title={t("common.noCategory")}
-          className="chip-btn"
-          style={{
-            background: "transparent",
-            border: `1px solid ${color === null ? COLORS.accent : "var(--border-color)"}`,
-            opacity: color === null ? 1 : 0.5,
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 4,
-          }}
-        >
-          <Icon name="close" size={12} />
-        </button>
+        {clearBtn("color", () => setColor(null))}
         {sets.map((c) => (
           <button
             key={c.id}
@@ -647,10 +746,13 @@ export function TaskFormFields({
           </button>
         ))}
       </div>
+      )}
 
       {/* Заметка к задаче. */}
+      {show("note") && (
       <div style={fieldRow}>
         <span style={labelStyle}>{t("task.note")}</span>
+        {clearBtn("note", () => setNotes(""))}
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
@@ -670,12 +772,13 @@ export function TaskFormFields({
           }}
         />
       </div>
+      )}
 
       {/* Файлы: при создании — выбранные файлы буферизуются и прикрепятся к
           задаче при сохранении; у существующей задачи — прикреплённые файлы.
           Системный диалог → файл копируется в приватное хранилище приложения;
           тап по файлу открывает его системным приложением. */}
-      {!templateMode && (
+      {!templateMode && show("files") && (
         <div style={{ ...fieldRow, alignItems: "flex-start" }}>
           <span style={labelStyle}>{t("form.files")}</span>
           <div style={{ flex: 1, minWidth: 180, display: "flex", flexDirection: "column", gap: 6 }}>
@@ -796,9 +899,13 @@ export function TaskFormFields({
 
       {/* Подзадачи: при создании — добавляются сразу (шестерёнка); в карточке
           существующей задачи — полный список с чекбоксами, удалением и полем. */}
+      {show("steps") && (
       <div style={{ ...fieldRow, alignItems: "flex-start" }}>
         <span style={labelStyle}>{t("form.subtasks")}</span>
         <div style={{ flex: 1, minWidth: 180 }}>
+          {/* Задачу переносили 2+ раз: обычно она слишком большая или
+              расплывчатая — подсказываем начать с маленького шага. */}
+          {postponed >= 2 && <div className="steps-hint">{t("form.stepsHint")}</div>}
           {editing
             ? subItems.map((s) => (
                 <div
@@ -972,6 +1079,23 @@ export function TaskFormFields({
           </div>
         </div>
       </div>
+      )}
+
+      {/* Незаданные поля — кнопками; тап раскрывает поле. */}
+      {hidden.length > 0 && (
+        <div className="chip-group" style={{ marginBottom: "var(--sp-4)" }}>
+          {hidden.map((a) => (
+            <button
+              key={a.f}
+              type="button"
+              className="text-chip"
+              onClick={() => setOpened((s) => new Set(s).add(a.f))}
+            >
+              + {t(a.label)}
+            </button>
+          ))}
+        </div>
+      )}
 
       {error && (
         <div
@@ -985,19 +1109,10 @@ export function TaskFormFields({
         </div>
       )}
 
-      {/* Кнопки: вторичные (перенос/дубль/удаление) — отдельной линией, иначе
-          на узком экране они выталкивают «Сохранить» за край карточки. */}
-      {editing && (
+      {/* Редкие действия (дубль/удаление) — под «⋯»: на виду только
+          Отмена и Сохранить, «Удалить» не стоит рядом с главной кнопкой. */}
+      {editing && moreOpen && (
         <div style={{ display: "flex", gap: "var(--sp-2)", marginBottom: "var(--sp-2)" }}>
-          <button
-            type="button"
-            className="modal-action-btn"
-            onClick={() => setMoveOpen(true)}
-            title={t("form.moveTitle")}
-            style={{ flex: 1 }}
-          >
-            <Icon name="calendarCheck" size={13} /> {t("form.move")}
-          </button>
           <button
             type="button"
             className="modal-action-btn"
@@ -1018,14 +1133,19 @@ export function TaskFormFields({
           </button>
         </div>
       )}
-      <div style={{ display: "flex", gap: "var(--sp-2)" }}>
-        <button
-          type="submit"
-          className="modal-action-btn primary"
-          style={{ flex: 1 }}
-        >
-          {templateMode ? t("common.save") : editing ? t("common.save") : t("common.add")}
-        </button>
+      <div className="card-footer" style={{ background: COLORS.card }}>
+        {editing && (
+          <button
+            type="button"
+            className="modal-action-btn compact"
+            aria-label={t("form.more")}
+            title={t("form.more")}
+            aria-expanded={moreOpen}
+            onClick={() => setMoreOpen((v) => !v)}
+          >
+            <Icon name="dots" size={14} />
+          </button>
+        )}
         <button
           type="button"
           className="modal-action-btn"
@@ -1033,6 +1153,13 @@ export function TaskFormFields({
           style={{ flex: 1 }}
         >
           {t("common.cancel")}
+        </button>
+        <button
+          type="submit"
+          className="modal-action-btn primary"
+          style={{ flex: 1 }}
+        >
+          {templateMode ? t("common.save") : editing ? t("common.save") : t("common.add")}
         </button>
       </div>
 
@@ -1047,11 +1174,9 @@ export function TaskFormFields({
       {moveOpen && initial && (
         <DatePickerModal
           tasks={[]}
-          onPick={async (d) => {
-            await api.moveTask(initial.id, d);
+          onPick={(d) => {
+            pickWhen(toEpochDay(d));
             setMoveOpen(false);
-            onChange?.();
-            onAdded?.();
           }}
           onClose={() => setMoveOpen(false)}
         />
@@ -1080,6 +1205,7 @@ export function AddTaskModal({
   // отпускание пальца попало на оверлей (position:fixed) — такой клик не
   // должен сразу закрывать только что открытое окно.
   const openedAt = useRef(Date.now());
+  const postponedCount = initial?.postponeCount ?? 0;
   // Задача «Когда-нибудь» не привязана ко дню — заголовок без даты.
   const head = editing && initial?.someday
     ? t("common.someday")
@@ -1090,7 +1216,7 @@ export function AddTaskModal({
   // справа рисовался ПОВЕРХ карточки. Порталом уходим на уровень body.
   return createPortal(
     <div
-      className="modal-overlay"
+      className="modal-overlay task-sheet-overlay"
       onClick={(e) => {
         if (e.target !== e.currentTarget) return;
         if (Date.now() - openedAt.current < 300) return;
@@ -1098,19 +1224,15 @@ export function AddTaskModal({
       }}
       style={{ zIndex: 200 }}
     >
+      {/* .task-sheet: по центру на десктопе, лист снизу на телефоне (App.css). */}
       <div
+        className="task-sheet"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         style={{
           background: COLORS.card,
           border: `1px solid var(--border-color)`,
-          borderRadius: "var(--radius-md)",
-          padding: "var(--sp-8)",
-          width: 460,
-          maxWidth: "92vw",
-          maxHeight: "85vh",
-          overflowY: "auto",
           boxShadow: "var(--shadow-xl)",
         }}
       >
@@ -1119,12 +1241,18 @@ export function AddTaskModal({
             fontSize: "var(--fs-lg)",
             fontWeight: 700,
             color: COLORS.text,
-            marginBottom: "var(--sp-5)",
+            marginBottom: postponedCount > 0 ? "var(--sp-1)" : "var(--sp-5)",
             textTransform: "capitalize",
           }}
         >
           {head}
         </div>
+        {/* Сколько раз задачу уже переносили — честный сигнал без упрёка. */}
+        {postponedCount > 0 && (
+          <div className={`card-postponed${postponedCount >= 3 ? " stuck" : ""}`}>
+            ↻ {t("card.postponed", { n: postponedCount })}
+          </div>
+        )}
         <TaskFormFields
           day={day}
           initial={initial}

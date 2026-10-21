@@ -273,6 +273,10 @@ const ru = {
   "form.addSubtask": "Добавить подзадачу",
   "form.move": "Перенести",
   "form.moveTitle": "Перенести на другой день",
+  "form.when": "Когда",
+  "form.more": "Ещё",
+  "form.stepsHint": "Переносили не раз — разбейте на маленький первый шаг",
+  "card.postponed": "переносов: {n}",
   "form.duplicate": "Дублировать",
   "form.duplicateTitle":
     "Создать копию с тем же временем (несохранённые правки не копируются)",
@@ -719,6 +723,10 @@ const en: Dict = {
   "form.addSubtask": "Add subtask",
   "form.move": "Move",
   "form.moveTitle": "Move to another day",
+  "form.when": "When",
+  "form.more": "More",
+  "form.stepsHint": "Postponed a few times — try a tiny first step",
+  "card.postponed": "postponed: {n}",
   "form.duplicate": "Duplicate",
   "form.duplicateTitle":
     "Create a copy with the same time (unsaved edits are not copied)",

@@ -86,6 +86,23 @@ const MOUSE_SENSOR_OPTIONS = {
 const TOUCH_SENSOR_OPTIONS = {
   activationConstraint: { delay: 120, tolerance: 12 },
 };
+// Строка задачи без ручки (палец, data-long-press): захват — долгим нажатием.
+// 120мс хватали задачу при любом касании, с которого начинается прокрутка, а
+// короткий тап должен открывать карточку.
+const LONG_PRESS_CONSTRAINT = { delay: 350, tolerance: 10 };
+
+/** TouchSensor с задержкой по месту касания: на строке с data-long-press —
+ *  LONG_PRESS_CONSTRAINT, на ручках и подзадачах — прежние 120мс. Второй
+ *  TouchSensor не подходит: слушатели одного события (onTouchStart) у
+ *  draggable перезаписывают друг друга. Опции подменяются до super(): база
+ *  читает props.options в attach() уже из конструктора. */
+class RowTouchSensor extends TouchSensor {
+  constructor(props: ConstructorParameters<typeof TouchSensor>[0]) {
+    const target = props.event.target;
+    const longPress = target instanceof Element && target.closest("[data-long-press]") !== null;
+    super(longPress ? { ...props, options: { ...props.options, activationConstraint: LONG_PRESS_CONSTRAINT } } : props);
+  }
+}
 
 interface TaskDndContextProps {
   children: ReactNode;
@@ -162,7 +179,7 @@ export function TaskDndContext({ children, onChange }: TaskDndContextProps) {
   // «взятии» строки, и drag не отменяется (150/8 отменял почти каждый захват).
   const sensors = useSensors(
     useSensor(MouseSensor, MOUSE_SENSOR_OPTIONS),
-    useSensor(TouchSensor, TOUCH_SENSOR_OPTIONS),
+    useSensor(RowTouchSensor, TOUCH_SENSOR_OPTIONS),
   );
 
   // Колбэки DndContext — СТРОГО useCallback: dnd-kit кладёт их в deps цепочки

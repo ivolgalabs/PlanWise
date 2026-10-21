@@ -14,6 +14,9 @@ const TAP_SLOP_PX = 10;
 
 interface Props {
   taskId: string;
+  /** Вне сетки недели: список свёрнут до счётчика «Подзадачи (1/3)»,
+   *  тап по счётчику разворачивает — строка дня не растёт от шагов. */
+  collapsible?: boolean;
 }
 
 /**
@@ -24,8 +27,10 @@ interface Props {
  * по тексту переводит строку в инлайн-редактирование. Карточка родительской
  * задачи открывается ТОЛЬКО кнопкой «✎» в строке задачи.
  */
-export function SubtaskList({ taskId }: Props) {
+export function SubtaskList({ taskId, collapsible = false }: Props) {
   const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  const shown = !collapsible || open;
   // Подзадачи + перезагрузка (общий хук: защита от гонки размонтирования,
   // глобальный subtaskRev после promote/смены родителя).
   const { items, error: loadError, reload } = useSubtasks(taskId);
@@ -45,7 +50,18 @@ export function SubtaskList({ taskId }: Props) {
 
   return (
     <div className="subtasks-area">
-      {items.length > 0 && (
+      {items.length > 0 && collapsible && (
+        <button
+          type="button"
+          className="subtasks-toggle"
+          aria-expanded={open}
+          onClick={() => setOpen((v) => !v)}
+        >
+          <span aria-hidden="true">{open ? "▾" : "▸"}</span>
+          {t("subtasks.title", { done, total: items.length })}
+        </button>
+      )}
+      {items.length > 0 && !collapsible && (
         <div
           style={{
             fontSize: "var(--fs-sm)",
@@ -58,7 +74,7 @@ export function SubtaskList({ taskId }: Props) {
           {t("subtasks.title", { done, total: items.length })}
         </div>
       )}
-      {items.map((s) => (
+      {shown && items.map((s) => (
         <SubtaskRow
           key={s.id}
           subtask={s}
