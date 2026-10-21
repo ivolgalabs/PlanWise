@@ -7,9 +7,7 @@ import { useStore } from "../store";
 import { showToast } from "../toast";
 import { fromEpochDay, toEpochDay } from "../date";
 import { useI18n } from "../i18n";
-
-/** После стольких переносов «Завтра» заблокировано (то же число в Rust move_task). */
-const POSTPONE_LIMIT = 3;
+import { FirstStepDialog, POSTPONE_LIMIT } from "./FirstStepDialog";
 
 /** «Обычно закрываешь N в день»: среднее по дням с закрытиями за 14 дней.
  *  Только после двух недель истории (есть закрытие старше 14 дней в окне 28). */
@@ -105,6 +103,10 @@ function CloseDayDialog({ onChange, onClose }: { onChange: () => void; onClose: 
     .filter((x) => !x.isDone && !x.someday && !x.archived && x.date <= todayEd)
     .sort((a, b) => a.date - b.date || a.sortOrder - b.sortOrder);
   const wins = doneToday(tasks, todayEd);
+  const mainDone = wins.filter((x) => x.difficulty === 3).length;
+  const mainTotal = mainDone + open.filter((x) => x.difficulty === 3).length;
+  const movable = open.filter((x) => (x.postponeCount ?? 0) < POSTPONE_LIMIT);
+  const [stepTask, setStepTask] = useState<Task | null>(null);
   const [note, setNote] = useState("");
   const [loaded, setLoaded] = useState<{ note: string; closedAt: number | null } | null>(null);
 
@@ -167,24 +169,17 @@ function CloseDayDialog({ onChange, onClose }: { onChange: () => void; onClose: 
           <button
             type="button"
             className="modal-action-btn compact"
-            disabled={stuck}
-            title={stuck ? t("close.stuck") : undefined}
-            onClick={() => act(() => api.moveTask(task.id, fromEpochDay(todayEd + 1)))}
+            onClick={() => (stuck ? setStepTask(task) : act(() => api.moveTask(task.id, fromEpochDay(todayEd + 1))))}
           >
             {t("close.tomorrow")}
           </button>
           <button type="button" className="modal-action-btn compact" onClick={() => act(() => api.setSomeday(task.id))}>
             {t("close.someday")}
           </button>
-          <button type="button" className="modal-action-btn compact danger" onClick={() => act(() => api.dropTask(task.id))}>
+          <button type="button" className="modal-action-btn compact" onClick={() => act(() => api.dropTask(task.id))}>
             {t("close.drop")}
           </button>
         </div>
-        {stuck && (
-          <div style={{ fontSize: "var(--fs-2xs)", color: "var(--text-secondary)", marginTop: "var(--sp-2)" }}>
-            {t("close.stuck")}
-          </div>
-        )}
       </div>
     );
   };
@@ -236,6 +231,38 @@ function CloseDayDialog({ onChange, onClose }: { onChange: () => void; onClose: 
             </div>
           </div>
         )}
+        {mainTotal > 0 && (
+          <div style={{ fontSize: "var(--fs-sm)", color: "var(--text-secondary)", marginBottom: "var(--sp-3)" }}>
+            {t("close.main", { a: mainDone, b: mainTotal })}
+          </div>
+        )}
+        {open.length > 0 && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "var(--sp-2)",
+              fontSize: "var(--fs-sm)",
+              color: COLORS.secondary,
+            }}
+          >
+            {t("close.open", { n: open.length })}
+            {movable.length > 0 && (
+              <button
+                type="button"
+                className="modal-action-btn compact"
+                onClick={() =>
+                  act(async () => {
+                    for (const x of movable) await api.moveTask(x.id, fromEpochDay(todayEd + 1));
+                  })
+                }
+              >
+                {t("close.all")}
+              </button>
+            )}
+          </div>
+        )}
         <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
           {open.length === 0 ? (
             <div style={{ color: "var(--text-secondary)", fontSize: "var(--fs-sm)", padding: "var(--sp-2) 0" }}>
@@ -278,6 +305,7 @@ function CloseDayDialog({ onChange, onClose }: { onChange: () => void; onClose: 
           {t("close.button")}
         </button>
       </div>
+      {stepTask && <FirstStepDialog task={stepTask} onChange={onChange} onClose={() => setStepTask(null)} />}
     </div>,
     document.body,
   );

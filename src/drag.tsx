@@ -33,6 +33,7 @@ import { COLORS, setHex as setHexOf } from "./theme";
 import { showToast } from "./toast";
 import { useStore } from "./store";
 import { useI18n } from "./i18n";
+import { FirstStepDialog, needsFirstStep } from "./components/FirstStepDialog";
 
 /** id droppable-зоны дня по epoch-day (основные зоны: колонки/строки/ячейки). */
 export const dayId = (epochDay: number): string => `d:${epochDay}`;
@@ -170,6 +171,7 @@ export function TaskDndContext({ children, onChange }: TaskDndContextProps) {
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [activeSubtask, setActiveSubtask] = useState<Subtask | null>(null);
   const [pending, setPending] = useState<Pending>(null);
+  const [stepTask, setStepTask] = useState<Task | null>(null);
 
   // MouseSensor + TouchSensor вместо PointerSensor: в WKWebView (Tauri на macOS)
   // pointer-события капризны — pointerCoordinates может быть null, и pointerWithin
@@ -220,6 +222,10 @@ export function TaskDndContext({ children, onChange }: TaskDndContextProps) {
       // увело бы срок в 1970 (epoch-day 7).
       if (over === weekShiftNextId) {
         const base = task.someday ? (task.dueEpochDay ?? toEpochDay(new Date())) : task.date;
+        if (needsFirstStep(task, base + 7)) {
+          setStepTask(task);
+          return;
+        }
         try {
           await api.moveTask(task.id, fromEpochDay(base + 7));
         } catch (err) {
@@ -230,6 +236,10 @@ export function TaskDndContext({ children, onChange }: TaskDndContextProps) {
       }
       const targetDay = parseDayId(over);
       if (targetDay == null || task.date === targetDay) return;
+      if (needsFirstStep(task, targetDay)) {
+        setStepTask(task);
+        return;
+      }
       try {
         await api.moveTask(task.id, fromEpochDay(targetDay));
       } catch (err) {
@@ -311,6 +321,8 @@ export function TaskDndContext({ children, onChange }: TaskDndContextProps) {
           <SubtaskGhost subtask={activeSubtask} />
         ) : null}
       </DragOverlay>
+
+      {stepTask && <FirstStepDialog task={stepTask} onChange={onChange} onClose={() => setStepTask(null)} />}
 
       {/* Диалог подтверждения promote подзадачи в задачу. */}
       {pending && (
