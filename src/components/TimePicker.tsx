@@ -24,6 +24,8 @@ interface Props {
   /** Наложение по времени с другой задачей: бейдж времени подсвечивается
    *  красным, чтобы конфликт был заметен. */
   conflict?: boolean;
+  /** Подпись пустого времени вместо «В течение дня» (быстрый ряд формы). */
+  emptyLabel?: string;
 }
 
 /**
@@ -47,6 +49,7 @@ export function TimePicker({
   durationMinutes,
   onChangeDuration,
   conflict = false,
+  emptyLabel,
 }: Props) {
   const { t } = useI18n();
   const [editing, setEditing] = useState(false);
@@ -180,9 +183,11 @@ export function TimePicker({
         {!compact && <Icon name="clock" size={large ? 16 : 13} />}
         {value !== null
           ? formatMinutes(value)
-          : compact
-            ? t("task.withinDayShort")
-            : t("task.withinDay")}
+          : emptyLabel
+            ? emptyLabel
+            : compact
+              ? t("task.withinDayShort")
+              : t("task.withinDay")}
       </button>
 
       {editing && (

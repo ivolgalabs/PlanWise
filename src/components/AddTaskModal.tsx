@@ -11,6 +11,7 @@ import { Icon } from "./Icon";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { DatePickerModal } from "./DatePickerModal";
 import { useI18n, t, type TKey } from "../i18n";
+import { parseQuickAdd } from "../quickAdd";
 
 /** Лимит вложения (совпадает с Rust: 25 МБ на команду) — отсекаем файлы
  *  сразу при выборе, чтобы не читать в base64 то, что всё равно не сохранится. */
@@ -120,6 +121,8 @@ export function TaskFormFields({
   const [moreOpen, setMoreOpen] = useState(false);
   // «⋯ Ещё» в быстром ряду: раскрывает редкие поля (подзадачи, повтор, цвет, заметка, файлы).
   const [restOpen, setRestOpen] = useState(false);
+  // День, названный в строке («завтра …»), если токены уже вырезаны из названия.
+  const [dayOff, setDayOff] = useState<number | null>(null);
   // Поля, раскрытые кнопкой «+ …»; заполненные видны всегда.
   const [opened, setOpened] = useState<ReadonlySet<Field>>(new Set());
   // Подзадачи: при создании и в шаблоне — тексты, которые сохранятся вместе
@@ -214,6 +217,20 @@ export function TaskFormFields({
 
   // Прогрессивное раскрытие: карточка показывает только заданное, остальное —
   // кнопками «+ Время», «+ Повтор»… (меньше решений на экране за раз).
+  // Новая задача: «в 15:00 позвонить», «завтра …» понимаем прямо в названии (как в
+  // строке быстрого ввода). Поле не меняем, пока печатают: токены вырезаются при
+  // сохранении, а чипы времени/дня показывают, что распознано.
+  const q = editing || templateMode ? null : parseQuickAdd(title);
+  const effTime = time ?? q?.timeMinutes ?? null;
+  const effDay = dayOff ?? q?.dayOffset ?? null;
+  // Время выбрали руками поверх распознанного: токены уходят из названия, день остаётся.
+  const onTime = (m: number | null) => {
+    if (q && q.timeMinutes != null) {
+      setTitle(q.title);
+      if (q.dayOffset != null) setDayOff(q.dayOffset);
+    }
+    setTime(m);
+  };
   const postponed = editing ? (initial?.postponeCount ?? 0) : 0;
   const has: Record<Field, boolean> = {
     time: time != null || duration != null || travel != null,
@@ -227,7 +244,6 @@ export function TaskFormFields({
   };
   const show = (f: Field) => has[f] || opened.has(f);
   const addable: { f: Field; label: TKey; ok: boolean }[] = [
-    { f: "time", label: "form.time", ok: true },
     { f: "steps", label: "form.subtasks", ok: true },
     { f: "repeat", label: "form.repeat", ok: !templateMode && !initial?.someday },
     { f: "notify", label: "form.notify", ok: true },
@@ -236,7 +252,9 @@ export function TaskFormFields({
     { f: "files", label: "form.files", ok: !templateMode },
   ];
   const hidden = addable.filter((a) => a.ok && !show(a.f));
-  const quick = hidden.filter((a) => a.f === "time" || (a.f === "notify" && time != null));
+  // Напоминание при заданном времени — отдельным чипом 🔔 в быстром ряду.
+  const bell = effTime != null && !show("notify");
+  const rest = hidden.filter((a) => a.f !== "notify" || effTime == null);
   // ✕ у раскрытого поля: сбросить значение и снова спрятать за «+».
   const clearBtn = (f: Field, clear: () => void) => (
     <button
@@ -271,12 +289,12 @@ export function TaskFormFields({
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const nextTitle = title.trim();
+    const nextTitle = (q?.title ?? title).trim();
     if (!nextTitle) return;
     setError("");
     const payload = {
       title: nextTitle,
-      timeMinutes: time,
+      timeMinutes: effTime,
       difficulty: priority,
       durationMinutes: duration,
       travelTime: travel,
@@ -318,7 +336,7 @@ export function TaskFormFields({
         // для вложений), потом прикрепляем выбранные файлы.
         let created = createdTaskRef.current;
         if (!created) {
-          created = await api.upsertTask({ ...payload, repeat, date: toEpochDay(day) });
+          created = await api.upsertTask({ ...payload, repeat, date: effDay != null ? todayEpoch + effDay : toEpochDay(day) });
           createdTaskRef.current = created;
           for (const s of subs) {
             const st = s.trim();
@@ -486,49 +504,51 @@ export function TaskFormFields({
         </div>
       )}
 
-      {/* Быстрый ряд: ★ «Главное» (один тап вместо трёх уровней приоритета,
-          difficulty=3) + то, что нужно чаще всего (Время; Уведомить — когда время
-          задано). Остальное — за «⋯ Ещё»: на первом экране 2–3 решения, не 8. */}
+      {/* Быстрый ряд — то, что нужно почти каждой задаче, сразу и в один тап:
+          ★ «Главное» (difficulty=3), Время (пикер с пресетами), 🔔 когда время задано
+          (по умолчанию уже включено — чип только открывает настройку). Редкое
+          (подзадачи, повтор, цвет, заметка, файлы) — за «⋯ Ещё». */}
       <div className="chip-group" style={{ marginBottom: "var(--sp-4)" }}>
         <button type="button" className="text-chip" aria-pressed={priority === 3} onClick={() => setPriority(priority === 3 ? 0 : 3)}>
           {priority === 3 ? "★" : "☆"} {t("form.focus")}
         </button>
-        {(restOpen ? hidden : quick).map((a) => (
-          <button key={a.f} type="button" className="text-chip" onClick={() => setOpened((s) => new Set(s).add(a.f))}>
+        <TimePicker
+          value={effTime}
+          onChange={onTime}
+          travelTime={travel}
+          onChangeTravel={setTravel}
+          durationMinutes={duration}
+          onChangeDuration={setDuration}
+          emptyLabel={t("form.time")}
+          large
+        />
+        {effDay != null && (
+          <span className="text-chip" title={t("form.when")}>
+            {fromEpochDay(todayEpoch + effDay).toLocaleDateString(lang, { weekday: "short", day: "numeric", month: "short" })}
+          </span>
+        )}
+        {bell && (
+          <button
+            type="button"
+            className="text-chip"
+            title={t("form.notifyDefault")}
+            aria-label={t("form.notify")}
+            onClick={() => setOpened((o) => new Set(o).add("notify"))}
+          >
+            🔔
+          </button>
+        )}
+        {(restOpen ? hidden : []).map((a) => (
+          <button key={a.f} type="button" className="text-chip" onClick={() => setOpened((o) => new Set(o).add(a.f))}>
             + {t(a.label)}
           </button>
         ))}
-        {!restOpen && hidden.length > quick.length && (
+        {!restOpen && rest.length > 0 && (
           <button type="button" className="text-chip" aria-expanded={false} onClick={() => setRestOpen(true)}>
             ⋯ {t("form.more")}
           </button>
         )}
       </div>
-
-      {/* Время + длительность + выезд — одним пикером (системные часы/селекты).
-          Бейдж — слева, как у остальных полей; само меню пикера открывается
-          по центру карточки (см. TimePicker). */}
-      {show("time") && (
-      <div style={fieldRow}>
-        <span style={labelStyle}>{t("form.time")}</span>
-        {clearBtn("time", () => {
-          setTime(null);
-          setDuration(null);
-          setTravel(null);
-          setTravelNotify(null);
-        })}
-        <TimePicker
-          value={time}
-          onChange={setTime}
-          travelTime={travel}
-          onChangeTravel={setTravel}
-          durationMinutes={duration}
-          onChangeDuration={setDuration}
-          large
-        />
-      </div>
-      )}
-
 
       {/* «Когда-нибудь»: мягкий срок — сделать в течение недели/месяца/к дате. */}
       {editing && initial?.someday && (
@@ -620,7 +640,7 @@ export function TaskFormFields({
              селекты «ч»/«мин»), а не время суток. */
           <DurationSelect value={notify != null && notify > 0 ? notify : null} onChange={setNotify} maxHours={168} />
         )}
-        {time == null && notify !== 0 && (
+        {effTime == null && notify !== 0 && (
           /* Задача без времени: «за N минут до начала» не определено —
              напомним утром дня задачи (дайджест, а при выключенном —
              отдельный утренний пинг; см. task_events в notify.rs). */
