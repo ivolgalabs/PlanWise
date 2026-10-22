@@ -118,6 +118,8 @@ export function TaskFormFields({
   // initial.date иначе откатил бы перенос.
   const [when, setWhen] = useState<number | "someday" | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
+  // «⋯ Ещё» в быстром ряду: раскрывает редкие поля (подзадачи, повтор, цвет, заметка, файлы).
+  const [restOpen, setRestOpen] = useState(false);
   // Поля, раскрытые кнопкой «+ …»; заполненные видны всегда.
   const [opened, setOpened] = useState<ReadonlySet<Field>>(new Set());
   // Подзадачи: при создании и в шаблоне — тексты, которые сохранятся вместе
@@ -234,6 +236,7 @@ export function TaskFormFields({
     { f: "files", label: "form.files", ok: !templateMode },
   ];
   const hidden = addable.filter((a) => a.ok && !show(a.f));
+  const quick = hidden.filter((a) => a.f === "time" || (a.f === "notify" && time != null));
   // ✕ у раскрытого поля: сбросить значение и снова спрятать за «+».
   const clearBtn = (f: Field, clear: () => void) => (
     <button
@@ -453,13 +456,6 @@ export function TaskFormFields({
         }}
       />
 
-      {/* ★ «Главное»: один тап вместо трёх уровней приоритета (difficulty=3). */}
-      <div style={fieldRow}>
-        <button type="button" className="text-chip" aria-pressed={priority === 3} onClick={() => setPriority(priority === 3 ? 0 : 3)}>
-          {priority === 3 ? "★" : "☆"} {t("form.focus")}
-        </button>
-      </div>
-
       {/* «Когда»: перенос одним тапом вместо кнопки «Перенести» с календарём.
           Применяется при «Сохранить». */}
       {editing && (
@@ -489,6 +485,25 @@ export function TaskFormFields({
           </div>
         </div>
       )}
+
+      {/* Быстрый ряд: ★ «Главное» (один тап вместо трёх уровней приоритета,
+          difficulty=3) + то, что нужно чаще всего (Время; Уведомить — когда время
+          задано). Остальное — за «⋯ Ещё»: на первом экране 2–3 решения, не 8. */}
+      <div className="chip-group" style={{ marginBottom: "var(--sp-4)" }}>
+        <button type="button" className="text-chip" aria-pressed={priority === 3} onClick={() => setPriority(priority === 3 ? 0 : 3)}>
+          {priority === 3 ? "★" : "☆"} {t("form.focus")}
+        </button>
+        {(restOpen ? hidden : quick).map((a) => (
+          <button key={a.f} type="button" className="text-chip" onClick={() => setOpened((s) => new Set(s).add(a.f))}>
+            + {t(a.label)}
+          </button>
+        ))}
+        {!restOpen && hidden.length > quick.length && (
+          <button type="button" className="text-chip" aria-expanded={false} onClick={() => setRestOpen(true)}>
+            ⋯ {t("form.more")}
+          </button>
+        )}
+      </div>
 
       {/* Время + длительность + выезд — одним пикером (системные часы/селекты).
           Бейдж — слева, как у остальных полей; само меню пикера открывается
@@ -1034,22 +1049,6 @@ export function TaskFormFields({
           </div>
         </div>
       </div>
-      )}
-
-      {/* Незаданные поля — кнопками; тап раскрывает поле. */}
-      {hidden.length > 0 && (
-        <div className="chip-group" style={{ marginBottom: "var(--sp-4)" }}>
-          {hidden.map((a) => (
-            <button
-              key={a.f}
-              type="button"
-              className="text-chip"
-              onClick={() => setOpened((s) => new Set(s).add(a.f))}
-            >
-              + {t(a.label)}
-            </button>
-          ))}
-        </div>
       )}
 
       {error && (
